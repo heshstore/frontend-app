@@ -1,0 +1,29 @@
+
+import { theme } from "../../theme";
+
+export default function Button({ children, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        width: "100%",
+        padding: 14,
+        borderRadius: 12,
+        border: `1px solid ${theme.border}`,
+        background: theme.card,
+        color: theme.text,
+        fontSize: 14,
+        fontWeight: 500,
+        cursor: "pointer",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = "#F3F4F6";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = theme.card;
+      }}
+    >
+      {children}
+    </button>
+  );
+}

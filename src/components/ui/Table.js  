@@ -1,0 +1,17 @@
+import { theme } from "../../theme";
+
+export default function Table({ children }) {
+  return (
+    <div style={{ overflowX: "auto" }}>
+      <table
+        style={{
+          width: "100%",
+          borderCollapse: "collapse",
+          background: theme.colors.card
+        }}
+      >
+        {children}
+      </table>
+    </div>
+  );
+}

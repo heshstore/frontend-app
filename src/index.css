@@ -1,13 +1,222 @@
+/* ===== GLOBAL ===== */
 body {
+  font-family: Arial, sans-serif;
+  background: #f5f6fa;
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  padding: 0;
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+/* ===== HEADER STYLES ===== */
+.page-header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.page-header h1 {
+  font-size: 28px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.underline {
+  width: 60px;
+  height: 4px;
+  background: #2563EB;
+  margin: 0 auto;
+  border-radius: 2px;
+}
+
+.back {
+  position: absolute;
+  left: 20px;
+  top: 20px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+/* ===== CONTAINER ===== */
+.container {
+  max-width: 1000px;
+  margin: auto;
+  padding: 20px;
+}
+
+/* ===== ORDER CONTAINER ===== */
+.order-container {
+  padding: 20px;
+  background: #F9FAFB;
+  min-height: 100vh;
+}
+
+/* ===== CARD ===== */
+.card {
+  background: white;
+  padding: 20px;
+  border-radius: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+/* ===== INVOICE HEADER (FIXED) ===== */
+.invoice-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  margin: 10px 0;
+}
+
+/* FORCE 3 EQUAL COLUMNS */
+.invoice-header > div {
+  flex: 1;
+}
+
+/* COLUMN */
+.column {
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+/* SECTION TITLE */
+.column h4 {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0 0 10px 0;
+  border-bottom: 2px solid #25679c;
+  padding-bottom: 4px;
+}
+
+/* LABEL + VALUE */
+.bottom-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 40px; /* add spacing */
+}
+
+/* LABEL */
+.column p strong {
+  min-width: 130px;
+  font-weight: 600;
+  color: #444;
+}
+
+/* VALUE */
+.column p span {
+  text-align: right;
+  color: #000;
+}
+
+/* RIGHT COLUMN */
+.right p {
+  display: flex;
+  justify-content: space-between;
+}
+
+/* ===== TABLE WRAPPER (OUTER BOX) ===== */
+.table-wrapper {
+  border: 2px solid #25679c;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-top: 15px;
+}
+
+/* ===== TABLE ===== */
+.invoice-table {
+  width: 100%;
+  border-collapse: separate;   /* IMPORTANT */
+  border-spacing: 0;
+  font-size: 14px;
+}
+
+/* ===== TABLE HEADER ===== */
+.invoice-table th {
+  background: #25679c;
+  color: #fff;
+  padding: 12px;
+  border-right: 1px solid #1e4f7a;
+  border-bottom: 1px solid #1e4f7a;
+  text-align: center;
+}
+
+/* REMOVE LAST BORDER */
+.invoice-table th:last-child {
+  border-right: none;
+}
+
+/* ===== TABLE BODY ===== */
+.invoice-table td {
+  padding: 10px;
+  border-right: 1px solid #ddd;
+  border-bottom: 1px solid #ddd;
+  text-align: center;
+}
+
+/* REMOVE LAST BORDER */
+.invoice-table td:last-child {
+  border-right: none;
+}
+
+/* ITEM COLUMN ALIGN LEFT */
+.invoice-table td:nth-child(3) {
+  text-align: left;
+}
+
+/* IMAGE */
+.invoice-table td img {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
+/* NO DATA */
+.no-data {
+  text-align: center;
+  padding: 15px;
+  color: #777;
+}
+
+/* ===== INPUT ===== */
+input {
+  padding: 8px;
+  margin: 5px;
+  border: 1px solid #ddd;
+}
+
+/* New order-form styled input */
+.input {
+  border: 1px solid #D1D5DB;
+  padding: 10px;
+  border-radius: 6px;
+  min-width: 180px;
+}
+
+/* ===== BUTTON ===== */
+button {
+  padding: 8px 12px;
+  margin: 5px;
+  background: blue;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+/* New primary button style */
+.btn-primary {
+  background: #2563EB;
+  color: white;
+  padding: 10px 16px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+}
+
+.btn-primary:hover {
+  background: #1D4ED8;
+}
+
+.card {
+  max-width: 600px;
+  margin: 0 auto;
 }
