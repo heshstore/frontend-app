@@ -11,8 +11,9 @@ export default function Login() {
 
     // TEMP LOGIN (replace later with backend)
     if (email === "admin@test.com" && password === "1234") {
-      localStorage.setItem("token", "loggedin");
-      localStorage.setItem("isLoggedIn", "true"); // persist login
+      // STEP 1 — Ensure login persists:
+      localStorage.setItem("isLoggedIn", "true");
+      // STEP 2 — Redirect to dashboard:
       navigate("/dashboard");
     } else {
       alert("Invalid credentials");

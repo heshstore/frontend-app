@@ -68,6 +68,12 @@ export default function Dashboard() {
     color: "#111827",
   };
 
+  // 🚀 Only handleLogout navigates away on logout!
+  const handleLogout = () => {
+    localStorage.removeItem("isLoggedIn");
+    navigate("/");
+  };
+
   return (
     <div style={{ padding: 20, maxWidth: 420, margin: "auto", background: theme.background }}>
       <h2 style={{ marginBottom: 20 }}>Dashboard</h2>
@@ -80,12 +86,15 @@ export default function Dashboard() {
       </div>
 
       {/* CUSTOMER */}
-      <button onClick={() => setShowCustomer(!showCustomer)} style={sectionBtn()}>
+      <button
+        onClick={() => setShowCustomer(!showCustomer)}
+        style={sectionBtn()}
+      >
         + Customer Master {showCustomer ? "▲" : "▼"}
       </button>
       {showCustomer && (
         <div>
-          <button style={subBtn} onClick={() => navigate("/add-customer")}>• New Customer</button>
+          <button style={subBtn} onClick={() => setShowCustomer(!showCustomer)}>• Create Customer</button>
           <button style={subBtn} onClick={() => navigate("/customers")}>• Search Customer</button>
           <button style={subBtn} onClick={() => alert("Coming Soon")}>• Scan Customer Visiting Card</button>
           <button style={subBtn} onClick={() => alert("Coming Soon")}>• Print Envelop</button>
@@ -93,16 +102,28 @@ export default function Dashboard() {
       )}
 
       {/* ITEM MASTER */}
-      <button onClick={() => setShowItem(!showItem)} style={sectionBtn()}>
+      <button
+        onClick={() => setShowItem(!showItem)}
+        style={sectionBtn()}
+      >
         + Item Master {showItem ? "▲" : "▼"}
       </button>
       {showItem && (
         <div>
-          {/* SERVICE ITEMS */}
-          <button style={subBtn} onClick={() => navigate("/add-item")}>• Add Service Item</button>
-          <button style={subBtn} onClick={() => navigate("/items")}>• View Service Item</button>
-
-          {/* SHOPIFY ITEMS */}
+          <button
+            style={subBtn}
+            onClick={() => {
+              console.log("Add Item clicked");
+              navigate("/add-item");
+            }}
+          >• Add Service Item</button>
+          <button
+            style={subBtn}
+            onClick={() => {
+              console.log("View Item clicked");
+              navigate("/items");
+            }}
+          >• View Service Item</button>
           <button
             style={subBtn}
             onClick={async () => {
@@ -117,8 +138,7 @@ export default function Dashboard() {
           >
             • Sync Shopify Items
           </button>
-          <button style={subBtn} onClick={() => navigate("/shopify-items")}>• View Shopify Items</button>
-
+          <button style={subBtn} onClick={() => alert("Coming Soon")}>• View Shopify Items</button>
           <button style={subBtn} onClick={() => alert("Coming Soon")}>• Update Price List</button>
           <button style={subBtn} onClick={() => navigate("/items")}>• Item Price List View</button>
         </div>
@@ -127,38 +147,47 @@ export default function Dashboard() {
       <hr />
 
       {/* QUOTATION */}
-      <button onClick={() => setShowQuotation(!showQuotation)} style={sectionBtn()}>
+      <button
+        onClick={() => setShowQuotation(!showQuotation)}
+        style={sectionBtn()}
+      >
         + Quotation {showQuotation ? "▲" : "▼"}
       </button>
       {showQuotation && (
         <div>
-          <button style={subBtn} onClick={() => navigate("/quotation")}>• Create Quotation</button>
-          <button style={subBtn} onClick={() => navigate("/quotation-list")}>• View Quotation</button>
+          <button style={subBtn} onClick={() => setShowQuotation(!showQuotation)}>• Create Quotation</button>
+          <button style={subBtn} onClick={() => alert("Coming Soon")}>• View Quotation</button>
         </div>
       )}
 
       {/* ORDER */}
-      <button onClick={() => setShowOrder(!showOrder)} style={sectionBtn()}>
+      <button
+        onClick={() => setShowOrder(!showOrder)}
+        style={sectionBtn()}
+      >
         + Order {showOrder ? "▲" : "▼"}
       </button>
       {showOrder && (
         <div>
-          <button style={subBtn} onClick={() => navigate("/create-order")}>• Create Order</button>
+          <button style={subBtn} onClick={() => setShowOrder(!showOrder)}>• Create Order</button>
           <button style={subBtn} onClick={() => navigate("/orders")}>• View Order</button>
-          <button style={subBtn} onClick={() => navigate("/orders?status=APPROVED")}>• Approved Order</button>
+          <button style={subBtn} onClick={() => navigate("/orders")}>• Approved Order</button>
         </div>
       )}
 
       <hr />
 
       {/* PRODUCTION */}
-      <button onClick={() => setShowProduction(!showProduction)} style={sectionBtn()}>
+      <button
+        onClick={() => setShowProduction(!showProduction)}
+        style={sectionBtn()}
+      >
         + Production Management {showProduction ? "▲" : "▼"}
       </button>
       {showProduction && (
         <div>
           <div
-            onClick={() => navigate("/orders/pending")}
+            onClick={() => navigate("/orders")}
             style={{
               border: "1px solid #ddd",
               borderRadius: "10px",
@@ -174,27 +203,25 @@ export default function Dashboard() {
           >
             • Order Pending Approval
           </div>
-          <button style={subBtn} onClick={() => navigate("/orders?status=PRODUCTION")}>• Production Pipeline</button>
-          <button style={subBtn} onClick={() => navigate("/orders?status=PRODUCTION")}>• View Pipeline</button>
+          <button style={subBtn} onClick={() => navigate("/orders")}>• Production Pipeline</button>
+          <button style={subBtn} onClick={() => navigate("/orders")}>• View Pipeline</button>
           <button style={subBtn} onClick={() => alert("Coming Soon")}>• Create Purchase Order</button>
           <button style={subBtn} onClick={() => alert("Coming Soon")}>• View Purchase Order</button>
         </div>
       )}
 
       {/* ACCOUNTS */}
-      <button onClick={() => setShowAccounts(!showAccounts)} style={sectionBtn()}>
+      <button
+        onClick={() => setShowAccounts(!showAccounts)}
+        style={sectionBtn()}
+      >
         + Accounts {showAccounts ? "▲" : "▼"}
       </button>
       {showAccounts && (
         <div>
-          <button style={subBtn} onClick={() => navigate("/invoice")}>• Create Invoice</button>
-          <button style={subBtn} onClick={() => navigate("/invoice-list")}>• View Invoice</button>
-
-          {/* ✅ FIXED CORRECT FLOW */}
-          <button style={subBtn} onClick={() => navigate("/orders?status=PRODUCTION_DONE")}>
-            • View Production Completed Order
-          </button>
-
+          <button style={subBtn} onClick={() => alert("Coming Soon")}>• Create Invoice</button>
+          <button style={subBtn} onClick={() => alert("Coming Soon")}>• View Invoice</button>
+          <button style={subBtn} onClick={() => navigate("/orders")}>• View Production Completed Order</button>
           <button style={subBtn} onClick={() => alert("Coming Soon")}>• Payment Entry</button>
           <button style={subBtn} onClick={() => alert("Coming Soon")}>• View Ledger</button>
           <button style={subBtn} onClick={() => alert("Coming Soon")}>• View Commission Calculation</button>
@@ -204,7 +231,10 @@ export default function Dashboard() {
       <hr />
 
       {/* DELIVERY */}
-      <button onClick={() => setShowDelivery(!showDelivery)} style={sectionBtn()}>
+      <button
+        onClick={() => setShowDelivery(!showDelivery)}
+        style={sectionBtn()}
+      >
         + Delivery {showDelivery ? "▲" : "▼"}
       </button>
       {showDelivery && (
@@ -218,7 +248,10 @@ export default function Dashboard() {
       )}
 
       {/* FOLLOW UPS */}
-      <button onClick={() => setShowFollow(!showFollow)} style={sectionBtn()}>
+      <button
+        onClick={() => setShowFollow(!showFollow)}
+        style={sectionBtn()}
+      >
         + Follow Ups {showFollow ? "▲" : "▼"}
       </button>
       {showFollow && (
@@ -229,10 +262,7 @@ export default function Dashboard() {
 
       {/* LOGOUT */}
       <button
-        onClick={() => {
-          localStorage.removeItem("token");
-          navigate("/login");
-        }}
+        onClick={handleLogout}
         style={{
           marginTop: 25,
           width: "100%",
