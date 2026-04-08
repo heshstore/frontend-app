@@ -93,7 +93,7 @@ export default function PageLayout({ title, subtitle, onSearch, children }) {
       </div>
 
       {/* CONTENT */}
-      <div style={{ padding: "20px 16px" }}>
+      <div style={{ padding: "20px 16px", position: "relative", zIndex: 20 }}>
         {children}
       </div>
     </div>

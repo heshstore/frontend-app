@@ -6,6 +6,8 @@ import Dashboard from "./Dashboard";
 import OrderForm from "./OrderForm";
 import AddCustomer from "./AddCustomer";
 import CustomerList from "./CustomerList"; // STEP 1 — ADD IMPORT
+import AddItem from "./AddItem";
+import ItemList from "./ItemList";
 
 // 🚀 FINAL PrivateRoute for stable login persistence/auth
 const PrivateRoute = ({ children }) => {
@@ -50,8 +52,10 @@ function App() {
           }
         />
 
+        {/* Added route as per instructions */}
+        <Route path="/add-customer" element={<AddCustomer />} />
+
         {/* Add required routes per instructions */}
-        <Route path="/items" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
         <Route path="/quotation" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
         <Route path="/accounts" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
         <Route path="/delivery" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
@@ -61,23 +65,9 @@ function App() {
         <Route path="/orders" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
         <Route path="/orders/:status" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
 
-        {/* 🚀 Ensure both /add-item and /items routes exist above "*" */}
-        <Route
-          path="/add-item"
-          element={
-            <PrivateRoute>
-              <Dashboard />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/items"
-          element={
-            <PrivateRoute>
-              <Dashboard />
-            </PrivateRoute>
-          }
-        />
+        {/* Newly added routes */}
+        <Route path="/add-item" element={<AddItem />} />
+        <Route path="/items" element={<ItemList />} />
 
         {/* Always redirect any other route to login */}
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -94,7 +94,7 @@ export default function Dashboard() {
       </button>
       {showCustomer && (
         <div>
-          <button style={subBtn} onClick={() => setShowCustomer(!showCustomer)}>• Create Customer</button>
+          <button style={subBtn} onClick={() => navigate("/add-customer")}>• Create Customer</button>
           <button style={subBtn} onClick={() => navigate("/customers")}>• Search Customer</button>
           <button style={subBtn} onClick={() => alert("Coming Soon")}>• Scan Customer Visiting Card</button>
           <button style={subBtn} onClick={() => alert("Coming Soon")}>• Print Envelop</button>
@@ -130,7 +130,8 @@ export default function Dashboard() {
               try {
                 const res = await fetch("https://backend-service-xady.onrender.com/shopify/sync-products");
                 const data = await res.json();
-                alert(`✅ Sync Done: ${data.count} items`);
+                const count = data?.count || data?.length || 0;
+                alert(`✅ Sync Done: ${count} items`);
               } catch (err) {
                 alert("❌ Sync Failed");
               }
