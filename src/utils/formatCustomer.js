@@ -1,9 +1,9 @@
-export const formatCustomer = (c) => {
-  if (!c) return "";
+export function formatCustomer(c) {
+  if (!c) return '';
+  const parts = [c.companyName];
+  if (c.tag) parts.push(`[${c.tag}]`);
+  if (c.city) parts.push(c.city);
+  return parts.join(' — ');
+}
 
-  const name = c.companyName || "";
-  const tag = c.tag || "";
-  const city = c.city || "";
-
-  return `${name} • ${tag} • ${city}`;
-};
+export default formatCustomer;

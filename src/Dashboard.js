@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { theme } from "./theme";
+import UniversalSearch from "./components/UniversalSearch";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -18,13 +19,18 @@ export default function Dashboard() {
   const [showAccounts, setShowAccounts] = useState(false);
   const [showDelivery, setShowDelivery] = useState(false);
   const [showFollow, setShowFollow] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+
+  // STEP 1: Add state
+  const [progress, setProgress] = useState(0);
 
   useEffect(() => {
     axios
-      .get("https://backend-service-xady.onrender.com/orders")
+      .get("http://localhost:3000/orders")
       .then((res) => setOrders(res.data))
       .catch((err) => console.error(err));
   }, []);
+
 
   const totalOrders = orders.length;
 
@@ -74,9 +80,84 @@ export default function Dashboard() {
     navigate("/");
   };
 
+
+  const [syncPhase, setSyncPhase] = useState("idle"); // idle | fetching | saving | done
+
+  const handleSync = () => {
+    setSyncing(true);
+    setProgress(0);
+    setSyncPhase("fetching");
+
+    // Fire sync — do NOT await (long-running)
+    fetch("http://localhost:3000/shopify/sync").catch(() => {});
+
+    // Start polling immediately every 2 s
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch("http://localhost:3000/shopify/sync-status");
+        const st = await res.json();
+
+        setSyncPhase(st.phase || (st.status === "done" ? "done" : "fetching"));
+
+        if (st.total > 0) {
+          const percent = Math.round((st.processed / st.total) * 100);
+          setProgress(Math.min(percent, 99));
+        }
+
+        if (st.status === "done") {
+          clearInterval(interval);
+          setProgress(100);
+          setSyncPhase("done");
+          const skipped = st.skipped ? ` · ${st.skipped} skipped` : "";
+          alert(`✅ Sync Done: ${st.processed} items synced${skipped}`);
+          setSyncing(false);
+          setSyncPhase("idle");
+        }
+      } catch (e) {
+        console.error("Polling error", e);
+      }
+    }, 2000);
+  };
+
   return (
-    <div style={{ padding: 20, maxWidth: 420, margin: "auto", background: theme.background }}>
-      <h2 style={{ marginBottom: 20 }}>Dashboard</h2>
+    <div style={{ fontFamily: theme.fontFamily, background: theme.background, minHeight: '100vh' }}>
+      {/* Sticky header with search */}
+      <div
+        style={{
+          background: theme.primary,
+          color: '#fff',
+          padding: '10px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          position: 'sticky',
+          top: 0,
+          zIndex: 100,
+        }}
+      >
+        <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0 }}>
+          Dashboard
+        </h2>
+        <UniversalSearch />
+        <button
+          onClick={handleLogout}
+          style={{
+            background: 'transparent',
+            border: '1px solid rgba(255,255,255,0.5)',
+            color: '#fff',
+            borderRadius: 4,
+            padding: '4px 10px',
+            cursor: 'pointer',
+            fontSize: 13,
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
+          }}
+        >
+          Logout
+        </button>
+      </div>
+
+    <div style={{ padding: 20, maxWidth: 420, margin: "auto" }}>
 
       {/* STATS */}
       <div style={{ marginBottom: 25 }}>
@@ -124,23 +205,90 @@ export default function Dashboard() {
               navigate("/items");
             }}
           >• View Service Item</button>
+          {syncing && (
+            <div
+              style={{
+                background: "#fffbe6",
+                border: "1px solid #fbbf24",
+                borderRadius: 8,
+                padding: "10px 12px",
+                marginBottom: 10,
+                fontSize: 13,
+              }}
+            >
+              <div style={{ fontWeight: 600, marginBottom: 6, color: "#92400e" }}>
+                {syncPhase === "fetching"
+                  ? "⏳ Fetching products from Shopify…"
+                  : `🔄 Saving items… ${progress}% (${Math.round((progress / 100) * (progress > 0 ? 100 : 1))} done)`}
+              </div>
+              {/* Indeterminate bar while fetching; real % bar while saving */}
+              {syncPhase === "fetching" ? (
+                <div
+                  style={{
+                    height: 8,
+                    borderRadius: 4,
+                    background: "#fde68a",
+                    overflow: "hidden",
+                    position: "relative",
+                  }}
+                >
+                  <div
+                    style={{
+                      position: "absolute",
+                      height: "100%",
+                      width: "40%",
+                      background: "#f59e0b",
+                      borderRadius: 4,
+                      animation: "slideAnim 1.4s ease-in-out infinite",
+                    }}
+                  />
+                </div>
+              ) : (
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div
+                    style={{
+                      flex: 1,
+                      height: 8,
+                      borderRadius: 4,
+                      background: "#fde68a",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        height: "100%",
+                        width: `${progress}%`,
+                        background: "#16a34a",
+                        borderRadius: 4,
+                        transition: "width 0.4s ease",
+                      }}
+                    />
+                  </div>
+                  <span style={{ fontSize: 12, color: "#374151", minWidth: 36 }}>
+                    {progress}%
+                  </span>
+                </div>
+              )}
+              <div style={{ marginTop: 5, fontSize: 11, color: "#78350f" }}>
+                Do not close this page
+              </div>
+            </div>
+          )}
+          <style>{`
+            @keyframes slideAnim {
+              0% { left: -40%; }
+              100% { left: 100%; }
+            }
+          `}</style>
           <button
             style={subBtn}
-            onClick={async () => {
-              try {
-                const res = await fetch("https://backend-service-xady.onrender.com/shopify/sync-products");
-                const data = await res.json();
-                const count = data?.count || data?.length || 0;
-                alert(`✅ Sync Done: ${count} items`);
-              } catch (err) {
-                alert("❌ Sync Failed");
-              }
-            }}
+            disabled={syncing}
+            onClick={handleSync}
           >
-            • Sync Shopify Items
+            {syncing ? "⏳ Syncing... Please wait" : "• Sync Shopify Items"}
           </button>
-          <button style={subBtn} onClick={() => alert("Coming Soon")}>• View Shopify Items</button>
-          <button style={subBtn} onClick={() => alert("Coming Soon")}>• Update Price List</button>
+          <button style={subBtn} onClick={() => navigate('/shopify-items')}>• View Shopify Items</button>
+          <button style={subBtn} onClick={() => alert("Coming Soon")}>• Price List </button>
           <button style={subBtn} onClick={() => navigate("/items")}>• Item Price List View</button>
         </div>
       )}
@@ -156,8 +304,8 @@ export default function Dashboard() {
       </button>
       {showQuotation && (
         <div>
-          <button style={subBtn} onClick={() => setShowQuotation(!showQuotation)}>• Create Quotation</button>
-          <button style={subBtn} onClick={() => alert("Coming Soon")}>• View Quotation</button>
+          <button style={subBtn} onClick={() => navigate("/quotation")}>• Create Quotation</button>
+          <button style={subBtn} onClick={() => navigate("/quotations")}>• View Quotation</button>
         </div>
       )}
 
@@ -170,7 +318,8 @@ export default function Dashboard() {
       </button>
       {showOrder && (
         <div>
-          <button style={subBtn} onClick={() => setShowOrder(!showOrder)}>• Create Order</button>
+          {/* REWRITE HERE for 'Create Order' button: setShowOrder -> navigate("/order") */}
+          <button style={subBtn} onClick={() => navigate("/order")}>• Create Order</button>
           <button style={subBtn} onClick={() => navigate("/orders")}>• View Order</button>
           <button style={subBtn} onClick={() => navigate("/orders")}>• Approved Order</button>
         </div>
@@ -226,6 +375,9 @@ export default function Dashboard() {
           <button style={subBtn} onClick={() => alert("Coming Soon")}>• Payment Entry</button>
           <button style={subBtn} onClick={() => alert("Coming Soon")}>• View Ledger</button>
           <button style={subBtn} onClick={() => alert("Coming Soon")}>• View Commission Calculation</button>
+          <button style={subBtn} onClick={() => alert("Coming Soon")}>
+            • Set Customer Credit Limit
+          </button>
         </div>
       )}
 
@@ -261,22 +413,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* LOGOUT */}
-      <button
-        onClick={handleLogout}
-        style={{
-          marginTop: 25,
-          width: "100%",
-          padding: 12,
-          background: "#e74c3c",
-          color: "#fff",
-          border: "none",
-          borderRadius: 8,
-          fontWeight: "bold",
-        }}
-      >
-        Logout
-      </button>
+    </div>
     </div>
   );
 }

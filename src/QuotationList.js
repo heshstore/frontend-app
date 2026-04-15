@@ -1,215 +1,233 @@
-import React, { useEffect, useState } from "react";
-import axios from "axios";
-import { useNavigate } from "react-router-dom";
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { API_URL } from './config';
+import { theme, buttonStyle } from './theme';
 
-export default function OrderList() {
-  const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [search, setSearch] = useState(""); // 1. ADD SEARCH STATE
+const STATUS_COLORS = {
+  OPEN: '#198754',
+  CONVERTED: '#0066B3',
+  CANCELLED: '#dc3545',
+  EXPIRED: '#6c757d',
+};
+
+export default function QuotationList() {
   const navigate = useNavigate();
+  const [quotations, setQuotations] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [expanded, setExpanded] = useState(null);
 
-  const loadOrders = async () => {
+  const loadQuotations = async () => {
     setLoading(true);
     try {
-      const res = await axios.get("https://backend-service-xady.onrender.com/orders");
-      setOrders(res.data.filter(o => o.status === 'quotation'));
+      const params = new URLSearchParams();
+      if (statusFilter) params.set('status', statusFilter);
+      const res = await fetch(`${API_URL}/quotations?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setQuotations(Array.isArray(data) ? data : []);
+      }
     } catch (err) {
-      console.error("Failed to load orders:", err);
+      console.error('Failed to load quotations:', err);
     } finally {
       setLoading(false);
     }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    loadOrders();
-  }, []);
+    loadQuotations();
+  }, [statusFilter]);
 
-  // 2. ADD FILTER
-  const filteredOrders = orders.filter((o) =>
-    (o.customer_name || "").toLowerCase().includes(search.toLowerCase()) ||
-    (o.mobile || "").includes(search) ||
-    String(o.id).includes(search)
-  );
+  const filtered = quotations.filter((q) => {
+    const text = search.toLowerCase();
+    return (
+      (q.quotation_no || '').toLowerCase().includes(text) ||
+      (q.customer_name || '').toLowerCase().includes(text) ||
+      String(q.id).includes(text)
+    );
+  });
 
-  const tableCellStyle = { padding: "8px 12px", textAlign: "center" };
-  const buttonStyle = { marginRight: "8px", marginBottom: "4px" };
+  const handleCancel = async (id) => {
+    if (!window.confirm('Cancel this quotation?')) return;
+    try {
+      const res = await fetch(`${API_URL}/quotations/${id}/cancel`, { method: 'PATCH' });
+      if (res.ok) {
+        alert('Quotation cancelled');
+        loadQuotations();
+      } else {
+        alert('Cancel failed');
+      }
+    } catch {
+      alert('Cancel failed');
+    }
+  };
+
+  const handleConvert = async (id) => {
+    if (!window.confirm('Convert this quotation to an order?')) return;
+    try {
+      const res = await fetch(`${API_URL}/quotations/${id}/convert-to-order`, { method: 'POST' });
+      if (res.ok) {
+        alert('Converted to Order');
+        loadQuotations();
+      } else {
+        alert('Conversion failed');
+      }
+    } catch {
+      alert('Conversion failed');
+    }
+  };
+
+  const shareWhatsApp = (q) => {
+    const msg = `Quotation ${q.quotation_no || '#' + q.id} from ${q.customer_name || ''}\nAmount: ₹${Number(q.total_amount || 0).toLocaleString('en-IN')}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+  };
 
   return (
-    <div style={{ padding: 24, maxWidth: 950, margin: "0 auto" }}>
-      {/* 1. ADD BACK BUTTON (TOP) */}
-      <button
-        onClick={() => navigate(-1)}
-        style={{
-          marginBottom: "10px",
-          padding: "6px 12px",
-          cursor: "pointer"
-        }}
-      >
-        ← Back
-      </button>
-
-      <div style={{ display: "flex", alignItems: "center", marginBottom: 24 }}>
-        <h2 style={{ margin: 0, flex: 1 }}>Quotation List</h2>
-        <button
-          style={{
-            padding: "8px 18px",
-            fontWeight: "bold",
-            fontSize: "15px",
-            background: "#007bff",
-            color: "white",
-            border: "none",
-            borderRadius: "4px",
-            cursor: "pointer",
-          }}
-          onClick={() => navigate("/")}
-        >
-          + New Order
+    <div style={{ fontFamily: theme.fontFamily, background: theme.background, minHeight: '100vh', padding: '0 0 40px' }}>
+      {/* Header */}
+      <div style={{ background: theme.primary, color: '#fff', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, position: 'sticky', top: 0, zIndex: 100 }}>
+        <button onClick={() => navigate(-1)} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.5)', color: '#fff', borderRadius: 4, padding: '4px 10px', cursor: 'pointer' }}>
+          ← Back
+        </button>
+        <h2 style={{ margin: 0, flex: 1, fontSize: 18 }}>Quotations</h2>
+        <button onClick={() => navigate('/quotation')} style={{ ...buttonStyle, background: '#fff', color: theme.primary, fontWeight: 600 }}>
+          + New
         </button>
       </div>
 
-      {/* 3. CENTER SEARCH BAR (TOP) */}
-      <div style={{
-        display: "flex",
-        justifyContent: "center",
-        marginBottom: 20
-      }}>
-        <input
-          placeholder="Search by ID / Customer / Mobile"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{
-            padding: "10px",
-            width: "320px",
-            maxWidth: "90%",
-            border: "1px solid #ccc",
-            borderRadius: "6px",
-            textAlign: "center"
-          }}
-        />
-      </div>
-
-      {loading ? (
-        <div style={{ padding: "25px 0", textAlign: "center" }}>Loading...</div>
-      ) : filteredOrders.length === 0 ? (
-        <div style={{ padding: "18px 0", textAlign: "center", color: "#666" }}>
-          No orders found
+      <div style={{ maxWidth: 960, margin: '0 auto', padding: 16 }}>
+        {/* Search + Filter */}
+        <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+          <input
+            placeholder="Search by No. / Customer"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ flex: 1, minWidth: 200, padding: '8px 12px', border: `1px solid ${theme.border}`, borderRadius: 4, fontSize: 14 }}
+          />
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            style={{ padding: '8px 12px', border: `1px solid ${theme.border}`, borderRadius: 4, fontSize: 14 }}
+          >
+            <option value="">All Statuses</option>
+            <option value="OPEN">Open</option>
+            <option value="CONVERTED">Converted</option>
+            <option value="CANCELLED">Cancelled</option>
+            <option value="EXPIRED">Expired</option>
+          </select>
         </div>
-      ) : (
-        // 8. MOBILE SAFETY - WRAP TABLE
-        <div style={{ overflowX: "auto" }}>
-          <table
-            border="1"
-            cellPadding="0"
-            cellSpacing="0"
+
+        {loading && <div style={{ padding: 24, textAlign: 'center', color: theme.textMuted }}>Loading...</div>}
+
+        {!loading && filtered.length === 0 && (
+          <div style={{ padding: 24, textAlign: 'center', color: theme.textMuted }}>
+            No quotations found.{' '}
+            <button onClick={() => navigate('/quotation')} style={{ ...buttonStyle, padding: '6px 14px' }}>
+              Create one
+            </button>
+          </div>
+        )}
+
+        {!loading && filtered.map((q) => (
+          <div
+            key={q.id}
             style={{
-              marginTop: 10,
-              borderCollapse: "collapse",
-              width: "100%",
-              background: "#fff",
+              border: `1px solid ${theme.border}`,
+              borderRadius: 8,
+              marginBottom: 12,
+              background: '#fff',
+              overflow: 'hidden',
             }}
           >
-            <thead style={{ background: "#f2f6fa" }}>
-              {/* 2. UPDATE TABLE HEADERS */}
-              <tr>
-                <th>Quotation No.</th>
-                <th>Date</th>
-                <th>Customer</th>
-                <th>Quotation Value</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {/* 3. UPDATE ROW DATA */}
-              {filteredOrders.map((row) => (
-                <tr key={row.id}>
-                  <td style={tableCellStyle}>{row.id}</td>
-                  <td style={tableCellStyle}>
-                    {row.created_at
-                      ? new Date(row.created_at).toLocaleDateString()
-                      : "-"}
-                  </td>
-                  <td style={tableCellStyle}>
-                    <div>{row.customer_name}</div>
-                    <div style={{ fontSize: "12px", color: "#666" }}>
-                      {row.city || ""} {row.mobile ? `| ${row.mobile}` : ""}
-                    </div>
-                  </td>
-                  <td style={tableCellStyle}>
-                    ₹ {Number(row.total_amount || 0).toLocaleString()}
-                  </td>
-                  <td style={tableCellStyle}>{row.status}</td>
-                  <td style={tableCellStyle}>
-                    {/* KEEP EXISTING BUTTONS */}
-                    <button
-                      style={buttonStyle}
-                      onClick={() => navigate(`/invoice/${row.id}`)}
-                    >
-                      View
-                    </button>
-                    <button
-                      style={buttonStyle}
-                      onClick={() => navigate(`/edit-order/${row.id}`)}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      style={buttonStyle}
-                      onClick={() => {
-                        if (!window.confirm("Cancel quotation?")) return;
-                        fetch(`https://backend-service-xady.onrender.com/orders/${row.id}`, {
-                          method: "DELETE"
-                        })
-                          .then(res => {
-                            if (!res.ok) throw new Error();
-                            alert("Quotation cancelled");
-                            window.location.reload();
-                          })
-                          .catch(() => alert("Cancel failed"));
-                      }}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      style={buttonStyle}
-                      onClick={() => {
-                        fetch(`https://backend-service-xady.onrender.com/orders/${row.id}/convert-to-order`, {
-                          method: "PATCH"
-                        })
-                          .then(res => {
-                            if (!res.ok) throw new Error();
-                            return res.json();
-                          })
-                          .then(() => {
-                            alert("Converted to Order");
-                            window.location.reload();
-                          })
-                          .catch(() => alert("Convert failed"));
-                      }}
-                    >
-                      Convert to Order
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+            {/* Card header */}
+            <div
+              onClick={() => setExpanded(expanded === q.id ? null : q.id)}
+              style={{ padding: '12px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}
+            >
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: 15 }}>
+                  {q.quotation_no || `QUO-${q.id}`}
+                  <span
+                    style={{
+                      marginLeft: 8,
+                      fontSize: 11,
+                      background: STATUS_COLORS[q.status] || '#6c757d',
+                      color: '#fff',
+                      borderRadius: 4,
+                      padding: '2px 8px',
+                    }}
+                  >
+                    {q.status}
+                  </span>
+                </div>
+                <div style={{ fontSize: 13, color: theme.textMuted, marginTop: 2 }}>
+                  {q.customer_name || '—'} · ₹{Number(q.total_amount || 0).toLocaleString('en-IN')}
+                </div>
+                <div style={{ fontSize: 12, color: theme.textMuted }}>
+                  {q.created_at ? new Date(q.created_at).toLocaleDateString('en-IN') : ''}
+                  {q.valid_till ? ` · Valid till ${new Date(q.valid_till).toLocaleDateString('en-IN')}` : ''}
+                </div>
+              </div>
+              <span style={{ fontSize: 18, color: theme.textMuted }}>{expanded === q.id ? '▲' : '▼'}</span>
+            </div>
 
-      {/* 7. ADD TOTAL AT BOTTOM */}
-      {filteredOrders.length > 0 && !loading && (
-        <div style={{
-          marginTop: 20,
-          textAlign: "right",
-          fontWeight: "bold",
-          fontSize: "16px"
-        }}>
-          Total: ₹ {filteredOrders
-            .reduce((sum, o) => sum + Number(o.total_amount || 0), 0)
-            .toLocaleString()}
-        </div>
-      )}
+            {/* Expanded details */}
+            {expanded === q.id && (
+              <div style={{ borderTop: `1px solid ${theme.border}`, padding: '12px 16px' }}>
+                {/* Items */}
+                {q.items && q.items.length > 0 && (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontWeight: 600, marginBottom: 6, fontSize: 13 }}>Items</div>
+                    {q.items.map((item, i) => (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '3px 0', borderBottom: `1px solid ${theme.border}` }}>
+                        <span>{item.item_name || item.sku || `Item ${i + 1}`}</span>
+                        <span>× {item.qty} @ ₹{Number(item.rate || 0).toLocaleString('en-IN')} = ₹{Number(item.amount || 0).toLocaleString('en-IN')}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+                  {q.status === 'OPEN' && (
+                    <>
+                      <button onClick={() => navigate(`/quotation?id=${q.id}`)} style={{ ...buttonStyle, padding: '6px 14px' }}>
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleConvert(q.id)}
+                        style={{ ...buttonStyle, background: theme.success || '#198754', padding: '6px 14px' }}
+                      >
+                        Convert to Order
+                      </button>
+                      <button
+                        onClick={() => handleCancel(q.id)}
+                        style={{ ...buttonStyle, background: '#dc3545', padding: '6px 14px' }}
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  )}
+                  <button
+                    onClick={() => window.print()}
+                    style={{ ...buttonStyle, background: '#6c757d', padding: '6px 14px' }}
+                  >
+                    Print
+                  </button>
+                  <button
+                    onClick={() => shareWhatsApp(q)}
+                    style={{ ...buttonStyle, background: '#25d366', padding: '6px 14px' }}
+                  >
+                    WhatsApp
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

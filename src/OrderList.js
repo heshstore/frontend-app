@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { ORDER_STATUS, ORDER_STATUS_LABELS } from "./constants/orderStatus";
+import { API_URL } from "./config";
 
 export default function OrderList() {
   const [orders, setOrders] = useState([]);
@@ -20,8 +22,16 @@ export default function OrderList() {
   }, []);
 
   const loadOrders = async () => {
-    const res = await axios.get("https://backend-service-xady.onrender.com/orders");
-    setOrders(res.data.filter(o => o.status === 'order'));
+    try {
+      const res = await axios.get(`${API_URL}/orders`);
+      // Show all non-cancelled, non-draft orders
+      setOrders(res.data.filter(o =>
+        o.status !== ORDER_STATUS.CANCELLED &&
+        o.status !== ORDER_STATUS.DRAFT
+      ));
+    } catch (err) {
+      console.error("Failed to load orders:", err);
+    }
   };
 
   useEffect(() => {
@@ -122,14 +132,14 @@ export default function OrderList() {
                 {/* KEEP SAME BUTTONS */}
                 <button onClick={() => navigate(`/invoice/${row.id}`)}>View</button>
                 <button onClick={() => navigate(`/edit-order/${row.id}`)}>Edit</button>
-                {row.status === "order" && (
+                      {row.status === ORDER_STATUS.DRAFT && (
                   <button onClick={() => {
-                    fetch(`https://backend-service-xady.onrender.com/orders/${row.id}/send-for-approval`, {
+                    fetch(`${API_URL}/orders/${row.id}/send-for-approval`, {
                       method: "PATCH"
                     })
                     .then(() => {
                       alert("Sent for approval");
-                      window.location.href = "/orders/pending";
+                      navigate("/pending-approval");
                     });
                   }}>
                     Send
@@ -137,8 +147,8 @@ export default function OrderList() {
                 )}
                 <button onClick={() => {
                   if (!window.confirm("Cancel order?")) return;
-                  fetch(`https://backend-service-xady.onrender.com/orders/${row.id}`, {
-                    method: "DELETE"
+                  fetch(`${API_URL}/orders/${row.id}/cancel`, {
+                    method: "PATCH"
                   }).then(() => window.location.reload());
                 }}>
                   Cancel
@@ -214,15 +224,15 @@ export default function OrderList() {
                       </button>
 
                       {/* SEND FOR APPROVAL BUTTON (ONLY for status = order) */}
-                      {row.status === "order" && (
+                      {row.status === ORDER_STATUS.DRAFT && (
                         <button
                           onClick={() => {
-                            fetch(`https://backend-service-xady.onrender.com/orders/${row.id}/send-for-approval`, {
+                            fetch(`${API_URL}/orders/${row.id}/send-for-approval`, {
                               method: "PATCH"
                             })
                             .then(() => {
                               alert("Sent for approval");
-                              window.location.href = "/orders/pending";
+                              navigate("/pending-approval");
                             });
                           }}
                         >
@@ -236,8 +246,8 @@ export default function OrderList() {
                           const confirmCancel = window.confirm("Cancel this order?");
                           if (!confirmCancel) return;
 
-                          fetch(`https://backend-service-xady.onrender.com/orders/${row.id}`, {
-                            method: 'DELETE'
+                          fetch(`${API_URL}/orders/${row.id}/cancel`, {
+                            method: 'PATCH'
                           })
                             .then(res => {
                               if (!res.ok) throw new Error();

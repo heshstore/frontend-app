@@ -4,75 +4,73 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./Login";
 import Dashboard from "./Dashboard";
 import OrderForm from "./OrderForm";
+import QuotationForm from "./QuotationForm";
 import AddCustomer from "./AddCustomer";
-import CustomerList from "./CustomerList"; // STEP 1 — ADD IMPORT
+import EditCustomer from "./EditCustomer";
+import CustomerList from "./CustomerList";
 import AddItem from "./AddItem";
 import ItemList from "./ItemList";
+import QuotationList from "./QuotationList";
+import OrderList from "./OrderList";
+import ShopifyItems from "./ShopifyItems";
+import Invoice from "./Invoice";
+import PendingApproval from "./PendingApproval";
+import PaymentEntry from "./PaymentEntry";
+import { AuthProvider } from "./context/AuthContext";
 
-// 🚀 FINAL PrivateRoute for stable login persistence/auth
 const PrivateRoute = ({ children }) => {
+  const token = localStorage.getItem("access_token");
   const isLoggedIn = localStorage.getItem("isLoggedIn");
-  if (isLoggedIn === "true") {
+  if (token || isLoggedIn === "true") {
     return children;
   }
-  // You may want to redirect to login in the future for strict auth.
-  return children;
+  return <Navigate to="/" replace />;
 };
 
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        {/* Default login */}
-        <Route path="/" element={<Login />} />
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          {/* Login */}
+          <Route path="/" element={<Login />} />
 
-        {/* Keep existing required routes */}
-        <Route
-          path="/dashboard"
-          element={
-            <PrivateRoute>
-              <Dashboard />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/order"
-          element={
-            <PrivateRoute>
-              <OrderForm />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/customer/create"
-          element={
-            <PrivateRoute>
-              <AddCustomer />
-            </PrivateRoute>
-          }
-        />
+          {/* Dashboard */}
+          <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
 
-        {/* Added route as per instructions */}
-        <Route path="/add-customer" element={<AddCustomer />} />
+          {/* Orders */}
+          <Route path="/order" element={<PrivateRoute><OrderForm /></PrivateRoute>} />
+          <Route path="/order-list" element={<PrivateRoute><OrderList /></PrivateRoute>} />
+          <Route path="/pending-approval" element={<PrivateRoute><PendingApproval /></PrivateRoute>} />
 
-        {/* Add required routes per instructions */}
-        <Route path="/quotation" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-        <Route path="/accounts" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-        <Route path="/delivery" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+          {/* Quotations */}
+          <Route path="/quotation" element={<PrivateRoute><QuotationForm /></PrivateRoute>} />
+          <Route path="/quotations" element={<PrivateRoute><QuotationList /></PrivateRoute>} />
 
-        {/* Added missing routes from Dashboard */}
-        <Route path="/customers" element={<PrivateRoute><CustomerList /></PrivateRoute>} /> {/* STEP 2 — USE REAL CustomerList */}
-        <Route path="/orders" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-        <Route path="/orders/:status" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+          {/* Customers */}
+          <Route path="/customers" element={<PrivateRoute><CustomerList /></PrivateRoute>} />
+          <Route path="/add-customer" element={<PrivateRoute><AddCustomer /></PrivateRoute>} />
+          <Route path="/customer/create" element={<PrivateRoute><AddCustomer /></PrivateRoute>} />
+          <Route path="/edit-customer/:id" element={<PrivateRoute><EditCustomer /></PrivateRoute>} />
 
-        {/* Newly added routes */}
-        <Route path="/add-item" element={<AddItem />} />
-        <Route path="/items" element={<ItemList />} />
+          {/* Items */}
+          <Route path="/add-item" element={<PrivateRoute><AddItem /></PrivateRoute>} />
+          <Route path="/items" element={<PrivateRoute><ItemList /></PrivateRoute>} />
+          <Route path="/shopify-items" element={<PrivateRoute><ShopifyItems /></PrivateRoute>} />
 
-        {/* Always redirect any other route to login */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
+          {/* Invoice */}
+          <Route path="/invoice/:id" element={<PrivateRoute><Invoice /></PrivateRoute>} />
+          <Route path="/payment/:orderId" element={<PrivateRoute><PaymentEntry /></PrivateRoute>} />
+
+          {/* Placeholder routes */}
+          <Route path="/accounts" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+          <Route path="/delivery" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+
+          {/* Catch-all */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
 

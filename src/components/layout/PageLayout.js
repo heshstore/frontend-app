@@ -1,99 +1,73 @@
-import { theme } from "../../theme";
-import BackButton from "../ui/BackButton";
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { theme } from '../../theme';
+import UniversalSearch from '../UniversalSearch';
 
-export default function PageLayout({ title, subtitle, onSearch, children }) {
+export default function PageLayout({ title, children, hideBack = false, hideSearch = false }) {
+  const navigate = useNavigate();
+
   return (
     <div
       style={{
-        maxWidth: 420,
-        margin: "auto",
+        fontFamily: theme.fontFamily,
         background: theme.background,
-        minHeight: "100vh"
+        minHeight: '100vh',
+        padding: '0 0 40px',
       }}
     >
-      {/* STICKY HEADER */}
+      {/* Header bar */}
       <div
         style={{
-          position: "sticky",
+          background: theme.primary,
+          color: '#fff',
+          padding: '10px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          position: 'sticky',
           top: 0,
-          background: theme.background,
-          padding: 16,
-          zIndex: 10,
-          borderBottom: `1px solid ${theme.border}`,
-          boxShadow: "0 2px 6px rgba(0,0,0,0.05)"
+          zIndex: 100,
         }}
       >
-        {/* BACK BUTTON */}
-        <div style={{ marginBottom: 8 }}>
-          <BackButton />
-        </div>
-
-        {/* TITLE */}
-        <div
-          style={{
-            textAlign: "center",
-            marginBottom: 16
-          }}
-        >
-          <h1
+        {!hideBack && (
+          <button
+            onClick={() => navigate(-1)}
             style={{
-              fontSize: 22,
-              fontWeight: 600,
-              color: theme.text,
-              margin: 0
+              background: 'transparent',
+              border: '1px solid rgba(255,255,255,0.5)',
+              color: '#fff',
+              borderRadius: theme.borderRadiusSm,
+              padding: '4px 10px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
             }}
           >
-            {title}
-          </h1>
-
-          {subtitle && (
-            <div
-              style={{
-                fontSize: 13,
-                color: "#6B7280",
-                marginTop: 4
-              }}
-            >
-              {subtitle}
-            </div>
-          )}
-
-          <div
-            style={{
-              width: 40,
-              height: 3,
-              background: theme.primary,
-              margin: "8px auto 0",
-              borderRadius: 2
-            }}
-          />
-        </div>
-
-        {/* SEARCH */}
-        {onSearch && (
-          <div style={{ marginTop: 8 }}>
-            <input
-              type="text"
-              placeholder="Search anything (name, mobile, city, gst...)"
-              onChange={(e) => onSearch(e.target.value)}
-              style={{
-                width: "100%",
-                padding: 12,
-                borderRadius: 12,
-                border: `1px solid ${theme.border}`,
-                marginBottom: 16,
-                fontSize: 14,
-                outline: "none"
-              }}
-              onFocus={(e) => e.target.style.border = `1px solid ${theme.primary}`}
-              onBlur={(e) => e.target.style.border = `1px solid ${theme.border}`}
-            />
-          </div>
+            ← Back
+          </button>
         )}
+        <h2
+          style={{
+            margin: 0,
+            fontSize: '17px',
+            fontWeight: 600,
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
+          }}
+        >
+          {title}
+        </h2>
+        {!hideSearch && <UniversalSearch />}
       </div>
 
-      {/* CONTENT */}
-      <div style={{ padding: "20px 16px", position: "relative", zIndex: 20 }}>
+      <div
+        style={{
+          maxWidth: 960,
+          margin: '0 auto',
+          padding: '16px',
+        }}
+      >
         {children}
       </div>
     </div>

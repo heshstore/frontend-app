@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { theme } from "./theme";
+import { API_URL } from "./config";
 
 export default function AddItem() {
   const navigate = useNavigate();
@@ -54,7 +55,7 @@ export default function AddItem() {
 
       console.log("SENDING 👉", payload);
 
-      const res = await fetch("https://backend-service-xady.onrender.com/items", {
+      const res = await fetch(`${API_URL}/items`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -137,12 +138,8 @@ export default function AddItem() {
       >
 
         {[
-          ["SKU", "sku"],  
+          ["SKU", "sku"],
           ["Item Name", "itemName"],
-          ["HSN Code", "hsnCode"],
-          ["GST %", "gst"],
-          ["Cost Price", "costPrice"],
-          ["Selling Price", "sellingPrice"]
         ].map(([label, name]) => (
           <div key={name} style={{ marginBottom: 15 }}>
             <label>{label}</label>
@@ -151,11 +148,53 @@ export default function AddItem() {
               value={form[name]}
               onChange={handleChange}
               required={name === "sku"}
-              style={{
-                width: "100%",
-                padding: 10,
-                borderRadius: 6
-              }}
+              style={{ width: "100%", padding: 10, borderRadius: 6 }}
+            />
+          </div>
+        ))}
+
+        {/* HSN Code — max 8 digits */}
+        <div style={{ marginBottom: 15 }}>
+          <label>HSN Code</label>
+          <input
+            name="hsnCode"
+            value={form.hsnCode}
+            onChange={(e) => {
+              const val = e.target.value.replace(/\D/g, "").slice(0, 8);
+              setForm((prev) => ({ ...prev, hsnCode: val }));
+            }}
+            maxLength={8}
+            placeholder="Up to 8 digits"
+            style={{ width: "100%", padding: 10, borderRadius: 6 }}
+          />
+        </div>
+
+        {/* GST % — dropdown */}
+        <div style={{ marginBottom: 15 }}>
+          <label>Gst Tax</label>
+          <select
+            name="gst"
+            value={form.gst}
+            onChange={handleChange}
+            style={{ width: "100%", padding: 10, borderRadius: 6 }}
+          >
+            <option value="">Select GST %</option>
+            <option value="5">5%</option>
+            <option value="18">18%</option>
+          </select>
+        </div>
+
+        {[
+          ["Cost Price", "costPrice"],
+          ["Selling Price", "sellingPrice"],
+        ].map(([label, name]) => (
+          <div key={name} style={{ marginBottom: 15 }}>
+            <label>{label}</label>
+            <input
+              name={name}
+              value={form[name]}
+              onChange={handleChange}
+              style={{ width: "100%", padding: 10, borderRadius: 6 }}
             />
           </div>
         ))}

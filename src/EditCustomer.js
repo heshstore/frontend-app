@@ -27,7 +27,7 @@ export default function EditCustomer() {
 
   // ✅ LOAD CUSTOMER
   useEffect(() => {
-    fetch(`https://backend-service-xady.onrender.com/customers/${id}`)
+    fetch(`${require('./config').API_URL}/customers/${id}`)
       .then(res => res.json())
       .then(data => {
         setForm({
@@ -68,7 +68,7 @@ export default function EditCustomer() {
     };
 
     try {
-      const res = await fetch(`https://backend-service-xady.onrender.com/customers/${id}`, {
+      const res = await fetch(`${require('./config').API_URL}/customers/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json"

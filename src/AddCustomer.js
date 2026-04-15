@@ -1,12 +1,45 @@
 import React, { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import PageLayout from "./components/layout/PageLayout";
+import { API_URL } from "./config";
 
-// Add a dummy theme if not using context (for legacy support)
 const theme = {
   card: "#fff",
   border: "#e5e5e5",
-  primary: "#007bff"
+  primary: "#0066B3",
+};
+
+/** ISO 3166-1 alpha-2 → ITU calling code */
+const ISO_TO_CALLING_CODE = {
+  AF:'+93',AL:'+355',DZ:'+213',AS:'+1',AD:'+376',AO:'+244',AG:'+1',
+  AR:'+54',AM:'+374',AW:'+297',AU:'+61',AT:'+43',AZ:'+994',BS:'+1',
+  BH:'+973',BD:'+880',BB:'+1',BY:'+375',BE:'+32',BZ:'+501',BJ:'+229',
+  BT:'+975',BO:'+591',BA:'+387',BW:'+267',BR:'+55',BN:'+673',BG:'+359',
+  BF:'+226',BI:'+257',KH:'+855',CM:'+237',CA:'+1',CV:'+238',CF:'+236',
+  TD:'+235',CL:'+56',CN:'+86',CO:'+57',KM:'+269',CG:'+242',CD:'+243',
+  CR:'+506',HR:'+385',CU:'+53',CY:'+357',CZ:'+420',DK:'+45',DJ:'+253',
+  DM:'+1',DO:'+1',TL:'+670',EC:'+593',EG:'+20',SV:'+503',GQ:'+240',
+  ER:'+291',EE:'+372',ET:'+251',FJ:'+679',FI:'+358',FR:'+33',GA:'+241',
+  GM:'+220',GE:'+995',DE:'+49',GH:'+233',GR:'+30',GD:'+1',GT:'+502',
+  GN:'+224',GW:'+245',GY:'+592',HT:'+509',HN:'+504',HK:'+852',HU:'+36',
+  IS:'+354',IN:'+91',ID:'+62',IR:'+98',IQ:'+964',IE:'+353',IL:'+972',
+  IT:'+39',JM:'+1',JP:'+81',JO:'+962',KZ:'+7',KE:'+254',KI:'+686',
+  KW:'+965',KG:'+996',LA:'+856',LV:'+371',LB:'+961',LS:'+266',LR:'+231',
+  LY:'+218',LI:'+423',LT:'+370',LU:'+352',MO:'+853',MK:'+389',MG:'+261',
+  MW:'+265',MY:'+60',MV:'+960',ML:'+223',MT:'+356',MH:'+692',MR:'+222',
+  MU:'+230',MX:'+52',FM:'+691',MD:'+373',MC:'+377',MN:'+976',ME:'+382',
+  MA:'+212',MZ:'+258',MM:'+95',NA:'+264',NR:'+674',NP:'+977',NL:'+31',
+  NC:'+687',NZ:'+64',NI:'+505',NE:'+227',NG:'+234',NU:'+683',KP:'+850',
+  NO:'+47',OM:'+968',PK:'+92',PW:'+680',PS:'+970',PA:'+507',PG:'+675',
+  PY:'+595',PE:'+51',PH:'+63',PL:'+48',PT:'+351',PR:'+1',QA:'+974',
+  RO:'+40',RU:'+7',RW:'+250',KN:'+1',LC:'+1',VC:'+1',WS:'+685',
+  SM:'+378',ST:'+239',SA:'+966',SN:'+221',RS:'+381',SC:'+248',SL:'+232',
+  SG:'+65',SK:'+421',SI:'+386',SB:'+677',SO:'+252',ZA:'+27',KR:'+82',
+  SS:'+211',ES:'+34',LK:'+94',SD:'+249',SR:'+597',SE:'+46',CH:'+41',
+  SY:'+963',TW:'+886',TJ:'+992',TZ:'+255',TH:'+66',TG:'+228',TO:'+676',
+  TT:'+1',TN:'+216',TR:'+90',TM:'+993',TV:'+688',UG:'+256',UA:'+380',
+  AE:'+971',GB:'+44',US:'+1',UY:'+598',UZ:'+998',VU:'+678',VE:'+58',
+  VN:'+84',YE:'+967',ZM:'+260',ZW:'+263',
 };
 
 export default function AddCustomer() {
@@ -31,10 +64,10 @@ export default function AddCustomer() {
     creditLimit: 0,
   });
 
-  // 🚀 STRICT MODE PATCH: Smart canonical states
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [country, setCountry] = useState("India");
+
   const [cityResults, setCityResults] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
 
@@ -59,13 +92,82 @@ export default function AddCustomer() {
 
   const handleChange = (e) => {
     let value = e.target.value;
-    if (["companyName", "contactName"].includes(e.target.name)) {
+    if (["companyName", "contactName", "tag"].includes(e.target.name)) {
       value = toSentenceCase(value);
     }
     setForm({ ...form, [e.target.name]: value });
   };
 
-  // 🚀 STRICT MODE PATCH: FULLY LOCAL-FIRST, ONLY FALLBACK TO GOOGLE IF LOCAL EMPTY
+  /** Save a city to the local DB in the background (fire-and-forget). */
+  const syncCityToDB = async (cityData) => {
+    try {
+      await fetch(`${API_URL}/cities/save`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(cityData),
+      });
+    } catch {
+      // non-critical
+    }
+  };
+
+  const handleCitySelect = (place) => {
+    let cityName = "";
+    let stateName = "";
+    let countryName = "";
+    let countryISO = "";
+
+    if (place.address_components) {
+      // Google Places result
+      place.address_components.forEach((component) => {
+        const types = component.types;
+        if (types.includes("locality")) cityName = component.long_name;
+        if (types.includes("administrative_area_level_1")) stateName = component.long_name;
+        if (types.includes("country")) {
+          countryName = component.long_name;
+          countryISO = component.short_name; // e.g. "IN", "US"
+        }
+      });
+
+      const callingCode = ISO_TO_CALLING_CODE[countryISO] || "+91";
+
+      setCity(cityName);
+      setState(stateName);
+      setCountry(countryName);
+      setForm(prev => ({
+        ...prev,
+        countryCode1: callingCode,
+        countryCode2: callingCode,
+      }));
+
+      selectedCityRef.current = { name: cityName, state: stateName, country: countryName };
+
+      // Immediately persist to local DB so future searches find it
+      syncCityToDB({ name: cityName, state: stateName, country: countryName, countryISO, countryCode: callingCode });
+
+    } else {
+      // Local DB result
+      const callingCode = place.countryCode || ISO_TO_CALLING_CODE[place.countryISO] || "+91";
+
+      setCity(place.name);
+      setState(place.state || "");
+      setCountry(place.country || "India");
+      setForm(prev => ({
+        ...prev,
+        countryCode1: callingCode,
+        countryCode2: callingCode,
+      }));
+
+      selectedCityRef.current = {
+        name: place.name,
+        state: place.state || "",
+        country: place.country || "India",
+      };
+    }
+  };
+
+  // --- The rest of the unchanged code below ---
+
   const handleCitySearch = async (value) => {
     setCity(value);
 
@@ -77,21 +179,22 @@ export default function AddCustomer() {
     }
 
     try {
-      // FIX: Use correct backend endpoint for cities search
       const res = await fetch(
-        `https://backend-service-xady.onrender.com/cities/search?q=${value.toLowerCase()}`
+        `${API_URL}/cities/search?q=${encodeURIComponent(value)}`
       );
-
       const data = await res.json();
 
-      // FORMAT: Set suggestions using canonical response
       if (data.length > 0) {
         setCityResults(
           data.map((c) => ({
+            id: c.id,
             name: c.name,
             state: c.state,
             country: c.country,
-            source: "local",
+            countryISO: c.countryISO,
+            countryCode: c.countryCode,
+            label: `${c.name}, ${c.state}, ${c.country}`,
+            source: "saved",
           }))
         );
         setShowDropdown(true);
@@ -99,7 +202,6 @@ export default function AddCustomer() {
       }
     } catch (err) {}
 
-    // FALLBACK: Call Google only if no local results
     if (window.google) {
       const service = new window.google.maps.places.AutocompleteService();
 
@@ -111,18 +213,13 @@ export default function AddCustomer() {
         (predictions) => {
           if (predictions) {
             setCityResults(
-              predictions.map((p) => {
-                const parts = p.description.split(",");
-
-                return {
-                  name: parts[0]?.trim(),
-                  state: parts[1]?.trim(),
-                  country: parts[2]?.trim() || "India",
-                  source: "google",
-                };
-              })
+              predictions.map((p) => ({
+                place_id: p.place_id,
+                description: p.description,
+                label: p.description,
+                source: "google",
+              }))
             );
-
             setShowDropdown(true);
           }
         }
@@ -143,8 +240,22 @@ export default function AddCustomer() {
       return;
     }
 
+    const selectedCity =
+      selectedCityRef.current && selectedCityRef.current.name
+        ? selectedCityRef.current
+        : {
+            name: city,
+            state: state || "",
+            country: country || "India",
+          };
+
+    if (!selectedCity.name) {
+      alert("Please select a city from dropdown");
+      return;
+    }
+
     try {
-      await fetch("https://backend-service-xady.onrender.com/customers", {
+      const res = await fetch(`${API_URL}/customers`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -153,39 +264,17 @@ export default function AddCustomer() {
           state,
           country,
           mobile1: form.countryCode1 + form.mobile1,
-          mobile2: form.mobile2
-            ? form.countryCode2 + form.mobile2
-            : "",
+          mobile2: form.mobile2 ? form.countryCode2 + form.mobile2 : "",
           creditLimit: Number(form.creditLimit) || 0,
         }),
       });
 
-      // 🚀 STRICT MODE PATCH Step 5 - save city after customer added (STRICT MODE PATCH)
-      const selectedCity =
-        selectedCityRef.current && selectedCityRef.current.name
-          ? selectedCityRef.current
-          : {
-              name: city,
-              state: state || "",
-              country: country || "India",
-            };
+      const data = await res.json();
 
-      if (!selectedCity.name) {
-        alert("Please select a city from dropdown");
+      if (!res.ok) {
+        alert(data.message || "Error saving customer");
         return;
       }
-
-      console.log("SAVING CITY:", selectedCity);
-
-      await fetch("https://backend-service-xady.onrender.com/cities/save", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: selectedCity.name,
-          state: selectedCity.state,
-          country: selectedCity.country
-        }),
-      });
 
       alert("Customer Added ✅");
       navigate("/dashboard");
@@ -214,18 +303,12 @@ export default function AddCustomer() {
     marginBottom: 4
   };
 
-  // For highlighting matched substring
-  function highlightMatch(text, query) {
-    if (!query) return text;
-    const matchIndex = text.toLowerCase().indexOf(query.toLowerCase());
-    if (matchIndex === -1) return text;
-    return (
-      <>
-        {text.slice(0, matchIndex)}
-        <span style={{ background: "#FEF08A", borderRadius: 2 }}>{text.slice(matchIndex, matchIndex + query.length)}</span>
-        {text.slice(matchIndex + query.length)}
-      </>
-    );
+  // Helper for dropdown: For local city, nicely formats fallback
+  function formatCustomer(c) {
+    if (c.label) return c.label;
+    if (c.name && c.state && c.country) return `${c.name}, ${c.state}, ${c.country}`;
+    if (c.description) return c.description;
+    return c.name || "";
   }
 
   return (
@@ -274,22 +357,26 @@ export default function AddCustomer() {
                     style={proInputStyle}
                   >
                     <option value="">Select</option>
-                    <option>Retailer</option>
+                    <option>Retail Shops</option>
+                    <option>Chain Stores</option>
+                    <option>Hospitals & Clinics</option>
                     <option>Wholesaler</option>
-                    <option>Hospital</option>
+                    <option>Cr Lab</option>
+                    <option>Grinders</option>
+                    <option>Brands</option>
                   </select>
                 </div>
 
                 {/* GST */}
                 <div style={{ marginBottom: 0 }}>
-                  <label style={proLabelStyle}>GST</label>
+                  <label style={proLabelStyle}>Gst No</label>
                   <input
                     name="gstNumber"
                     value={form.gstNumber}
+                    maxLength={15}
                     onChange={(e) => {
                       let value = e.target.value.toUpperCase();
                       value = value.replace(/[^A-Z0-9]/g, "");
-                      if (value.length > 15) value = value.slice(0, 15);
 
                       setForm((prev) => ({
                         ...prev,
@@ -300,25 +387,14 @@ export default function AddCustomer() {
                   />
                 </div>
 
-                {/* CREDIT */}
-                <div style={{ marginBottom: 0 }}>
-                  <label style={proLabelStyle}>Credit Limit</label>
-                  <input
-                    type="number"
-                    name="creditLimit"
-                    value={form.creditLimit}
-                    onChange={handleChange}
-                    style={proInputStyle}
-                  />
-                </div>
-
                 {/* MOBILE */}
                 <div style={{ marginBottom: 0 }}>
                   <label style={proLabelStyle}>Mobile *</label>
                   <div style={{ display: "flex", gap: 10 }}>
                     <input
-                      value="+91"
+                      value={form.countryCode1}
                       readOnly
+                      title="Auto-set from city selection"
                       style={{
                         width: "25%",
                         padding: 12,
@@ -327,7 +403,10 @@ export default function AddCustomer() {
                         marginTop: 6,
                         marginBottom: 14,
                         fontSize: 14,
-                        background: "#f6f8fa"
+                        background: "#eef4fb",
+                        color: theme.primary,
+                        fontWeight: 600,
+                        textAlign: "center",
                       }}
                     />
                     <input
@@ -352,8 +431,9 @@ export default function AddCustomer() {
                   <label style={proLabelStyle}>Mobile 2</label>
                   <div style={{ display: "flex", gap: 10 }}>
                     <input
-                      value="+91"
+                      value={form.countryCode2}
                       readOnly
+                      title="Auto-set from city selection"
                       style={{
                         width: "25%",
                         padding: 12,
@@ -362,7 +442,10 @@ export default function AddCustomer() {
                         marginTop: 6,
                         marginBottom: 14,
                         fontSize: 14,
-                        background: "#f6f8fa"
+                        background: "#eef4fb",
+                        color: theme.primary,
+                        fontWeight: 600,
+                        textAlign: "center",
                       }}
                     />
                     <input
@@ -441,74 +524,77 @@ export default function AddCustomer() {
                     />
                     {showDropdown && cityResults.length > 0 && (
                       <div
+                        // STEP 2: Replace with strictly these styles
                         style={{
                           position: "absolute",
-                          top: "100%",
-                          left: 0,
-                          right: 0, // 🔥 FIX WIDTH ISSUE
+                          zIndex: 99999,
+                          width: "100%",
                           background: "#fff",
-                          border: `1px solid ${theme.border}`,
-                          borderRadius: 10,
-                          maxHeight: 180,
-                          overflowY: "auto",
-                          zIndex: 999,
+                          border: "1px solid #ddd",
+                          borderRadius: 8,
                           marginTop: 4,
-                          boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                          maxHeight: 200,
+                          overflowY: "auto",
+                          boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                          pointerEvents: "auto"
                         }}
                       >
-                        {cityResults.map((item, i) => (
+                        {/* STEP 3/4: Replace dropdown list rendering */}
+                        {cityResults.map((c) => (
                           <div
-                            key={i}
-                            onClick={() => {
-                              setCity(item.name);
-                              setState(item.state || "");
-                              setCountry(item.country || "India");
-                              setShowDropdown(false);
-                              // Save the selected city for backend saving
-                              selectedCityRef.current = {
-                                name: item.name,
-                                state: item.state || "",
-                                country: item.country || "India"
-                              };
-                            }}
+                            key={c.id || c.place_id}
                             style={{
-                              padding: 12,
+                              padding: 10,
                               cursor: "pointer",
-                              borderBottom: `1px solid ${theme.border}`,
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "center",
+                              borderBottom: "1px solid #eee"
                             }}
-                            onMouseEnter={(e) =>
-                              (e.currentTarget.style.background = "#f9fafb")
-                            }
-                            onMouseLeave={(e) =>
-                              (e.currentTarget.style.background = "transparent")
-                            }
+                            onMouseDown={async () => {
+                              // Google Place: fetch details first
+                              if (c.source === "google" && window.google) {
+                                const service = new window.google.maps.places.PlacesService(
+                                  document.createElement("div")
+                                );
+                                // STEP 3: ADD LOADING LOCK (VERY IMPORTANT)
+                                // setShowDropdown(false);  // Remove from here and move to success block below
+                                service.getDetails(
+                                  { placeId: c.place_id },
+                                  (place, status) => {
+
+                                    if (
+                                      status === window.google.maps.places.PlacesServiceStatus.OK &&
+                                      place &&
+                                      place.address_components
+                                    ) {
+                                      handleCitySelect(place);
+                                      setShowDropdown(false); // ✅ MOVE HERE
+                                    } else {
+                                      alert("Failed to load city details. Try again.");
+                                    }
+
+                                  }
+                                );
+                              } else {
+                                handleCitySelect(c);
+                                setShowDropdown(false);
+                              }
+                            }}
                           >
-                            <div>
-                              <div style={{ fontWeight: 500 }}>
-                                {highlightMatch(item.name, city)}
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <div>
+                                {c.label || c.description || formatCustomer(c)}
                               </div>
-
-                              <div style={{ fontSize: 12, color: "#6b7280" }}>
-                                {item.state}, {item.country}
+                              <div
+                                style={{
+                                  fontSize: 11,
+                                  padding: "2px 6px",
+                                  borderRadius: 6,
+                                  background: c.source === "saved" ? "#d1fae5" : "#dbeafe",
+                                  color: c.source === "saved" ? "#065f46" : "#1e40af",
+                                  marginLeft: 8
+                                }}
+                              >
+                                {c.source === "saved" ? "Saved" : "Google"}
                               </div>
-                            </div>
-
-                            <div
-                              style={{
-                                fontSize: 10,
-                                padding: "2px 6px",
-                                borderRadius: 6,
-                                background:
-                                  item.source === "local" ? "#DCFCE7" : "#DBEAFE",
-                                color:
-                                  item.source === "local" ? "#166534" : "#1E40AF",
-                                fontWeight: 500,
-                              }}
-                            >
-                              {item.source === "local" ? "Saved" : "Google"}
                             </div>
                           </div>
                         ))}
@@ -571,11 +657,4 @@ export default function AddCustomer() {
 }
 
 /* STYLES */
-const header = { display: "flex", justifyContent: "center", position: "relative", padding: 14 };
-const backBtn = { position: "absolute", left: 15 };
 const container = { display: "flex", justifyContent: "center", padding: 20 };
-const mobileRow = { display: "flex", gap: 10 };
-const codeBox = { width: "25%" };
-const mobileBox = { width: "75%" };
-const saveBtn = { width: "100%", padding: 14, background: "#4facfe", color: "#fff" };
-const fetchBtn = { marginTop: 8 };

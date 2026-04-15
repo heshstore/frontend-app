@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { ORDER_STATUS } from "./constants/orderStatus";
+import { apiFetch } from "./utils/api";
+import { API_URL } from "./config";
 
 export default function PendingApproval() {
   const [orders, setOrders] = useState([]);
@@ -19,13 +22,10 @@ export default function PendingApproval() {
 
   const loadOrders = async () => {
     try {
-      const res = await axios.get("https://backend-service-xady.onrender.com/orders");
-
-      // ✅ FILTER ONLY PENDING APPROVAL
+      const res = await axios.get(`${API_URL}/orders`);
       const pending = res.data.filter(
-        (o) => o.status === "pending_approval"
+        (o) => o.status === ORDER_STATUS.PENDING_APPROVAL
       );
-
       setOrders(pending);
     } catch (err) {
       console.error("Error loading orders", err);
@@ -38,10 +38,8 @@ export default function PendingApproval() {
 
   const approveOrder = async (id) => {
     try {
-      await fetch(`https://backend-service-xady.onrender.com/orders/${id}/approve`, {
-        method: "PATCH",
-      });
-
+      const res = await apiFetch(`/orders/${id}/approve`, { method: "PATCH" });
+      if (!res.ok) throw new Error();
       alert("Order Approved");
       loadOrders();
     } catch {
@@ -50,16 +48,15 @@ export default function PendingApproval() {
   };
 
   const rejectOrder = async (id) => {
-    const remark = prompt("Enter rejection remark");
-    if (!remark) return;
+    const reason = prompt("Enter rejection reason");
+    if (!reason) return;
 
     try {
-      await fetch(`https://backend-service-xady.onrender.com/orders/${id}/reject`, {
+      const res = await apiFetch(`/orders/${id}/reject`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ remark }),
+        body: JSON.stringify({ reason }),
       });
-
+      if (!res.ok) throw new Error();
       alert("Order Rejected");
       loadOrders();
     } catch {

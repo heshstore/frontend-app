@@ -13,9 +13,14 @@ export default function CustomerList() {
   const navigate = useNavigate();
   const perPage = 50;
 
-  const loadCustomers = async () => {
+  // Modified: fetch with search if search present, using /customers/search?q=
+  const loadCustomers = async (searchValue = "") => {
     try {
-      const res = await fetch("https://backend-service-xady.onrender.com/customers");
+      let url = "http://localhost:3000/customers";
+      if (searchValue) {
+        url = `http://localhost:3000/customers/search?q=${searchValue.toLowerCase()}`;
+      }
+      const res = await fetch(url);
       const data = await res.json();
       setCustomers(data);
     } catch (err) {
@@ -27,11 +32,21 @@ export default function CustomerList() {
     loadCustomers();
   }, []);
 
+  // Call the API when search changes (debounce optional, keeping it simple)
+  useEffect(() => {
+    if (search.trim()) {
+      loadCustomers(search);
+    } else {
+      loadCustomers();
+    }
+    setPage(1);
+  }, [search]);
+
   const deleteCustomer = async (id) => {
     if (!window.confirm("Delete this customer?")) return;
 
     try {
-      await fetch(`https://backend-service-xady.onrender.com/customers/${id}`, {
+      await fetch(`http://localhost:3000/customers/${id}`, {
         method: "DELETE",
       });
 
@@ -42,13 +57,8 @@ export default function CustomerList() {
     }
   };
 
-  // ✅ SEARCH
-  const filtered = customers.filter((c) =>
-    Object.values(c)
-      .join(" ")
-      .toLowerCase()
-      .includes(search.toLowerCase())
-  );
+  // Client filtering no longer needed for API search, but fallback for API returning all
+  const filtered = customers;
 
   const totalPages = Math.ceil(filtered.length / perPage);
   const paginated = filtered.slice(
@@ -101,7 +111,7 @@ export default function CustomerList() {
                   <div>
                     <div style={{ fontWeight: "bold", fontSize: 16 }}>
                       {formatCustomer({
-                        companyName: customer.companyName || customer.name,
+                        companyName: customer.companyName || customer.company_name || customer.name,
                         tag: customer.tag,
                         city: customer.city
                       })}

@@ -7,7 +7,7 @@ export default function Invoice() {
   const [invoice, setInvoice] = useState(null);
 
   useEffect(() => {
-    fetch(`https://backend-service-xady.onrender.com/orders/${id}/split-invoice`)
+    fetch(`http://localhost:3000/orders/${id}/split-invoice`)
       .then(res => res.json())
       .then(data => {
         console.log("INVOICE DATA:", data);
@@ -147,7 +147,11 @@ const grandTotal =
                 </td>
                 <td>{i.instructions || "-"}</td>
                 <td>{i.gst}%</td>
-                <td>0</td>
+                <td>
+                  {Number(i.discount_value) > 0
+                    ? (i.discount_type === "percent" ? `${i.discount_value}%` : `₹${i.discount_value}`)
+                    : "—"}
+                </td>
                 <td>{i.quantity}</td>
                 <td>Rs. {i.rate}</td>
                 <td>Rs. {amount}</td>
@@ -196,8 +200,6 @@ const grandTotal =
           <div className="gst-line">
             5% GST | On Rs. {taxable5.toFixed(2)} Rs. {gst5.toFixed(2)}
           </div>
-
-          <div>Round Off Rs. 0.00</div>
 
           <div className="total">
             Nett Amount Rs. {grandTotal.toFixed(2)}
