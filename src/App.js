@@ -26,24 +26,37 @@ import CrmAnalytics from "./crm/CrmAnalytics";
 import WhatsAppQR from "./whatsapp/WhatsAppQR";
 import { AuthProvider } from "./context/AuthContext";
 
+/** Any authenticated user — used for public-ish protected pages (dashboard, etc.) */
 const PrivateRoute = ({ children }) => {
   const token = localStorage.getItem("access_token");
   const isLoggedIn = localStorage.getItem("isLoggedIn");
-  if (token || isLoggedIn === "true") {
-    return children;
-  }
+  if (token || isLoggedIn === "true") return children;
   return <Navigate to="/" replace />;
 };
 
-/** Admin-only route — redirects to dashboard if not Admin */
-const AdminRoute = ({ children }) => {
+/**
+ * Permission-gated route.
+ * `permission` can be a single string or an array (any-of match).
+ * Admin role always passes. Non-matching users are sent to /dashboard.
+ */
+const PermissionRoute = ({ children, permission }) => {
   const token = localStorage.getItem("access_token");
   const isLoggedIn = localStorage.getItem("isLoggedIn");
   if (!token && isLoggedIn !== "true") return <Navigate to="/" replace />;
+
   try {
     const user = JSON.parse(localStorage.getItem("user") || "{}");
     if (user?.role === "Admin") return children;
   } catch {}
+
+  try {
+    const perms = JSON.parse(localStorage.getItem("permissions") || "[]");
+    if (Array.isArray(perms)) {
+      const required = Array.isArray(permission) ? permission : [permission];
+      if (required.some((p) => perms.includes(p))) return children;
+    }
+  } catch {}
+
   return <Navigate to="/dashboard" replace />;
 };
 
@@ -59,43 +72,43 @@ function App() {
           <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
 
           {/* Orders */}
-          <Route path="/order" element={<PrivateRoute><OrderForm /></PrivateRoute>} />
-          <Route path="/order-list" element={<PrivateRoute><OrderList /></PrivateRoute>} />
-          <Route path="/orders" element={<PrivateRoute><OrderList /></PrivateRoute>} />
-          <Route path="/pending-approval" element={<PrivateRoute><PendingApproval /></PrivateRoute>} />
+          <Route path="/order" element={<PermissionRoute permission="order.create"><OrderForm /></PermissionRoute>} />
+          <Route path="/order-list" element={<PermissionRoute permission="order.view"><OrderList /></PermissionRoute>} />
+          <Route path="/orders" element={<PermissionRoute permission="order.view"><OrderList /></PermissionRoute>} />
+          <Route path="/pending-approval" element={<PermissionRoute permission="order.view"><PendingApproval /></PermissionRoute>} />
 
           {/* Quotations */}
-          <Route path="/quotation" element={<PrivateRoute><QuotationForm /></PrivateRoute>} />
-          <Route path="/quotations" element={<PrivateRoute><QuotationList /></PrivateRoute>} />
+          <Route path="/quotation" element={<PermissionRoute permission="quotation.create"><QuotationForm /></PermissionRoute>} />
+          <Route path="/quotations" element={<PermissionRoute permission="quotation.view"><QuotationList /></PermissionRoute>} />
 
           {/* Customers */}
-          <Route path="/customers" element={<PrivateRoute><CustomerList /></PrivateRoute>} />
-          <Route path="/add-customer" element={<PrivateRoute><AddCustomer /></PrivateRoute>} />
-          <Route path="/customer/create" element={<PrivateRoute><AddCustomer /></PrivateRoute>} />
-          <Route path="/edit-customer/:id" element={<PrivateRoute><EditCustomer /></PrivateRoute>} />
+          <Route path="/customers" element={<PermissionRoute permission="customer.view"><CustomerList /></PermissionRoute>} />
+          <Route path="/add-customer" element={<PermissionRoute permission="customer.create"><AddCustomer /></PermissionRoute>} />
+          <Route path="/customer/create" element={<PermissionRoute permission="customer.create"><AddCustomer /></PermissionRoute>} />
+          <Route path="/edit-customer/:id" element={<PermissionRoute permission="customer.edit"><EditCustomer /></PermissionRoute>} />
 
           {/* Items */}
-          <Route path="/add-item" element={<PrivateRoute><AddItem /></PrivateRoute>} />
-          <Route path="/items" element={<PrivateRoute><ItemList /></PrivateRoute>} />
-          <Route path="/shopify-items" element={<PrivateRoute><ShopifyItems /></PrivateRoute>} />
+          <Route path="/add-item" element={<PermissionRoute permission="item.create"><AddItem /></PermissionRoute>} />
+          <Route path="/items" element={<PermissionRoute permission="item.view"><ItemList /></PermissionRoute>} />
+          <Route path="/shopify-items" element={<PermissionRoute permission="item.view"><ShopifyItems /></PermissionRoute>} />
 
           {/* Invoice */}
-          <Route path="/invoice/:id" element={<PrivateRoute><Invoice /></PrivateRoute>} />
-          <Route path="/payment/:orderId" element={<PrivateRoute><PaymentEntry /></PrivateRoute>} />
+          <Route path="/invoice/:id" element={<PermissionRoute permission="invoice.view"><Invoice /></PermissionRoute>} />
+          <Route path="/payment/:orderId" element={<PermissionRoute permission="payment.create"><PaymentEntry /></PermissionRoute>} />
 
           {/* Accounts */}
-          <Route path="/set-credit-limit" element={<PrivateRoute><SetCreditLimit /></PrivateRoute>} />
+          <Route path="/set-credit-limit" element={<PermissionRoute permission="customer.edit"><SetCreditLimit /></PermissionRoute>} />
 
           {/* CRM */}
-          <Route path="/crm/leads" element={<PrivateRoute><LeadList /></PrivateRoute>} />
-          <Route path="/crm/leads/new" element={<PrivateRoute><LeadForm /></PrivateRoute>} />
-          <Route path="/crm/leads/:id" element={<PrivateRoute><LeadDetail /></PrivateRoute>} />
-          <Route path="/crm/analytics" element={<PrivateRoute><CrmAnalytics /></PrivateRoute>} />
-          <Route path="/whatsapp" element={<PrivateRoute><WhatsAppQR /></PrivateRoute>} />
+          <Route path="/crm/leads" element={<PermissionRoute permission="lead.view"><LeadList /></PermissionRoute>} />
+          <Route path="/crm/leads/new" element={<PermissionRoute permission="lead.create"><LeadForm /></PermissionRoute>} />
+          <Route path="/crm/leads/:id" element={<PermissionRoute permission="lead.view"><LeadDetail /></PermissionRoute>} />
+          <Route path="/crm/analytics" element={<PermissionRoute permission="crm.analytics.self"><CrmAnalytics /></PermissionRoute>} />
+          <Route path="/whatsapp" element={<PermissionRoute permission="whatsapp.manage"><WhatsAppQR /></PermissionRoute>} />
 
-          {/* Staff & Settings — Admin only */}
-          <Route path="/staff" element={<AdminRoute><StaffManagement /></AdminRoute>} />
-          <Route path="/rbac" element={<AdminRoute><RbacMatrix /></AdminRoute>} />
+          {/* Staff & Settings */}
+          <Route path="/staff" element={<PermissionRoute permission="staff.view"><StaffManagement /></PermissionRoute>} />
+          <Route path="/rbac" element={<PermissionRoute permission="rbac.manage"><RbacMatrix /></PermissionRoute>} />
 
           {/* Placeholder routes */}
           <Route path="/accounts" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
