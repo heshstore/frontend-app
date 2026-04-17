@@ -5,7 +5,7 @@ import { theme, buttonStyle, inputStyle } from "./theme";
 import { useAuth } from "./context/AuthContext";
 
 export default function Login() {
-  const [email, setEmail] = useState("");
+  const [mobile, setMobile] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -17,28 +17,44 @@ export default function Login() {
     setError("");
     setLoading(true);
 
+    const loginUrl = API_URL ? `${API_URL}/auth/login` : "/auth/login";
+
     try {
-      const res = await fetch(`${API_URL}/auth/login`, {
+      const res = await fetch(loginUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ mobile: mobile.replace(/\s/g, "").trim(), password }),
       });
 
       if (res.ok) {
         const data = await res.json();
-        login(data.access_token, data.user);
+        login(data.access_token, data.user, data.permissions || []);
         navigate("/dashboard");
       } else {
-        const err = await res.json();
-        setError(err.message || "Invalid email or password");
+        let errMsg = `Sign in failed (${res.status})`;
+        try {
+          const err = await res.json();
+          errMsg = err.message || errMsg;
+        } catch {
+          const text = await res.text();
+          if (text) errMsg = text.slice(0, 180);
+        }
+        setError(errMsg);
       }
     } catch (err) {
       // Fallback for development: allow local login if backend is unreachable
-      if (email === "admin@test.com" && password === "1234") {
+      if (mobile === "9876543210" && password === "1234") {
         localStorage.setItem("isLoggedIn", "true");
         navigate("/dashboard");
       } else {
-        setError("Login failed. Check your connection.");
+        const hint =
+          API_URL === ""
+            ? " Start the Nest API on port 3000 (same machine). CRA proxy forwards /auth/login there."
+            : ` Could not reach ${loginUrl}. If the UI is not on port 3000, set REACT_APP_API_URL or use an empty API base in dev with package.json "proxy".`;
+        setError(
+          (err && err.message ? err.message : "Network error") +
+            hint
+        );
       }
     } finally {
       setLoading(false);
@@ -78,13 +94,15 @@ export default function Login() {
         <form onSubmit={handleLogin}>
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: "block", marginBottom: 4, fontSize: 13, fontWeight: 500, color: theme.text }}>
-              Email
+              Mobile (or email if you have one)
             </label>
             <input
-              type="email"
-              placeholder="admin@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              type="text"
+              inputMode="tel"
+              autoComplete="username"
+              placeholder="e.g. 9000000001 or +91 9000000001"
+              value={mobile}
+              onChange={(e) => setMobile(e.target.value)}
               required
               style={inputStyle}
             />

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_URL } from './config';
 import { theme, buttonStyle } from './theme';
+import DocActions from './components/DocActions';
 
 const STATUS_COLORS = {
   OPEN: '#198754',
@@ -68,20 +69,18 @@ export default function QuotationList() {
     if (!window.confirm('Convert this quotation to an order?')) return;
     try {
       const res = await fetch(`${API_URL}/quotations/${id}/convert-to-order`, { method: 'POST' });
+      const data = await res.json();
       if (res.ok) {
-        alert('Converted to Order');
+        const orderNo = data.order_id ? `#ORD-${String(data.order_id).padStart(5, '0')}` : '';
+        alert(`Order ${orderNo} created successfully!`);
         loadQuotations();
+        navigate('/orders');
       } else {
-        alert('Conversion failed');
+        alert(data?.message || 'Conversion failed');
       }
     } catch {
       alert('Conversion failed');
     }
-  };
-
-  const shareWhatsApp = (q) => {
-    const msg = `Quotation ${q.quotation_no || '#' + q.id} from ${q.customer_name || ''}\nAmount: ₹${Number(q.total_amount || 0).toLocaleString('en-IN')}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
   return (
@@ -162,8 +161,17 @@ export default function QuotationList() {
                     {q.status}
                   </span>
                 </div>
-                <div style={{ fontSize: 13, color: theme.textMuted, marginTop: 2 }}>
-                  {q.customer_name || '—'} · ₹{Number(q.total_amount || 0).toLocaleString('en-IN')}
+                <div style={{ fontSize: 13, color: theme.textMuted, marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <span>{q.customer_name || '—'} · ₹{Number(q.total_amount || 0).toLocaleString('en-IN')}</span>
+                  {q.is_wholesaler !== undefined && (
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 10,
+                      background: q.is_wholesaler ? '#fef9c3' : '#dbeafe',
+                      color: q.is_wholesaler ? '#a16207' : '#1e40af',
+                    }}>
+                      {q.is_wholesaler ? 'WHOLESALER' : 'RETAILER'}
+                    </span>
+                  )}
                 </div>
                 <div style={{ fontSize: 12, color: theme.textMuted }}>
                   {q.created_at ? new Date(q.created_at).toLocaleDateString('en-IN') : ''}
@@ -210,18 +218,13 @@ export default function QuotationList() {
                       </button>
                     </>
                   )}
-                  <button
-                    onClick={() => window.print()}
-                    style={{ ...buttonStyle, background: '#6c757d', padding: '6px 14px' }}
-                  >
-                    Print
-                  </button>
-                  <button
-                    onClick={() => shareWhatsApp(q)}
-                    style={{ ...buttonStyle, background: '#25d366', padding: '6px 14px' }}
-                  >
-                    WhatsApp
-                  </button>
+                  <DocActions
+                    type="quotation"
+                    id={q.id}
+                    docNo={q.quotation_no}
+                    amount={q.total_amount}
+                    customerMobile={q.mobile}
+                  />
                 </div>
               </div>
             )}

@@ -31,7 +31,8 @@ export async function apiFetch(path, options = {}) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const url = path.startsWith('http') ? path : `${API_URL}${path}`;
+  const relPath = path.startsWith('/') ? path : `/${path}`;
+  const url = path.startsWith('http') ? path : `${API_URL}${relPath}`;
 
   const res = await fetch(url, {
     ...options,

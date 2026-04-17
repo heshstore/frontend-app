@@ -1,11 +1,35 @@
 import React, { useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { API_URL } from "./config";
+import { apiFetch } from "./utils/api";
 import DocumentForm from "./components/forms/DocumentForm";
 
 // ── Quotation-specific data loader ───────────────────────────────────────────
-// Returns the shape DocumentForm expects: { billTo, shipTo, shipSameAsBill, form, rows }
+// Supports sentinel id "_prefill_<customerId>" to prefill customer from CRM lead flow
 async function loadQuotation(id) {
+  if (!id) return null;
+
+  // Prefill from customer (coming from lead conversion)
+  if (String(id).startsWith("_prefill_")) {
+    const custId = String(id).replace("_prefill_", "");
+    const res = await apiFetch(`/customers/${custId}`);
+    if (!res.ok) return null;
+    const c = await res.json();
+    return {
+      billTo:         { id: c.id, companyName: c.companyName },
+      shipTo:         { id: c.id, companyName: c.companyName },
+      shipSameAsBill: true,
+      form: {
+        salesman_id: "", validity_days: 15, delivery_by: "",
+        delivery_type: "Road", payment_type: "Credit",
+        delivery_instructions: "", charges_packing: "",
+        charges_cartage: "", charges_forwarding: "",
+        charges_installation: "", charges_loading: "",
+      },
+      rows: [],
+    };
+  }
+
   const res  = await fetch(`${API_URL}/quotations/${id}`);
   const data = await res.json();
 
@@ -42,32 +66,44 @@ async function loadQuotation(id) {
   };
 }
 
-// ── Quotation-specific submit handler ────────────────────────────────────────
-async function submitQuotation(payload, editId) {
-  const res = await fetch(
-    editId ? `${API_URL}/quotations/${editId}` : `${API_URL}/quotations`,
-    { method: editId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }
-  );
-  if (res.ok) {
-    return { ok: true, message: editId ? "Quotation updated ✅" : "Quotation created ✅", redirect: "/quotations" };
-  }
-  const err = await res.json().catch(() => ({}));
-  return { ok: false, message: err.message || "Failed to save quotation" };
-}
-
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function QuotationForm() {
   const [searchParams] = useSearchParams();
-  const editId = searchParams.get("id");
+  const editId     = searchParams.get("id");
+  const customerId = searchParams.get("customerId");
+  const leadId     = searchParams.get("leadId");
 
-  // useCallback so DocumentForm's useEffect deps stay stable
-  const loadData   = useCallback(loadQuotation, []);
-  const onSubmit   = useCallback(submitQuotation, []);
+  // When coming from lead conversion, use sentinel to trigger customer prefill
+  const effectiveEditId = editId || (customerId ? `_prefill_${customerId}` : null);
+
+  const loadData = useCallback(loadQuotation, []);
+
+  const onSubmit = useCallback(async (payload, id) => {
+    // Strip sentinel prefix — this is a new quotation
+    const isNew = !id || String(id).startsWith("_prefill_");
+    const res = await fetch(
+      isNew ? `${API_URL}/quotations` : `${API_URL}/quotations/${id}`,
+      { method: isNew ? "POST" : "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }
+    );
+    if (res.ok) {
+      const saved = await res.json().catch(() => ({}));
+      // Mark lead as QUOTATION stage if coming from CRM
+      if (leadId && saved?.id) {
+        apiFetch(`/crm/leads/${leadId}`, {
+          method: "PUT",
+          body: JSON.stringify({ status: "QUOTATION", quotation_id: saved.id }),
+        }).catch(() => {});
+      }
+      return { ok: true, message: isNew ? "Quotation created ✅" : "Quotation updated ✅", redirect: "/quotations" };
+    }
+    const err = await res.json().catch(() => ({}));
+    return { ok: false, message: err.message || "Failed to save quotation" };
+  }, [leadId]);
 
   return (
     <DocumentForm
-      pageTitle={editId ? "Edit Quotation" : "New Quotation"}
-      editId={editId}
+      pageTitle={effectiveEditId ? (editId ? "Edit Quotation" : "New Quotation (from Lead)") : "New Quotation"}
+      editId={effectiveEditId}
       loadData={loadData}
       onSubmit={onSubmit}
       submitLabel="Create Quotation ✓"

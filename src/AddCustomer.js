@@ -61,7 +61,6 @@ export default function AddCustomer() {
     gstNumber: "",
     customerType: "",
     tag: "",
-    creditLimit: 0,
   });
 
   const [city, setCity] = useState("");
@@ -265,7 +264,6 @@ export default function AddCustomer() {
           country,
           mobile1: form.countryCode1 + form.mobile1,
           mobile2: form.mobile2 ? form.countryCode2 + form.mobile2 : "",
-          creditLimit: Number(form.creditLimit) || 0,
         }),
       });
 

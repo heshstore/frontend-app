@@ -1,19 +1,42 @@
 import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
+import { API_URL } from "./config";
 
 export default function Invoice() {
-  // All hooks at top
   const { id } = useParams();
+  const navigate = useNavigate();
   const [invoice, setInvoice] = useState(null);
+  const [creatingInvoice, setCreatingInvoice] = useState(false);
+  const [creditBlock, setCreditBlock] = useState(null); // { outstanding, credit_limit }
+  const [invoiceCreated, setInvoiceCreated] = useState(null); // { invoice_no, id }
 
   useEffect(() => {
-    fetch(`http://localhost:3000/orders/${id}/split-invoice`)
+    fetch(`${API_URL}/orders/${id}/split-invoice`)
       .then(res => res.json())
       .then(data => {
-        console.log("INVOICE DATA:", data);
         setInvoice(data);
       });
   }, [id]);
+
+  const handleCreateInvoice = async () => {
+    setCreatingInvoice(true);
+    try {
+      const res = await fetch(`${API_URL}/invoice/from-order/${id}`, { method: "POST" });
+      const data = await res.json();
+      if (data.blocked) {
+        setCreditBlock({ outstanding: data.outstanding, credit_limit: data.credit_limit });
+      } else if (data.ok || data.invoice_no || (data.invoice && data.invoice.invoice_no)) {
+        const inv = data.invoice || data;
+        setInvoiceCreated({ invoice_no: inv.invoice_no || data.invoice_no, id: inv.id || data.id });
+      } else {
+        alert(data.message || "Invoice creation failed");
+      }
+    } catch (err) {
+      alert("Error: " + err.message);
+    } finally {
+      setCreatingInvoice(false);
+    }
+  };
 
   // Loading check
   if (!invoice) return <div>Loading...</div>;
@@ -87,7 +110,20 @@ const grandTotal =
       <div className="billing">
         <div>
           <b>Billing to:</b><br/>
-          {invoice.customer_name}<br/>
+          {invoice.customer_name}
+          {invoice.is_wholesaler !== undefined && (
+            <span style={{
+              marginLeft: 6,
+              fontSize: 9,
+              fontWeight: 700,
+              padding: "1px 6px",
+              borderRadius: 8,
+              background: invoice.is_wholesaler ? "#fef9c3" : "#dbeafe",
+              color: invoice.is_wholesaler ? "#a16207" : "#1e40af",
+            }}>
+              {invoice.is_wholesaler ? "WHOLESALER" : "RETAILER"}
+            </span>
+          )}<br/>
           {invoice.address}<br/>
           {invoice.city} - {invoice.pincode}<br/>
           GST NO.: {invoice.gst_number}<br/>
@@ -217,10 +253,119 @@ const grandTotal =
         5. Computer generated document.
       </div>
 
-      {/* PRINT */}
-      <button className="print" onClick={() => window.print()}>
-        Print
-      </button>
+      {/* ACTION BUTTONS */}
+      <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+        <button className="print" onClick={() => window.print()} style={{ marginTop: 0 }}>
+          Print
+        </button>
+        {!invoiceCreated && (
+          <button
+            onClick={handleCreateInvoice}
+            disabled={creatingInvoice}
+            style={{
+              padding: "8px 18px",
+              background: "#198754",
+              color: "#fff",
+              border: "none",
+              borderRadius: 4,
+              cursor: creatingInvoice ? "not-allowed" : "pointer",
+              fontWeight: 600,
+              opacity: creatingInvoice ? 0.7 : 1,
+            }}
+          >
+            {creatingInvoice ? "Creating..." : "Create Invoice"}
+          </button>
+        )}
+      </div>
+
+      {/* INVOICE CREATED SUCCESS BANNER */}
+      {invoiceCreated && (
+        <div style={{
+          marginTop: 12,
+          background: "#d1e7dd",
+          border: "1px solid #0f5132",
+          borderRadius: 6,
+          padding: "12px 16px",
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          flexWrap: "wrap",
+        }}>
+          <span style={{ color: "#0f5132", fontWeight: 600 }}>
+            ✓ Invoice {invoiceCreated.invoice_no} created successfully!
+          </span>
+          {invoiceCreated.id && (
+            <button
+              onClick={() => navigate(`/invoice-view/${invoiceCreated.id}`)}
+              style={{
+                padding: "5px 12px",
+                background: "#0f5132",
+                color: "#fff",
+                border: "none",
+                borderRadius: 4,
+                cursor: "pointer",
+                fontSize: 13,
+              }}
+            >
+              View Invoice →
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* CREDIT BLOCK MODAL */}
+      {creditBlock && (
+        <div style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0,0,0,0.55)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 9999,
+        }}>
+          <div style={{
+            background: "#fff",
+            borderRadius: 10,
+            padding: 28,
+            width: "90%",
+            maxWidth: 420,
+            boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
+          }}>
+            <div style={{ fontSize: 20, fontWeight: 700, color: "#dc3545", marginBottom: 10 }}>
+              🚫 Credit Limit Exceeded
+            </div>
+            <p style={{ margin: "0 0 16px", color: "#444", fontSize: 14 }}>
+              This customer has exceeded their credit limit. Invoice cannot be created.
+            </p>
+            <div style={{
+              background: "#fff5f5",
+              border: "1px solid #f5c6cb",
+              borderRadius: 6,
+              padding: "12px 16px",
+              marginBottom: 20,
+              fontSize: 14,
+            }}>
+              <div>Outstanding: <strong>₹{Number(creditBlock.outstanding).toLocaleString("en-IN")}</strong></div>
+              <div>Credit Limit: <strong>₹{Number(creditBlock.credit_limit).toLocaleString("en-IN")}</strong></div>
+            </div>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setCreditBlock(null)}
+                style={{ padding: "8px 16px", background: "#6c757d", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}
+              >
+                Close
+              </button>
+              <button
+                onClick={() => { setCreditBlock(null); navigate(`/orders/${id}/payment`); }}
+                style={{ padding: "8px 16px", background: "#0066b3", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600 }}
+              >
+                Record Payment →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* CSS */}
       <style>{`

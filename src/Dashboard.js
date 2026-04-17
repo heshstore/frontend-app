@@ -3,6 +3,7 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { theme } from "./theme";
 import UniversalSearch from "./components/UniversalSearch";
+import { usePermission, hasAnyPermission } from "./utils/usePermission";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -15,11 +16,25 @@ export default function Dashboard() {
   const [showOrder, setShowOrder] = useState(false);
   const [showInvoice, setShowInvoice] = useState(false);
 
+  const [showCrm, setShowCrm] = useState(false);
   const [showProduction, setShowProduction] = useState(false);
   const [showAccounts, setShowAccounts] = useState(false);
   const [showDelivery, setShowDelivery] = useState(false);
   const [showFollow, setShowFollow] = useState(false);
+  const [showStaff, setShowStaff] = useState(false);
   const [syncing, setSyncing] = useState(false);
+
+  // Permission-based section visibility
+  const canSeeCustomers    = usePermission('customer.view');
+  const canSeeItems        = usePermission('item.view');
+  const canSeeQuotations   = usePermission('quotation.view');
+  const canSeeOrders       = usePermission('order.view');
+  const canSeeProduction   = usePermission('production.view');
+  const canSeeAccounts     = hasAnyPermission('invoice.view', 'payment.view');
+  const canSeeDispatch     = usePermission('dispatch.view');
+  const canSeeStaff        = hasAnyPermission('staff.view', 'rbac.manage');
+  const canSeeCrm          = hasAnyPermission('lead.view', 'crm.analytics.self');
+  const canSeeWhatsApp     = usePermission('whatsapp.manage');
 
   // STEP 1: Add state
   const [progress, setProgress] = useState(0);
@@ -166,30 +181,50 @@ export default function Dashboard() {
         <p>📈 Today Sales: ₹ {todaySales}</p>
       </div>
 
+      {/* CRM */}
+      {canSeeCrm && (
+        <>
+          <button onClick={() => setShowCrm(!showCrm)} style={sectionBtn()}>
+            + CRM {showCrm ? "▲" : "▼"}
+          </button>
+          {showCrm && (
+            <div>
+              <button style={subBtn} onClick={() => navigate("/crm/leads/new")}>• Create Lead</button>
+              <button style={subBtn} onClick={() => navigate("/crm/leads")}>• View Leads</button>
+              <button style={subBtn} onClick={() => navigate("/crm/analytics")}>• CRM Analytics</button>
+              {canSeeWhatsApp && (
+                <button style={subBtn} onClick={() => navigate("/whatsapp")}>• WhatsApp Connection</button>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
       {/* CUSTOMER */}
-      <button
-        onClick={() => setShowCustomer(!showCustomer)}
-        style={sectionBtn()}
-      >
-        + Customer Master {showCustomer ? "▲" : "▼"}
-      </button>
-      {showCustomer && (
-        <div>
-          <button style={subBtn} onClick={() => navigate("/add-customer")}>• Create Customer</button>
-          <button style={subBtn} onClick={() => navigate("/customers")}>• Search Customer</button>
-          <button style={subBtn} onClick={() => alert("Coming Soon")}>• Scan Customer Visiting Card</button>
-          <button style={subBtn} onClick={() => alert("Coming Soon")}>• Print Envelop</button>
-        </div>
+      {canSeeCustomers && (
+        <>
+          <button onClick={() => setShowCustomer(!showCustomer)} style={sectionBtn()}>
+            + Customer Master {showCustomer ? "▲" : "▼"}
+          </button>
+          {showCustomer && (
+            <div>
+              <button style={subBtn} onClick={() => navigate("/add-customer")}>• Create Customer</button>
+              <button style={subBtn} onClick={() => navigate("/customers")}>• Search Customer</button>
+              <button style={subBtn} onClick={() => alert("Coming Soon")}>• Scan Customer Visiting Card</button>
+              <button style={subBtn} onClick={() => alert("Coming Soon")}>• Print Envelop</button>
+            </div>
+          )}
+        </>
       )}
 
       {/* ITEM MASTER */}
-      <button
+      {canSeeItems && <button
         onClick={() => setShowItem(!showItem)}
         style={sectionBtn()}
       >
         + Item Master {showItem ? "▲" : "▼"}
-      </button>
-      {showItem && (
+      </button>}
+      {canSeeItems && showItem && (
         <div>
           <button
             style={subBtn}
@@ -296,121 +331,124 @@ export default function Dashboard() {
       <hr />
 
       {/* QUOTATION */}
-      <button
-        onClick={() => setShowQuotation(!showQuotation)}
-        style={sectionBtn()}
-      >
-        + Quotation {showQuotation ? "▲" : "▼"}
-      </button>
-      {showQuotation && (
-        <div>
-          <button style={subBtn} onClick={() => navigate("/quotation")}>• Create Quotation</button>
-          <button style={subBtn} onClick={() => navigate("/quotations")}>• View Quotation</button>
-        </div>
+      {canSeeQuotations && (
+        <>
+          <button onClick={() => setShowQuotation(!showQuotation)} style={sectionBtn()}>
+            + Quotation {showQuotation ? "▲" : "▼"}
+          </button>
+          {showQuotation && (
+            <div>
+              <button style={subBtn} onClick={() => navigate("/quotation")}>• Create Quotation</button>
+              <button style={subBtn} onClick={() => navigate("/quotations")}>• View Quotation</button>
+            </div>
+          )}
+        </>
       )}
 
       {/* ORDER */}
-      <button
-        onClick={() => setShowOrder(!showOrder)}
-        style={sectionBtn()}
-      >
-        + Order {showOrder ? "▲" : "▼"}
-      </button>
-      {showOrder && (
-        <div>
-          {/* REWRITE HERE for 'Create Order' button: setShowOrder -> navigate("/order") */}
-          <button style={subBtn} onClick={() => navigate("/order")}>• Create Order</button>
-          <button style={subBtn} onClick={() => navigate("/orders")}>• View Order</button>
-          <button style={subBtn} onClick={() => navigate("/orders")}>• Approved Order</button>
-        </div>
+      {canSeeOrders && (
+        <>
+          <button onClick={() => setShowOrder(!showOrder)} style={sectionBtn()}>
+            + Order {showOrder ? "▲" : "▼"}
+          </button>
+          {showOrder && (
+            <div>
+              <button style={subBtn} onClick={() => navigate("/order")}>• Create Order</button>
+              <button style={subBtn} onClick={() => navigate("/orders")}>• View Order</button>
+              <button style={subBtn} onClick={() => navigate("/pending-approval")}>• Pending Approval</button>
+            </div>
+          )}
+        </>
       )}
 
       <hr />
 
       {/* PRODUCTION */}
-      <button
-        onClick={() => setShowProduction(!showProduction)}
-        style={sectionBtn()}
-      >
-        + Production Management {showProduction ? "▲" : "▼"}
-      </button>
-      {showProduction && (
-        <div>
-          <div
-            onClick={() => navigate("/orders")}
-            style={{
-              border: "1px solid #ddd",
-              borderRadius: "10px",
-              padding: "14px 16px",
-              marginTop: "10px",
-              background: "#f9f9f9",
-              cursor: "pointer",
-              fontSize: "15px",
-              fontWeight: "400"
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.background = "#f1f1f1"}
-            onMouseLeave={(e) => e.currentTarget.style.background = "#f9f9f9"}
-          >
-            • Order Pending Approval
-          </div>
-          <button style={subBtn} onClick={() => navigate("/orders")}>• Production Pipeline</button>
-          <button style={subBtn} onClick={() => navigate("/orders")}>• View Pipeline</button>
-          <button style={subBtn} onClick={() => alert("Coming Soon")}>• Create Purchase Order</button>
-          <button style={subBtn} onClick={() => alert("Coming Soon")}>• View Purchase Order</button>
-        </div>
+      {canSeeProduction && (
+        <>
+          <button onClick={() => setShowProduction(!showProduction)} style={sectionBtn()}>
+            + Production Management {showProduction ? "▲" : "▼"}
+          </button>
+          {showProduction && (
+            <div>
+              <button style={subBtn} onClick={() => navigate("/pending-approval")}>• Order Pending Approval</button>
+              <button style={subBtn} onClick={() => navigate("/orders")}>• Production Pipeline</button>
+              <button style={subBtn} onClick={() => navigate("/orders")}>• View Pipeline</button>
+              <button style={subBtn} onClick={() => alert("Coming Soon")}>• Create Purchase Order</button>
+              <button style={subBtn} onClick={() => alert("Coming Soon")}>• View Purchase Order</button>
+            </div>
+          )}
+        </>
       )}
 
       {/* ACCOUNTS */}
-      <button
-        onClick={() => setShowAccounts(!showAccounts)}
-        style={sectionBtn()}
-      >
-        + Accounts {showAccounts ? "▲" : "▼"}
-      </button>
-      {showAccounts && (
-        <div>
-          <button style={subBtn} onClick={() => alert("Coming Soon")}>• Create Invoice</button>
-          <button style={subBtn} onClick={() => alert("Coming Soon")}>• View Invoice</button>
-          <button style={subBtn} onClick={() => navigate("/orders")}>• View Production Completed Order</button>
-          <button style={subBtn} onClick={() => alert("Coming Soon")}>• Payment Entry</button>
-          <button style={subBtn} onClick={() => alert("Coming Soon")}>• View Ledger</button>
-          <button style={subBtn} onClick={() => alert("Coming Soon")}>• View Commission Calculation</button>
-          <button style={subBtn} onClick={() => alert("Coming Soon")}>
-            • Set Customer Credit Limit
+      {canSeeAccounts && (
+        <>
+          <button onClick={() => setShowAccounts(!showAccounts)} style={sectionBtn()}>
+            + Accounts {showAccounts ? "▲" : "▼"}
           </button>
-        </div>
+          {showAccounts && (
+            <div>
+              <button style={subBtn} onClick={() => alert("Coming Soon")}>• Create Invoice</button>
+              <button style={subBtn} onClick={() => alert("Coming Soon")}>• View Invoice</button>
+              <button style={subBtn} onClick={() => navigate("/orders")}>• View Production Completed Order</button>
+              <button style={subBtn} onClick={() => alert("Coming Soon")}>• Payment Entry</button>
+              <button style={subBtn} onClick={() => alert("Coming Soon")}>• View Ledger</button>
+              <button style={subBtn} onClick={() => alert("Coming Soon")}>• View Commission Calculation</button>
+              <button style={subBtn} onClick={() => navigate("/set-credit-limit")}>• Set Customer Credit Limit</button>
+            </div>
+          )}
+        </>
       )}
 
       <hr />
 
       {/* DELIVERY */}
-      <button
-        onClick={() => setShowDelivery(!showDelivery)}
-        style={sectionBtn()}
-      >
-        + Delivery {showDelivery ? "▲" : "▼"}
-      </button>
-      {showDelivery && (
-        <div>
-          <button style={subBtn} onClick={() => alert("Coming Soon")}>• Create Labels</button>
-          <button style={subBtn} onClick={() => alert("Coming Soon")}>• View Labels</button>
-          <button style={subBtn} onClick={() => alert("Coming Soon")}>• View Dispatch</button>
-          <button style={subBtn} onClick={() => alert("Coming Soon")}>• Add Dispatch Details</button>
-          <button style={subBtn} onClick={() => alert("Coming Soon")}>• View Dispatch Details</button>
-        </div>
+      {canSeeDispatch && (
+        <>
+          <button onClick={() => setShowDelivery(!showDelivery)} style={sectionBtn()}>
+            + Delivery {showDelivery ? "▲" : "▼"}
+          </button>
+          {showDelivery && (
+            <div>
+              <button style={subBtn} onClick={() => alert("Coming Soon")}>• Create Labels</button>
+              <button style={subBtn} onClick={() => alert("Coming Soon")}>• View Labels</button>
+              <button style={subBtn} onClick={() => alert("Coming Soon")}>• View Dispatch</button>
+              <button style={subBtn} onClick={() => alert("Coming Soon")}>• Add Dispatch Details</button>
+              <button style={subBtn} onClick={() => alert("Coming Soon")}>• View Dispatch Details</button>
+            </div>
+          )}
+        </>
       )}
 
       {/* FOLLOW UPS */}
-      <button
-        onClick={() => setShowFollow(!showFollow)}
-        style={sectionBtn()}
-      >
-        + Follow Ups {showFollow ? "▲" : "▼"}
-      </button>
-      {showFollow && (
-        <div>
-          <button style={subBtn} onClick={() => alert("Coming Soon")}>• Add Customer Feedback</button>
-        </div>
+      {canSeeCustomers && (
+        <>
+          <button onClick={() => setShowFollow(!showFollow)} style={sectionBtn()}>
+            + Follow Ups {showFollow ? "▲" : "▼"}
+          </button>
+          {showFollow && (
+            <div>
+              <button style={subBtn} onClick={() => alert("Coming Soon")}>• Add Customer Feedback</button>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* STAFF & SETTINGS */}
+      {canSeeStaff && (
+        <>
+          <hr />
+          <button onClick={() => setShowStaff(!showStaff)} style={sectionBtn()}>
+            + Staff &amp; Settings {showStaff ? "▲" : "▼"}
+          </button>
+          {showStaff && (
+            <div>
+              <button style={subBtn} onClick={() => navigate("/staff")}>• Staff Management</button>
+              <button style={subBtn} onClick={() => navigate("/rbac")}>• Roles &amp; Permissions</button>
+            </div>
+          )}
+        </>
       )}
 
     </div>

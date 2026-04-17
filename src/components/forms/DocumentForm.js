@@ -129,8 +129,15 @@ function CustomerSearchField({ label, value, onSelect, onClear, placeholder }) {
         style={{ ...inp, borderColor: value ? "#16a34a" : theme.border, background: value ? "#f0fdf4" : "#fff" }}
       />
       {value && (
-        <div style={{ marginTop: 4, fontSize: 12, color: "#16a34a", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
-          ✓ {value.companyName}{value.city ? ` · ${value.city}` : ""}
+        <div style={{ marginTop: 4, fontSize: 12, color: "#16a34a", fontWeight: 600, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+          <span>✓ {value.companyName}{value.city ? ` · ${value.city}` : ""}</span>
+          <span style={{
+            fontSize: 10, fontWeight: 700, padding: "1px 7px", borderRadius: 8,
+            background: value.isWholesaler ? "#fef9c3" : "#dbeafe",
+            color: value.isWholesaler ? "#a16207" : "#1e40af",
+          }}>
+            {value.isWholesaler ? "WHOLESALER" : "RETAILER"}
+          </span>
           <button type="button" onClick={() => { setSearch(""); onClear(); }}
             style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 12, padding: 0 }}>
             Change
@@ -146,7 +153,16 @@ function CustomerSearchField({ label, value, onSelect, onClear, placeholder }) {
                   style={{ padding: "10px 12px", cursor: "pointer", borderBottom: `1px solid ${theme.border}`, fontSize: 13 }}
                   onMouseEnter={e => e.currentTarget.style.background = theme.primaryLight}
                   onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
-                  <div style={{ fontWeight: 600 }}>{c.companyName}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    <span style={{ fontWeight: 600 }}>{c.companyName}</span>
+                    <span style={{
+                      fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 8,
+                      background: c.isWholesaler ? "#fef9c3" : "#dbeafe",
+                      color: c.isWholesaler ? "#a16207" : "#1e40af",
+                    }}>
+                      {c.isWholesaler ? "WHOLESALER" : "RETAILER"}
+                    </span>
+                  </div>
                   <div style={{ color: theme.textMuted, fontSize: 11 }}>
                     {[c.tag && `[${c.tag}]`, c.city, c.mobile1].filter(Boolean).join(" · ")}
                   </div>
@@ -160,7 +176,7 @@ function CustomerSearchField({ label, value, onSelect, onClear, placeholder }) {
 }
 
 // ── ItemRow ───────────────────────────────────────────────────────────────────
-function ItemRow({ row, index, items, canRemove, onChange, onRemove }) {
+function ItemRow({ row, index, items, canRemove, onChange, onRemove, isWholesaler }) {
   const [search, setSearch] = useState(
     row.sku && row.item_name ? `${row.sku}  ·  ${row.item_name}` : (row.item_name || "")
   );
@@ -186,14 +202,17 @@ function ItemRow({ row, index, items, canRemove, onChange, onRemove }) {
   const select = (item) => {
     setSearch(`${item.sku}  ·  ${item.itemName}`);
     setShowDrop(false);
-    const rate = item.retail_price || item.sellingPrice || 0;
+    // Use wholesale price when customer is a wholesaler and price is set
+    const wholesalePrice = Number(item.wholesale_price) || 0;
+    const retailPrice    = Number(item.retail_price) || Number(item.sellingPrice) || 0;
+    const rate = (isWholesaler && wholesalePrice > 0) ? wholesalePrice : retailPrice;
     onChange(index, {
       sku: item.sku,
       item_name: item.itemName,
       rate,
       gst_percent: item.gst || 0,
       hsn_code: item.hsnCode || "",
-      _floor_price: rate,
+      _floor_price: rate,   // floor = auto-filled price; user can increase but not go below
       _image: item.image || "",
     });
   };
@@ -281,18 +300,43 @@ function ItemRow({ row, index, items, canRemove, onChange, onRemove }) {
             onChange={(e) => onChange(index, { qty: e.target.value })} style={inp} />
         </div>
         <div>
-          <label style={lbl}>Rate (₹)</label>
-          <input type="number" min="0" step="0.01"
+          <label style={lbl}>
+            Rate (₹)
+            {row._floor_price > 0 && (
+              <span style={{ fontWeight: 400, color: theme.primary, marginLeft: 6, fontSize: 11, textTransform: "none", letterSpacing: 0 }}>
+                min ₹{Number(row._floor_price).toLocaleString("en-IN")}
+              </span>
+            )}
+          </label>
+          <input
+            type="number" min={row._floor_price > 0 ? row._floor_price : 0} step="0.01"
             value={row.rate === "" ? "" : row.rate}
             placeholder="Enter rate"
             onChange={(e) => {
               const val = Number(e.target.value);
               if (row._floor_price > 0 && val < row._floor_price) {
-                alert(`Rate cannot be below item price ₹${row._floor_price}`);
+                onChange(index, { rate: row._floor_price });
                 return;
               }
               onChange(index, { rate: e.target.value });
-            }} style={inp} />
+            }}
+            onBlur={(e) => {
+              const val = Number(e.target.value);
+              if (row._floor_price > 0 && (isNaN(val) || val < row._floor_price)) {
+                onChange(index, { rate: row._floor_price });
+              }
+            }}
+            style={{
+              ...inp,
+              borderColor: row._floor_price > 0 && Number(row.rate) > row._floor_price ? "#16a34a" : inp.borderColor,
+              background: row._floor_price > 0 && Number(row.rate) > row._floor_price ? "#f0fdf4" : "#fff",
+            }}
+          />
+          {row._floor_price > 0 && Number(row.rate) > row._floor_price && (
+            <div style={{ fontSize: 11, color: "#16a34a", marginTop: 3 }}>
+              +₹{(Number(row.rate) - row._floor_price).toLocaleString("en-IN")} above base price
+            </div>
+          )}
         </div>
       </div>
 
@@ -374,7 +418,7 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
   // Load master data
   useEffect(() => {
     fetch(`${API_URL}/items?master=1`).then(r => r.json()).then(d => setItems(Array.isArray(d) ? d : [])).catch(console.error);
-    fetch(`${API_URL}/users`).then(r => r.json()).then(d => setUsers(Array.isArray(d) ? d : [])).catch(console.error);
+    fetch(`${API_URL}/users/dropdown`, { headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` } }).then(r => r.json()).then(d => setUsers(Array.isArray(d) ? d : [])).catch(console.error);
   }, []);
 
   // Load edit data via the caller-supplied loader
@@ -435,6 +479,7 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
       customer_name: billTo.companyName,
       bill_to_id:    billTo.id,
       ship_to_id:    shipSameAsBill ? billTo.id : (shipTo?.id || billTo.id),
+      is_wholesaler: !!billTo.isWholesaler,
       salesman_id:       form.salesman_id || null,
       validity_days:     Number(form.validity_days) || 15,
       delivery_by:       form.delivery_by,
@@ -518,9 +563,13 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
           )}
 
           {shipSameAsBill && billTo && (
-            <div style={{ background: theme.surface, borderRadius: 8, padding: "8px 12px", fontSize: 12, color: theme.textMuted, marginTop: 2 }}>
-              📦 Ships to: <strong style={{ color: theme.text }}>{billTo.companyName}</strong>
-              {billTo.city ? ` · ${billTo.city}` : ""}
+            <div style={{ background: theme.surface, borderRadius: 8, padding: "8px 12px", fontSize: 12, color: theme.textMuted, marginTop: 2, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span>📦 Ships to: <strong style={{ color: theme.text }}>{billTo.companyName}</strong>{billTo.city ? ` · ${billTo.city}` : ""}</span>
+              {billTo.isWholesaler && (
+                <span style={{ fontSize: 11, fontWeight: 700, background: "#fef9c3", color: "#a16207", borderRadius: 10, padding: "2px 8px" }}>
+                  Wholesale Pricing Active
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -532,6 +581,7 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
             canRemove={rows.length > 1}
             onChange={updateRow}
             onRemove={removeRow}
+            isWholesaler={!!billTo?.isWholesaler}
           />
         ))}
         <button type="button" onClick={addRow}

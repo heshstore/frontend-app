@@ -3,6 +3,7 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { ORDER_STATUS, ORDER_STATUS_LABELS } from "./constants/orderStatus";
 import { API_URL } from "./config";
+import DocActions from "./components/DocActions";
 
 export default function OrderList() {
   const [orders, setOrders] = useState([]);
@@ -117,7 +118,16 @@ export default function OrderList() {
               background: "#fff"
             }}>
               <div><b>ID:</b> {row.id}</div>
-              <div><b>Customer:</b> {row.customer_name}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <b>{row.customer_name}</b>
+                <span style={{
+                  fontSize: 10, fontWeight: 700, padding: "1px 7px", borderRadius: 8,
+                  background: row.is_wholesaler ? "#fef9c3" : "#dbeafe",
+                  color: row.is_wholesaler ? "#a16207" : "#1e40af",
+                }}>
+                  {row.is_wholesaler ? "WHOLESALER" : "RETAILER"}
+                </span>
+              </div>
               <div style={{ fontSize: "12px", color: "#666" }}>
                 {row.mobile || ""}
               </div>
@@ -154,6 +164,15 @@ export default function OrderList() {
                   Cancel
                 </button>
               </div>
+              <div style={{ marginTop: 8 }}>
+                <DocActions
+                  type="order"
+                  id={row.id}
+                  docNo={row.order_number}
+                  amount={row.total_amount}
+                  customerMobile={row.mobile}
+                />
+              </div>
             </div>
           ))
         ) : (
@@ -187,7 +206,16 @@ export default function OrderList() {
                       : "-"}
                   </td>
                   <td>
-                    <div>{row.customer_name}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                      <span>{row.customer_name}</span>
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, padding: "1px 7px", borderRadius: 8,
+                        background: row.is_wholesaler ? "#fef9c3" : "#dbeafe",
+                        color: row.is_wholesaler ? "#a16207" : "#1e40af",
+                      }}>
+                        {row.is_wholesaler ? "WHOLESALER" : "RETAILER"}
+                      </span>
+                    </div>
                     <div style={{ fontSize: "12px", color: "#666" }}>
                       {row.city || ""} {row.mobile ? `| ${row.mobile}` : ""}
                     </div>
@@ -262,6 +290,15 @@ export default function OrderList() {
                         Cancel
                       </button>
                       {/* PAY BUTTON REMOVED PER INSTRUCTIONS */}
+                    </div>
+                    <div style={{ marginTop: 6 }}>
+                      <DocActions
+                        type="order"
+                        id={row.id}
+                        docNo={row.order_number}
+                        amount={row.total_amount}
+                        customerMobile={row.mobile}
+                      />
                     </div>
                   </td>
                 </tr>

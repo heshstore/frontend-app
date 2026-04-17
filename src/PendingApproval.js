@@ -4,12 +4,15 @@ import { useNavigate } from "react-router-dom";
 import { ORDER_STATUS } from "./constants/orderStatus";
 import { apiFetch } from "./utils/api";
 import { API_URL } from "./config";
+import { usePermission } from "./utils/usePermission";
 
 export default function PendingApproval() {
   const [orders, setOrders] = useState([]);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
+  const canApprove = usePermission('order.approve');
+  const canReject = usePermission('order.reject');
 
   useEffect(() => {
     const handleResize = () => {
@@ -152,12 +155,16 @@ export default function PendingApproval() {
               <button onClick={() => window.location.href = `/invoice/${o.id}`}>
                 View
               </button>
-              <button onClick={() => approveOrder(o.id)}>
-                Approve
-              </button>
-              <button onClick={() => rejectOrder(o.id)}>
-                Reject
-              </button>
+              {canApprove && (
+                <button onClick={() => approveOrder(o.id)}>
+                  Approve
+                </button>
+              )}
+              {canReject && (
+                <button onClick={() => rejectOrder(o.id)}>
+                  Reject
+                </button>
+              )}
             </div>
           </div>
         ))
@@ -199,12 +206,16 @@ export default function PendingApproval() {
                     <button onClick={() => window.location.href = `/invoice/${o.id}`}>
                       View
                     </button>
-                    <button onClick={() => approveOrder(o.id)}>
-                      Approve
-                    </button>
-                    <button onClick={() => rejectOrder(o.id)}>
-                      Reject
-                    </button>
+                    {canApprove && (
+                      <button onClick={() => approveOrder(o.id)}>
+                        Approve
+                      </button>
+                    )}
+                    {canReject && (
+                      <button onClick={() => rejectOrder(o.id)}>
+                        Reject
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

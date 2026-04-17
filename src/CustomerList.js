@@ -109,12 +109,22 @@ export default function CustomerList() {
                   }}
                 >
                   <div>
-                    <div style={{ fontWeight: "bold", fontSize: 16 }}>
-                      {formatCustomer({
-                        companyName: customer.companyName || customer.company_name || customer.name,
-                        tag: customer.tag,
-                        city: customer.city
-                      })}
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <span style={{ fontWeight: "bold", fontSize: 16 }}>
+                        {formatCustomer({
+                          companyName: customer.companyName || customer.company_name || customer.name,
+                          tag: customer.tag,
+                          city: customer.city
+                        })}
+                      </span>
+                      {/* Pricing type badge */}
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 10,
+                        background: customer.isWholesaler ? "#fef9c3" : "#dbeafe",
+                        color: customer.isWholesaler ? "#a16207" : "#1e40af",
+                      }}>
+                        {customer.isWholesaler ? "WHOLESALER" : "RETAILER"}
+                      </span>
                     </div>
 
                     {/* ✅ FIXED HEADER */}
@@ -159,6 +169,17 @@ export default function CustomerList() {
                       </div>
                       <div style={{ marginBottom: 6 }}>
                         💰 Credit Limit: ₹ {customer.creditLimit ?? 0}
+                        {customer.credit_days > 0 ? ` · ${customer.credit_days} days` : ""}
+                      </div>
+                      <div style={{ marginBottom: 6, display: "flex", alignItems: "center", gap: 8 }}>
+                        <span>💼 Pricing Type:</span>
+                        <span style={{
+                          fontSize: 11, fontWeight: 700, padding: "2px 10px", borderRadius: 10,
+                          background: customer.isWholesaler ? "#fef9c3" : "#dbeafe",
+                          color: customer.isWholesaler ? "#a16207" : "#1e40af",
+                        }}>
+                          {customer.isWholesaler ? "WHOLESALER" : "RETAILER"}
+                        </span>
                       </div>
 
                       {/* ACTIONS */}

@@ -22,7 +22,7 @@ export default function EditCustomer() {
     gstNumber: "",
     customerType: "",
     tag: "",
-    creditLimit: ""
+    creditLimit: "",
   });
 
   // ✅ LOAD CUSTOMER
@@ -64,7 +64,7 @@ export default function EditCustomer() {
       gstNumber: form.gstNumber,
       customerType: form.customerType,
       tag: form.tag,
-      creditLimit: Number(form.creditLimit || 0)
+      creditLimit: Number(form.creditLimit || 0),
     };
 
     try {
@@ -120,7 +120,6 @@ export default function EditCustomer() {
             ["Pincode", "pincode"],
             ["GST Number", "gstNumber"],
             ["Tag", "tag"],
-            ["Credit Limit", "creditLimit"]
           ].map(([label, name]) => (
             <div key={name} style={{ marginBottom: 15 }}>
               <label>{label}</label>
@@ -137,6 +136,7 @@ export default function EditCustomer() {
               />
             </div>
           ))}
+
 
           {/* MOBILE 1 */}
           <div style={{ marginBottom: 15 }}>
