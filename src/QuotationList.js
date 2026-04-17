@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { API_URL } from './config';
+import { apiFetch } from './utils/api';
 import { theme, buttonStyle } from './theme';
 import DocActions from './components/DocActions';
 
@@ -24,7 +24,7 @@ export default function QuotationList() {
     try {
       const params = new URLSearchParams();
       if (statusFilter) params.set('status', statusFilter);
-      const res = await fetch(`${API_URL}/quotations?${params.toString()}`);
+      const res = await apiFetch(`/quotations?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
         setQuotations(Array.isArray(data) ? data : []);
@@ -53,7 +53,7 @@ export default function QuotationList() {
   const handleCancel = async (id) => {
     if (!window.confirm('Cancel this quotation?')) return;
     try {
-      const res = await fetch(`${API_URL}/quotations/${id}/cancel`, { method: 'PATCH' });
+      const res = await apiFetch(`/quotations/${id}/cancel`, { method: 'PATCH' });
       if (res.ok) {
         alert('Quotation cancelled');
         loadQuotations();
@@ -68,7 +68,7 @@ export default function QuotationList() {
   const handleConvert = async (id) => {
     if (!window.confirm('Convert this quotation to an order?')) return;
     try {
-      const res = await fetch(`${API_URL}/quotations/${id}/convert-to-order`, { method: 'POST' });
+      const res = await apiFetch(`/quotations/${id}/convert-to-order`, { method: 'POST' });
       const data = await res.json();
       if (res.ok) {
         const orderNo = data.order_id ? `#ORD-${String(data.order_id).padStart(5, '0')}` : '';

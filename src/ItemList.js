@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { theme } from "./theme";
+import { apiFetch } from "./utils/api";
 
 export default function ItemList() {
   const [items, setItems] = useState([]);
@@ -9,9 +10,9 @@ export default function ItemList() {
   const [search, setSearch] = useState("");
 
   const loadItems = async () => {
-    const res = await fetch("http://localhost:3000/items");
+    const res = await apiFetch(`/items`);
     const data = await res.json();
-    setItems(data);
+    setItems(Array.isArray(data) ? data : []);
   };
 
   useEffect(() => {
@@ -19,9 +20,7 @@ export default function ItemList() {
   }, []);
 
   const deleteItem = async (item) => {
-    await fetch(`http://localhost:3000/items/${item.sku}`, {
-      method: "DELETE"
-    });
+    await apiFetch(`/items/${item.sku}`, { method: "DELETE" });
     loadItems();
   };
 

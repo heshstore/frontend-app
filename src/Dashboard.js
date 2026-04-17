@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { theme } from "./theme";
 import UniversalSearch from "./components/UniversalSearch";
 import { usePermission, hasAnyPermission } from "./utils/usePermission";
+import { apiFetch } from "./utils/api";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -40,10 +40,10 @@ export default function Dashboard() {
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
-    axios
-      .get("http://localhost:3000/orders")
-      .then((res) => setOrders(res.data))
-      .catch((err) => console.error(err));
+    apiFetch(`/orders`)
+      .then(res => res.json())
+      .then(data => setOrders(Array.isArray(data) ? data : []))
+      .catch(err => console.error(err));
   }, []);
 
 
@@ -104,12 +104,12 @@ export default function Dashboard() {
     setSyncPhase("fetching");
 
     // Fire sync — do NOT await (long-running)
-    fetch("http://localhost:3000/shopify/sync").catch(() => {});
+    apiFetch(`/shopify/sync`).catch(() => {});
 
     // Start polling immediately every 2 s
     const interval = setInterval(async () => {
       try {
-        const res = await fetch("http://localhost:3000/shopify/sync-status");
+        const res = await apiFetch(`/shopify/sync-status`);
         const st = await res.json();
 
         setSyncPhase(st.phase || (st.status === "done" ? "done" : "fetching"));

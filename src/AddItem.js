@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { theme } from "./theme";
-import { API_URL } from "./config";
+import { apiFetch } from "./utils/api";
 
 export default function AddItem() {
   const navigate = useNavigate();
@@ -55,11 +55,8 @@ export default function AddItem() {
 
       console.log("SENDING 👉", payload);
 
-      const res = await fetch(`${API_URL}/items`, {
+      const res = await apiFetch(`/items`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
         body: JSON.stringify(payload)
       });
 

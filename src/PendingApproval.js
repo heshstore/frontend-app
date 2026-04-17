@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { ORDER_STATUS } from "./constants/orderStatus";
 import { apiFetch } from "./utils/api";
-import { API_URL } from "./config";
 import { usePermission } from "./utils/usePermission";
 
 export default function PendingApproval() {
@@ -25,8 +23,9 @@ export default function PendingApproval() {
 
   const loadOrders = async () => {
     try {
-      const res = await axios.get(`${API_URL}/orders`);
-      const pending = res.data.filter(
+      const res = await apiFetch(`/orders`);
+      const data = await res.json();
+      const pending = (Array.isArray(data) ? data : []).filter(
         (o) => o.status === ORDER_STATUS.PENDING_APPROVAL
       );
       setOrders(pending);

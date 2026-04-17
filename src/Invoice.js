@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { API_URL } from "./config";
+import { apiFetch } from "./utils/api";
 
 export default function Invoice() {
   const { id } = useParams();
@@ -11,7 +11,7 @@ export default function Invoice() {
   const [invoiceCreated, setInvoiceCreated] = useState(null); // { invoice_no, id }
 
   useEffect(() => {
-    fetch(`${API_URL}/orders/${id}/split-invoice`)
+    apiFetch(`/orders/${id}/split-invoice`)
       .then(res => res.json())
       .then(data => {
         setInvoice(data);
@@ -21,7 +21,7 @@ export default function Invoice() {
   const handleCreateInvoice = async () => {
     setCreatingInvoice(true);
     try {
-      const res = await fetch(`${API_URL}/invoice/from-order/${id}`, { method: "POST" });
+      const res = await apiFetch(`/invoice/from-order/${id}`, { method: "POST" });
       const data = await res.json();
       if (data.blocked) {
         setCreditBlock({ outstanding: data.outstanding, credit_limit: data.credit_limit });

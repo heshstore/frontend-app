@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { theme } from "./theme";
+import { apiFetch } from "./utils/api";
 
 export default function ShopifyItems() {
   const navigate = useNavigate();
@@ -90,11 +91,9 @@ export default function ShopifyItems() {
 
       console.log("BULK SAVE:", selectedData);
 
-      // 🚀 SINGLE API CALL
-      const res = await fetch("http://localhost:3000/items/bulk", {
+      const res = await apiFetch(`/items/bulk`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(selectedData)
+        body: JSON.stringify(selectedData),
       });
 
       const result = await res.json();
@@ -135,8 +134,7 @@ export default function ShopifyItems() {
 
   const loadItems = async () => {
     try {
-      // 1. Load Shopify items (NEW APPROACH: load all items, then filter by isShopify)
-      const res = await fetch("http://localhost:3000/items");
+      const res = await apiFetch(`/items`);
       const data = await res.json();
 
       console.log("ALL ITEMS:", data);

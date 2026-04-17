@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { theme } from "./theme";
 import PageLayout from "./components/layout/PageLayout";
+import { apiFetch } from "./utils/api";
 
 export default function EditCustomer() {
   const { id } = useParams();
@@ -27,15 +28,25 @@ export default function EditCustomer() {
 
   // ✅ LOAD CUSTOMER
   useEffect(() => {
-    fetch(`${require('./config').API_URL}/customers/${id}`)
+    apiFetch(`/customers/${id}`)
       .then(res => res.json())
       .then(data => {
         setForm({
-          ...data,
-          mobile1: data.mobile1?.slice(-10) || "",
-          mobile2: data.mobile2?.slice(-10) || "",
-          countryCode1: data.mobile1?.slice(0, -10) || "+91",
-          countryCode2: data.mobile2?.slice(0, -10) || "+91"
+          companyName: data.companyName || "",
+          contactName: data.contactName || "",
+          email: data.email || "",
+          address: data.address || "",
+          city: data.city || "",
+          state: data.state || "",
+          pincode: data.pincode || "",
+          gstNumber: data.gstNumber || "",
+          customerType: data.customerType || "",
+          tag: data.tag || "",
+          creditLimit: data.creditLimit ?? "",
+          mobile1: data.mobile1?.replace(/^\+?\d{0,3}(?=\d{10}$)/, "").slice(-10) || "",
+          mobile2: data.mobile2?.replace(/^\+?\d{0,3}(?=\d{10}$)/, "").slice(-10) || "",
+          countryCode1: data.mobile1 && data.mobile1.length > 10 ? data.mobile1.slice(0, data.mobile1.length - 10) : "+91",
+          countryCode2: data.mobile2 && data.mobile2.length > 10 ? data.mobile2.slice(0, data.mobile2.length - 10) : "+91",
         });
       })
       .catch(err => console.error(err));
@@ -68,12 +79,9 @@ export default function EditCustomer() {
     };
 
     try {
-      const res = await fetch(`${require('./config').API_URL}/customers/${id}`, {
+      const res = await apiFetch(`/customers/${id}`, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();

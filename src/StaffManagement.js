@@ -1,13 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { API_URL } from './config';
+import { apiFetch } from './utils/api';
 import { theme } from './theme';
 import PageLayout from './components/layout/PageLayout';
 
-const authHeader = () => ({
-  'Content-Type': 'application/json',
-  Authorization: `Bearer ${localStorage.getItem('access_token')}`,
-});
 
 const EMPTY_FORM = {
   name: '', email: '', mobile: '', role: '',
@@ -60,8 +56,8 @@ export default function StaffManagement() {
     setLoading(true);
     try {
       const [staffRes, rolesRes] = await Promise.all([
-        fetch(`${API_URL}/users`, { headers: authHeader() }),
-        fetch(`${API_URL}/rbac/roles`, { headers: authHeader() }),
+        apiFetch(`/users`),
+        apiFetch(`/rbac/roles`),
       ]);
       if (staffRes.status === 403) { navigate('/dashboard'); return; }
       const staffData = await staffRes.json();
@@ -113,12 +109,11 @@ export default function StaffManagement() {
       const payload = { ...form };
       if (!payload.password) delete payload.password;
 
-      const url = editId ? `${API_URL}/users/${editId}` : `${API_URL}/users`;
+      const url = editId ? `/users/${editId}` : `/users`;
       const method = editId ? 'PUT' : 'POST';
 
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method,
-        headers: authHeader(),
         body: JSON.stringify(payload),
       });
 
@@ -142,9 +137,8 @@ export default function StaffManagement() {
     const action = s.is_active ? 'deactivate' : 'reactivate';
     if (!window.confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} ${s.name}?`)) return;
     try {
-      await fetch(`${API_URL}/users/${s.id}/deactivate`, {
+      await apiFetch(`/users/${s.id}/deactivate`, {
         method: 'PATCH',
-        headers: authHeader(),
       });
       await loadStaff();
     } catch (e) {

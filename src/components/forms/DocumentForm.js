@@ -13,7 +13,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { API_URL } from "../../config";
+import { apiFetch } from "../../utils/api";
 import { theme } from "../../theme";
 import PageLayout from "../layout/PageLayout";
 
@@ -102,7 +102,7 @@ function CustomerSearchField({ label, value, onSelect, onClear, placeholder }) {
     if (!val || val.length < 2) { setResults([]); setShowDrop(false); return; }
     timerRef.current = setTimeout(async () => {
       try {
-        const r = await fetch(`${API_URL}/customers/search?q=${encodeURIComponent(val)}`);
+        const r = await apiFetch(`/customers/search?q=${encodeURIComponent(val)}`);
         const d = await r.json();
         setResults(Array.isArray(d) ? d : []);
         setShowDrop(true);

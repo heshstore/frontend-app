@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { ORDER_STATUS, ORDER_STATUS_LABELS } from "./constants/orderStatus";
-import { API_URL } from "./config";
 import DocActions from "./components/DocActions";
+import { apiFetch } from "./utils/api";
 
 export default function OrderList() {
   const [orders, setOrders] = useState([]);
@@ -24,9 +23,10 @@ export default function OrderList() {
 
   const loadOrders = async () => {
     try {
-      const res = await axios.get(`${API_URL}/orders`);
+      const res = await apiFetch(`/orders`);
+      const data = await res.json();
       // Show all non-cancelled, non-draft orders
-      setOrders(res.data.filter(o =>
+      setOrders((Array.isArray(data) ? data : []).filter(o =>
         o.status !== ORDER_STATUS.CANCELLED &&
         o.status !== ORDER_STATUS.DRAFT
       ));

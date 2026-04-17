@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { theme } from "./theme";
 import PageLayout from "./components/layout/PageLayout";
 import { formatCustomer } from "./utils/formatCustomer";
+import { apiFetch } from "./utils/api";
 
 export default function CustomerList() {
   const [customers, setCustomers] = useState([]);
@@ -16,13 +17,12 @@ export default function CustomerList() {
   // Modified: fetch with search if search present, using /customers/search?q=
   const loadCustomers = async (searchValue = "") => {
     try {
-      let url = "http://localhost:3000/customers";
-      if (searchValue) {
-        url = `http://localhost:3000/customers/search?q=${searchValue.toLowerCase()}`;
-      }
-      const res = await fetch(url);
+      const path = searchValue
+        ? `/customers/search?q=${encodeURIComponent(searchValue.toLowerCase())}`
+        : `/customers`;
+      const res = await apiFetch(path);
       const data = await res.json();
-      setCustomers(data);
+      setCustomers(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error(err);
     }
@@ -46,9 +46,7 @@ export default function CustomerList() {
     if (!window.confirm("Delete this customer?")) return;
 
     try {
-      await fetch(`http://localhost:3000/customers/${id}`, {
-        method: "DELETE",
-      });
+      await apiFetch(`/customers/${id}`, { method: "DELETE" });
 
       alert("Deleted successfully");
       loadCustomers();

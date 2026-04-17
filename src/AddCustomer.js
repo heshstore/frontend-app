@@ -2,6 +2,7 @@ import React, { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import PageLayout from "./components/layout/PageLayout";
 import { API_URL } from "./config";
+import { apiFetch } from "./utils/api";
 
 const theme = {
   card: "#fff",
@@ -254,9 +255,8 @@ export default function AddCustomer() {
     }
 
     try {
-      const res = await fetch(`${API_URL}/customers`, {
+      const res = await apiFetch(`/customers`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
           city,

@@ -39,13 +39,23 @@ export default function WhatsAppQR() {
           setQrDataUrl(data.dataUrl);
           setStatus('CONNECTING');
           setPhone(null);
+          setError('');
         } else if (data.type === 'ready') {
           setStatus('CONNECTED');
           setPhone(data.phone || null);
           setQrDataUrl(null);
-        } else if (data.type === 'ping') {
-          // keep-alive, ignore
+          setError('');
+        } else if (data.type === 'initializing') {
+          setStatus('INITIALIZING');
+          setQrDataUrl(null);
+        } else if (data.type === 'disconnected') {
+          setStatus('DISCONNECTED');
+          setQrDataUrl(null);
+        } else if (data.type === 'error') {
+          setError(data.message || 'WhatsApp error');
+          setStatus('DISCONNECTED');
         }
+        // ping: ignore
       } catch {}
     };
 
@@ -57,7 +67,7 @@ export default function WhatsAppQR() {
     return () => { es.close(); };
   }, []);
 
-  const statusColor = { CONNECTED: '#198754', CONNECTING: '#ffc107', DISCONNECTED: '#dc3545' };
+  const statusColor = { CONNECTED: '#198754', CONNECTING: '#ffc107', DISCONNECTED: '#dc3545', INITIALIZING: '#0d6efd' };
 
   return (
     <PageLayout title="WhatsApp Connection">
@@ -73,14 +83,16 @@ export default function WhatsAppQR() {
           }} />
           <div>
             <div style={{ fontWeight: 700, fontSize: 15 }}>
-              {status === 'CONNECTED' ? `Connected${phone ? `: +${phone}` : ''}` :
-               status === 'CONNECTING' ? 'Waiting for QR scan...' :
+              {status === 'CONNECTED'    ? `Connected${phone ? `: +${phone}` : ''}` :
+               status === 'CONNECTING'   ? 'Waiting for QR scan...' :
+               status === 'INITIALIZING' ? 'Starting WhatsApp (launching browser)...' :
                'Disconnected'}
             </div>
             <div style={{ fontSize: 12, color: theme.textMuted }}>
-              {status === 'CONNECTED' && 'WhatsApp is active. Leads will be captured automatically.'}
-              {status === 'CONNECTING' && 'Scan the QR code with your WhatsApp to connect.'}
-              {status === 'DISCONNECTED' && 'QR code will appear below once server is ready.'}
+              {status === 'CONNECTED'    && 'WhatsApp is active. Leads will be captured automatically.'}
+              {status === 'CONNECTING'   && 'Scan the QR code with your WhatsApp to connect.'}
+              {status === 'INITIALIZING' && 'Chromium is launching on the server. QR will appear in 20–60 seconds.'}
+              {status === 'DISCONNECTED' && 'WhatsApp is not connected.'}
             </div>
           </div>
         </div>

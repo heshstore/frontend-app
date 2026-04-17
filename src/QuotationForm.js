@@ -1,6 +1,5 @@
 import React, { useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
-import { API_URL } from "./config";
 import { apiFetch } from "./utils/api";
 import DocumentForm from "./components/forms/DocumentForm";
 
@@ -30,7 +29,7 @@ async function loadQuotation(id) {
     };
   }
 
-  const res  = await fetch(`${API_URL}/quotations/${id}`);
+  const res  = await apiFetch(`/quotations/${id}`);
   const data = await res.json();
 
   return {

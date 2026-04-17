@@ -1,12 +1,12 @@
 import React, { useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
-import { API_URL } from "./config";
+import { apiFetch } from "./utils/api";
 import DocumentForm from "./components/forms/DocumentForm";
 
 // ── Order-specific data loader ────────────────────────────────────────────────
 // Maps the Order API response shape into the DocumentForm expected shape.
 async function loadOrder(id) {
-  const res  = await fetch(`${API_URL}/orders/${id}`);
+  const res  = await apiFetch(`/orders/${id}`);
   const data = await res.json();
 
   return {

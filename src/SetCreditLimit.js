@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { API_URL } from "./config";
+import { apiFetch } from "./utils/api";
 import { theme, buttonStyle } from "./theme";
 import PageLayout from "./components/layout/PageLayout";
 
@@ -62,7 +62,7 @@ export default function SetCreditLimit() {
   const loadWholesalers = useCallback(async () => {
     setLoadingList(true);
     try {
-      const r = await fetch(`${API_URL}/customers`);
+      const r = await apiFetch(`/customers`);
       const d = await r.json();
       setWholesalerList(Array.isArray(d) ? d.filter(c => c.isWholesaler) : []);
     } catch (e) { console.error(e); }
@@ -83,7 +83,7 @@ export default function SetCreditLimit() {
   const search = useCallback(async (q) => {
     if (!q || q.length < 2) { setResults([]); setShowDrop(false); return; }
     try {
-      const r = await fetch(`${API_URL}/customers/search?q=${encodeURIComponent(q)}`);
+      const r = await apiFetch(`/customers/search?q=${encodeURIComponent(q)}`);
       const d = await r.json();
       setResults(Array.isArray(d) ? d.slice(0, 8) : []);
       setShowDrop(true);
@@ -127,9 +127,8 @@ export default function SetCreditLimit() {
     }
     setSaving(true);
     try {
-      const res = await fetch(`${API_URL}/customers/${selected.id}/credit-limit`, {
+      const res = await apiFetch(`/customers/${selected.id}/credit-limit`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           credit_limit_amount: Number(creditLimit) || 0,
           credit_days: Number(creditDays),
@@ -139,7 +138,7 @@ export default function SetCreditLimit() {
       if (!res.ok) throw new Error("Save failed");
       setSaved(true);
       // refresh selected object and wholesaler list
-      const updated = await fetch(`${API_URL}/customers/${selected.id}`);
+      const updated = await apiFetch(`/customers/${selected.id}`);
       const updatedData = await updated.json();
       setSelected(updatedData);
       loadWholesalers();
