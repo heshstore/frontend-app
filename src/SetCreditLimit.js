@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import { apiFetch } from "./utils/api";
 import { theme, buttonStyle } from "./theme";
 import PageLayout from "./components/layout/PageLayout";
@@ -34,8 +33,6 @@ const CREDIT_DAY_OPTIONS = [
 ];
 
 export default function SetCreditLimit() {
-  const navigate = useNavigate();
-
   // ── search state ──────────────────────────────────────────────────────────
   const [query, setQuery]         = useState("");
   const [results, setResults]     = useState([]);

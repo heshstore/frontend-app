@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ORDER_STATUS, ORDER_STATUS_LABELS } from "./constants/orderStatus";
+import { ORDER_STATUS } from "./constants/orderStatus";
 import DocActions from "./components/DocActions";
 import { apiFetch } from "./utils/api";
 

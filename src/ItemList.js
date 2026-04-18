@@ -6,7 +6,6 @@ import { apiFetch } from "./utils/api";
 export default function ItemList() {
   const [items, setItems] = useState([]);
   const navigate = useNavigate();
-  const [openId, setOpenId] = useState(null);
   const [search, setSearch] = useState("");
 
   const loadItems = async () => {

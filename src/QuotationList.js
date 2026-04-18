@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from './utils/api';
 import { theme, buttonStyle } from './theme';
@@ -19,7 +19,7 @@ export default function QuotationList() {
   const [statusFilter, setStatusFilter] = useState('');
   const [expanded, setExpanded] = useState(null);
 
-  const loadQuotations = async () => {
+  const loadQuotations = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -34,12 +34,11 @@ export default function QuotationList() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [statusFilter]);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     loadQuotations();
-  }, [statusFilter]);
+  }, [loadQuotations]);
 
   const filtered = quotations.filter((q) => {
     const text = search.toLowerCase();

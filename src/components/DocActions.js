@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { API_URL } from "../config";
 import { apiFetch } from "../utils/api";
 import { theme, buttonStyle } from "../theme";
 

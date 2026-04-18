@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import PageLayout from "./components/layout/PageLayout";
-import { theme, buttonStyle, inputStyle } from "./theme";
+import { buttonStyle, inputStyle } from "./theme";
 import { apiFetch } from "./utils/api";
 
 const PAYMENT_MODES = ["Cash", "UPI", "Bank Transfer", "Cheque", "NEFT/RTGS"];

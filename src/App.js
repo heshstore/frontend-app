@@ -22,6 +22,7 @@ import RbacMatrix from "./RbacMatrix";
 import LeadList from "./crm/LeadList";
 import LeadForm from "./crm/LeadForm";
 import LeadDetail from "./crm/LeadDetail";
+import TelecallerDashboard from "./crm/TelecallerDashboard";
 import CrmAnalytics from "./crm/CrmAnalytics";
 import WhatsAppQR from "./whatsapp/WhatsAppQR";
 import { AuthProvider } from "./context/AuthContext";
@@ -100,6 +101,7 @@ function App() {
           <Route path="/set-credit-limit" element={<PermissionRoute permission="customer.edit"><SetCreditLimit /></PermissionRoute>} />
 
           {/* CRM */}
+          <Route path="/crm/queue" element={<PermissionRoute permission="lead.view"><TelecallerDashboard /></PermissionRoute>} />
           <Route path="/crm/leads" element={<PermissionRoute permission="lead.view"><LeadList /></PermissionRoute>} />
           <Route path="/crm/leads/new" element={<PermissionRoute permission="lead.create"><LeadForm /></PermissionRoute>} />
           <Route path="/crm/leads/:id" element={<PermissionRoute permission="lead.view"><LeadDetail /></PermissionRoute>} />

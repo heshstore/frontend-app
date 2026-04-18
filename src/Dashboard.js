@@ -14,8 +14,6 @@ export default function Dashboard() {
   const [showItem, setShowItem] = useState(false);
   const [showQuotation, setShowQuotation] = useState(false);
   const [showOrder, setShowOrder] = useState(false);
-  const [showInvoice, setShowInvoice] = useState(false);
-
   const [showCrm, setShowCrm] = useState(false);
   const [showProduction, setShowProduction] = useState(false);
   const [showAccounts, setShowAccounts] = useState(false);
@@ -189,6 +187,7 @@ export default function Dashboard() {
           </button>
           {showCrm && (
             <div>
+              <button style={{ ...subBtn, fontWeight: 700, color: theme.primary }} onClick={() => navigate("/crm/queue")}>⚡ My Queue</button>
               <button style={subBtn} onClick={() => navigate("/crm/leads/new")}>• Create Lead</button>
               <button style={subBtn} onClick={() => navigate("/crm/leads")}>• View Leads</button>
               <button style={subBtn} onClick={() => navigate("/crm/analytics")}>• CRM Analytics</button>

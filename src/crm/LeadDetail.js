@@ -5,6 +5,9 @@ import { apiFetch } from '../utils/api';
 import { theme } from '../theme';
 import ConvertToCustomerModal from './ConvertToCustomerModal';
 
+const URGENCY_BG = { HIGH: '#fff3f3', MEDIUM: '#fffbea', LOW: '#f8f9fa' };
+const URGENCY_BORDER = { HIGH: '#dc3545', MEDIUM: '#ffc107', LOW: '#6c757d' };
+
 const STATUSES = ['NEW','CONTACTED','INTERESTED','QUOTATION','CONVERTED','LOST'];
 const STATUS_COLORS = {
   NEW: '#ffc107', CONTACTED: '#0d6efd', INTERESTED: '#198754',
@@ -40,6 +43,10 @@ export default function LeadDetail() {
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
   const chatBottomRef = useRef(null);
+  const [decision, setDecision] = useState(null);
+  const [scriptOpen, setScriptOpen] = useState(false);
+  const [logNote, setLogNote] = useState('');
+  const [logging, setLogging] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -48,7 +55,7 @@ export default function LeadDetail() {
       if (!res.ok) { navigate('/crm/leads'); return; }
       const data = await res.json();
       setLead(data);
-      setNotes(data.notes || []);
+      setNotes(data.activityNotes || []);
       setFollowups(data.followups || []);
       setEditStatus(data.status);
 
@@ -56,6 +63,9 @@ export default function LeadDetail() {
         const cr = await apiFetch(`/whatsapp/chat/${encodeURIComponent(data.whatsapp_chat_id)}/messages?leadId=${id}`);
         if (cr.ok) setChatMessages(await cr.json());
       }
+
+      const dr = await apiFetch(`/crm/leads/${id}/decision`);
+      if (dr.ok) setDecision(await dr.json());
     } catch (e) {
       console.error(e);
     } finally {
@@ -162,8 +172,26 @@ export default function LeadDetail() {
     }
   };
 
+  const logAction = async () => {
+    if (!logNote.trim()) return;
+    setLogging(true);
+    try {
+      const newStatus = decision?.nextAction?.nextStatusOnComplete;
+      const res = await apiFetch(`/crm/leads/${id}/log-action`, {
+        method: 'POST',
+        body: JSON.stringify({ note: logNote, noteType: 'CALL', newStatus: newStatus || undefined }),
+      });
+      if (res.ok) {
+        setLogNote('');
+        await load();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(err.message || 'Failed to log action');
+      }
+    } finally { setLogging(false); }
+  };
+
   const inp = { width: '100%', padding: '9px 11px', borderRadius: 6, border: `1px solid ${theme.border}`, fontSize: 13, boxSizing: 'border-box' };
-  const lbl = { display: 'block', fontSize: 11, fontWeight: 600, color: theme.textMuted, marginBottom: 3, textTransform: 'uppercase' };
   const tabBtn = (t) => ({
     padding: '7px 16px', border: 'none', borderRadius: '6px 6px 0 0',
     cursor: 'pointer', fontSize: 13, fontWeight: 600,
@@ -183,6 +211,114 @@ export default function LeadDetail() {
           prefillData={convertData.prefillData}
           onClose={() => setShowConvert(false)}
         />
+      )}
+
+      {/* Decision Engine Banner */}
+      {decision && decision.nextAction && decision.nextAction.action !== 'NONE' && (
+        <div
+          style={{
+            background: URGENCY_BG[decision.nextAction.urgency] || '#f8f9fa',
+            border: `1.5px solid ${URGENCY_BORDER[decision.nextAction.urgency] || theme.border}`,
+            borderRadius: 10,
+            padding: 14,
+            marginBottom: 14,
+          }}
+        >
+          {/* Score + next action header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: '50%',
+                  border: `3px solid ${URGENCY_BORDER[decision.nextAction.urgency]}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: 700,
+                  fontSize: 13,
+                  color: URGENCY_BORDER[decision.nextAction.urgency],
+                }}
+              >
+                {decision.score}
+              </div>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14, color: URGENCY_BORDER[decision.nextAction.urgency] }}>
+                  {decision.nextAction.label}
+                </div>
+                <div style={{ fontSize: 11, color: theme.textMuted }}>
+                  {decision.nextAction.urgency} urgency
+                  {decision.followUpOverdueDays > 0 ? ` · ${decision.followUpOverdueDays}d overdue` : ''}
+                  {decision.urgencyKeywords.length > 0 ? ` · keywords: ${decision.urgencyKeywords.join(', ')}` : ''}
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => setScriptOpen((v) => !v)}
+              style={{
+                padding: '5px 11px',
+                borderRadius: 6,
+                border: `1px solid ${URGENCY_BORDER[decision.nextAction.urgency]}`,
+                background: 'transparent',
+                color: URGENCY_BORDER[decision.nextAction.urgency],
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              {scriptOpen ? 'Hide Script' : 'Show Script'}
+            </button>
+          </div>
+
+          {/* Script */}
+          {scriptOpen && (
+            <pre
+              style={{
+                background: 'rgba(0,0,0,0.04)',
+                borderRadius: 6,
+                padding: '10px 12px',
+                fontSize: 12,
+                lineHeight: 1.6,
+                whiteSpace: 'pre-wrap',
+                margin: '0 0 10px',
+                fontFamily: 'inherit',
+                color: theme.text,
+              }}
+            >
+              {decision.nextAction.script}
+            </pre>
+          )}
+
+          {/* Log action form */}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              style={{ flex: 1, padding: '8px 11px', borderRadius: 6, border: `1px solid ${theme.border}`, fontSize: 13, boxSizing: 'border-box' }}
+              placeholder="Outcome note (e.g. Called, interested in 50 units)..."
+              value={logNote}
+              onChange={(e) => setLogNote(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && logAction()}
+            />
+            <button
+              onClick={logAction}
+              disabled={logging || !logNote.trim()}
+              style={{
+                padding: '8px 14px',
+                background: URGENCY_BORDER[decision.nextAction.urgency],
+                color: '#fff',
+                border: 'none',
+                borderRadius: 6,
+                fontWeight: 700,
+                fontSize: 12,
+                cursor: logging ? 'not-allowed' : 'pointer',
+                whiteSpace: 'nowrap',
+                opacity: logging ? 0.7 : 1,
+              }}
+            >
+              {logging ? '...' : decision.nextAction.buttonText}
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Lead card */}

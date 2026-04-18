@@ -10,4 +10,4 @@ export const API_URL =
     ? String(fromEnv).replace(/\/$/, "")
     : process.env.NODE_ENV === "development"
       ? ""
-      : "http://localhost:3000";
+      : "http://localhost:4000";
