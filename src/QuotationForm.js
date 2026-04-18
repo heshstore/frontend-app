@@ -80,9 +80,9 @@ export default function QuotationForm() {
   const onSubmit = useCallback(async (payload, id) => {
     // Strip sentinel prefix — this is a new quotation
     const isNew = !id || String(id).startsWith("_prefill_");
-    const res = await fetch(
-      isNew ? `${API_URL}/quotations` : `${API_URL}/quotations/${id}`,
-      { method: isNew ? "POST" : "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }
+    const res = await apiFetch(
+      isNew ? `/quotations` : `/quotations/${id}`,
+      { method: isNew ? "POST" : "PUT", body: JSON.stringify(payload) }
     );
     if (res.ok) {
       const saved = await res.json().catch(() => ({}));

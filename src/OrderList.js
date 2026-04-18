@@ -144,22 +144,18 @@ export default function OrderList() {
                 <button onClick={() => navigate(`/edit-order/${row.id}`)}>Edit</button>
                       {row.status === ORDER_STATUS.DRAFT && (
                   <button onClick={() => {
-                    fetch(`${API_URL}/orders/${row.id}/send-for-approval`, {
-                      method: "PATCH"
-                    })
-                    .then(() => {
-                      alert("Sent for approval");
-                      navigate("/pending-approval");
-                    });
+                    apiFetch(`/orders/${row.id}/send-for-approval`, { method: "PATCH" })
+                      .then(() => { alert("Sent for approval"); navigate("/pending-approval"); })
+                      .catch(() => alert("Failed to send for approval"));
                   }}>
                     Send
                   </button>
                 )}
                 <button onClick={() => {
                   if (!window.confirm("Cancel order?")) return;
-                  fetch(`${API_URL}/orders/${row.id}/cancel`, {
-                    method: "PATCH"
-                  }).then(() => window.location.reload());
+                  apiFetch(`/orders/${row.id}/cancel`, { method: "PATCH" })
+                    .then(r => { if (!r.ok) throw new Error(); window.location.reload(); })
+                    .catch(() => alert("Cancel failed"));
                 }}>
                   Cancel
                 </button>
@@ -255,36 +251,25 @@ export default function OrderList() {
                       {row.status === ORDER_STATUS.DRAFT && (
                         <button
                           onClick={() => {
-                            fetch(`${API_URL}/orders/${row.id}/send-for-approval`, {
-                              method: "PATCH"
-                            })
-                            .then(() => {
-                              alert("Sent for approval");
-                              navigate("/pending-approval");
-                            });
+                            apiFetch(`/orders/${row.id}/send-for-approval`, { method: "PATCH" })
+                              .then(() => { alert("Sent for approval"); navigate("/pending-approval"); })
+                              .catch(() => alert("Failed to send for approval"));
                           }}
                         >
                           Send for Approval
                         </button>
                       )}
 
-                      {/* Cancel button per STRICT MODE instructions */}
                       <button
                         onClick={() => {
-                          const confirmCancel = window.confirm("Cancel this order?");
-                          if (!confirmCancel) return;
-
-                          fetch(`${API_URL}/orders/${row.id}/cancel`, {
-                            method: 'PATCH'
-                          })
+                          if (!window.confirm("Cancel this order?")) return;
+                          apiFetch(`/orders/${row.id}/cancel`, { method: 'PATCH' })
                             .then(res => {
                               if (!res.ok) throw new Error();
                               alert('Order cancelled');
                               window.location.reload();
                             })
-                            .catch(() => {
-                              alert('Cancel failed');
-                            });
+                            .catch(() => alert('Cancel failed'));
                         }}
                       >
                         Cancel

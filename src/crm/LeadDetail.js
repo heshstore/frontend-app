@@ -84,12 +84,19 @@ export default function LeadDetail() {
   }, [chatMessages]);
 
   const updateStatus = async (status) => {
+    const prevStatus = lead?.status;
     setEditStatus(status);
-    await apiFetch(`/crm/leads/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ status }),
-    });
-    setLead((l) => ({ ...l, status }));
+    try {
+      const res = await apiFetch(`/crm/leads/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) throw new Error('Update failed');
+      setLead((l) => ({ ...l, status }));
+    } catch {
+      setEditStatus(prevStatus);
+      alert('Failed to update status');
+    }
   };
 
   const addNote = async (e) => {

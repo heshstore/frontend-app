@@ -417,8 +417,8 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
 
   // Load master data
   useEffect(() => {
-    fetch(`${API_URL}/items?master=1`).then(r => r.json()).then(d => setItems(Array.isArray(d) ? d : [])).catch(console.error);
-    fetch(`${API_URL}/users/dropdown`, { headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` } }).then(r => r.json()).then(d => setUsers(Array.isArray(d) ? d : [])).catch(console.error);
+    apiFetch('/items?master=1').then(r => r.json()).then(d => setItems(Array.isArray(d) ? d : [])).catch(console.error);
+    apiFetch('/users/dropdown').then(r => r.json()).then(d => setUsers(Array.isArray(d) ? d : [])).catch(console.error);
   }, []);
 
   // Load edit data via the caller-supplied loader

@@ -44,9 +44,9 @@ async function loadOrder(id) {
 
 // ── Order-specific submit handler ─────────────────────────────────────────────
 async function submitOrder(payload, editId) {
-  const res = await fetch(
-    editId ? `${API_URL}/orders/${editId}` : `${API_URL}/orders`,
-    { method: editId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }
+  const res = await apiFetch(
+    editId ? `/orders/${editId}` : `/orders`,
+    { method: editId ? "PUT" : "POST", body: JSON.stringify(payload) }
   );
   if (res.ok) {
     return { ok: true, message: editId ? "Order updated ✅" : "Order created ✅", redirect: "/orders" };

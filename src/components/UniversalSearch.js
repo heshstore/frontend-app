@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { API_URL } from '../config';
+import { apiFetch } from '../utils/api';
 import { theme } from '../theme';
 
 const SECTION_ICONS = {
@@ -39,9 +39,9 @@ export default function UniversalSearch({ placeholder = 'Search customers, items
     try {
       const enc = encodeURIComponent(q.trim());
       const [custRes, itemRes, ordRes] = await Promise.allSettled([
-        fetch(`${API_URL}/customers/search?q=${enc}`),
-        fetch(`${API_URL}/items/search?q=${enc}`),
-        fetch(`${API_URL}/orders`),
+        apiFetch(`/customers/search?q=${enc}`),
+        apiFetch(`/items/search?q=${enc}`),
+        apiFetch(`/orders`),
       ]);
 
       const customers =
