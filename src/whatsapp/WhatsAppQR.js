@@ -10,6 +10,7 @@ export default function WhatsAppQR() {
   const [phone, setPhone] = useState(null);
   const [qrDataUrl, setQrDataUrl] = useState(null);
   const [error, setError] = useState('');
+  const [disconnecting, setDisconnecting] = useState(false);
   const esRef = useRef(null);
 
   const loadStatus = async () => {
@@ -66,6 +67,16 @@ export default function WhatsAppQR() {
 
     return () => { es.close(); };
   }, []);
+
+  const handleDisconnect = async () => {
+    if (!window.confirm('Disconnect WhatsApp? A new QR code will appear to link a different number.')) return;
+    setDisconnecting(true);
+    try {
+      await apiFetch('/whatsapp/disconnect', { method: 'POST' });
+    } catch { /* ignore — SSE will update status */ } finally {
+      setDisconnecting(false);
+    }
+  };
 
   const statusColor = { CONNECTED: '#198754', CONNECTING: '#ffc107', DISCONNECTED: '#dc3545', INITIALIZING: '#0d6efd' };
 
@@ -133,7 +144,19 @@ export default function WhatsAppQR() {
           }}>
             <div style={{ fontSize: 40, marginBottom: 8 }}>✅</div>
             <p style={{ fontWeight: 700, fontSize: 16, color: '#0f5132', margin: '0 0 6px' }}>WhatsApp Connected</p>
-            {phone && <p style={{ fontSize: 13, color: '#0f5132', margin: 0 }}>Number: +{phone}</p>}
+            {phone && <p style={{ fontSize: 13, color: '#0f5132', margin: '0 0 14px' }}>Number: +{phone}</p>}
+            <button
+              onClick={handleDisconnect}
+              disabled={disconnecting}
+              style={{
+                padding: '8px 20px', background: '#dc3545', color: '#fff',
+                border: 'none', borderRadius: 6, fontWeight: 700, fontSize: 13,
+                cursor: disconnecting ? 'not-allowed' : 'pointer',
+                opacity: disconnecting ? 0.7 : 1,
+              }}
+            >
+              {disconnecting ? 'Disconnecting...' : 'Disconnect & Change Number'}
+            </button>
           </div>
         )}
 
