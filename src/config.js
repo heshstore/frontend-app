@@ -1,13 +1,11 @@
 /**
  * API base URL (no trailing slash).
- * - Development: default "" so requests go to the same origin as the React app and
- *   CRA's "proxy" forwards them to the Nest backend (avoids CORS / wrong port).
- * - Production: set REACT_APP_API_URL at build time, e.g. https://api.yourdomain.com
+ * Set REACT_APP_API_URL in .env.production (prod build) or .env (dev).
+ * e.g. REACT_APP_API_URL=https://backend-service-xady.onrender.com
  */
-const fromEnv = process.env.REACT_APP_API_URL;
-export const API_URL =
-  fromEnv != null && String(fromEnv).trim() !== ""
-    ? String(fromEnv).replace(/\/$/, "")
-    : process.env.NODE_ENV === "development"
-      ? ""
-      : "http://localhost:4000";
+export const API_URL = (process.env.REACT_APP_API_URL || "").replace(/\/$/, "");
+
+// Visible in browser console — confirms which backend the build is talking to
+console.log(
+  `[API] base URL: "${API_URL || "(empty — relative paths)"}" | env: ${process.env.NODE_ENV}`,
+);

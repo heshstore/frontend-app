@@ -26,36 +26,44 @@ export default function Login() {
         body: JSON.stringify({ mobile: mobile.replace(/\s/g, "").trim(), password }),
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        login(data.access_token, data.user, data.permissions || []);
-        navigate("/dashboard");
-      } else {
-        let errMsg = `Sign in failed (${res.status})`;
-        try {
-          const err = await res.json();
-          errMsg = err.message || errMsg;
-        } catch {
-          const text = await res.text();
-          if (text) errMsg = text.slice(0, 180);
-        }
-        setError(errMsg);
+      let data;
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error('Invalid server response (not JSON)');
       }
+
+      if (!res.ok) {
+        throw new Error(data?.message || `Sign in failed (${res.status})`);
+      }
+
+      login(data.access_token, data.user, data.permissions || []);
+      navigate("/dashboard");
     } catch (err) {
-      // Fallback for development: allow local login if backend is unreachable
+      // Dev-only bypass
       if (mobile === "9876543210" && password === "1234") {
-        localStorage.setItem("isLoggedIn", "true");
+        login('dev-token', { id: 0, name: 'Dev User', role: 'Admin', mobile }, []);
         navigate("/dashboard");
-      } else {
-        const hint =
-          API_URL === ""
-            ? " Start the Nest API on port 3000 (same machine). CRA proxy forwards /auth/login there."
-            : ` Could not reach ${loginUrl}. If the UI is not on port 3000, set REACT_APP_API_URL or use an empty API base in dev with package.json "proxy".`;
-        setError(
-          (err && err.message ? err.message : "Network error") +
-            hint
-        );
+        return;
       }
+
+      const raw = err?.message || 'Network error';
+      let userMessage = raw;
+
+      if (err?.name === 'AbortError' || raw.includes('timed out')) {
+        userMessage = `Server took too long to respond. It may be starting up — wait 30 seconds and try again.\n(${loginUrl})`;
+      } else if (
+        raw === 'Load failed' ||
+        raw === 'Failed to fetch' ||
+        raw.includes('NetworkError') ||
+        raw.includes('Could not connect')
+      ) {
+        // "Load failed" is iOS Safari's generic error for CORS rejection or unreachable host
+        userMessage = `Cannot reach server. Possible causes:\n• CORS not configured for this domain\n• Backend is down\n• No internet\n\nTarget: ${loginUrl}`;
+      }
+
+      console.error('[Login] error:', raw, '→', loginUrl);
+      setError(userMessage);
     } finally {
       setLoading(false);
     }

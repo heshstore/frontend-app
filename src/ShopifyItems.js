@@ -9,6 +9,7 @@ export default function ShopifyItems() {
   const [search, setSearch] = useState("");
   const [openSku, setOpenSku] = useState(null);
   const [mainData, setMainData] = useState({});
+  const [updatedSku, setUpdatedSku] = useState({});
   const [selectedItems, setSelectedItems] = useState({});
   const [selectedVariants, setSelectedVariants] = useState({});
   

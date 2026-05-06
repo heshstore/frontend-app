@@ -4,10 +4,14 @@ import PageLayout from '../components/layout/PageLayout';
 import { apiFetch } from '../utils/api';
 import { theme } from '../theme';
 
-const SOURCES = ['MANUAL','INDIAMART','META_ADS','GOOGLE_ADS','SHOPIFY','WHATSAPP','DIRECT_CALL'];
+const SOURCES = ['DIRECT', 'INDIAMART', 'META', 'GOOGLE', 'SHOPIFY', 'WHATSAPP'];
 const SOURCE_LABELS = {
-  MANUAL:'Manual', INDIAMART:'IndiaMart', META_ADS:'Meta Ads',
-  GOOGLE_ADS:'Google Ads', SHOPIFY:'Shopify', WHATSAPP:'WhatsApp', DIRECT_CALL:'Direct Call',
+  DIRECT: 'Direct / Manual',
+  INDIAMART: 'IndiaMart',
+  META: 'Meta Ads',
+  GOOGLE: 'Google',
+  SHOPIFY: 'Shopify',
+  WHATSAPP: 'WhatsApp',
 };
 const PRIORITIES = ['HIGH', 'MEDIUM', 'LOW'];
 
@@ -30,9 +34,12 @@ export default function LeadForm() {
     name: params.get('name') || '',
     phone: params.get('phone') || '',
     email: params.get('email') || '',
-    source: params.get('source') || 'MANUAL',
+    city: '',
+    country: 'India',
+    source: 'DIRECT',
     lead_priority: 'MEDIUM',
     product_interest: params.get('product') || '',
+    requirement_note: '',
     notes: '',
     utm_source: '',
     utm_campaign: '',
@@ -64,9 +71,15 @@ export default function LeadForm() {
         ...form,
         name: sentenceCaseWords(form.name),
         phone,
-        notes: form.notes ? form.notes.charAt(0).toUpperCase() + form.notes.slice(1).toLowerCase() : undefined,
+        city: form.city.trim(),
+        country: form.country.trim(),
+        notes: form.notes ? form.notes.charAt(0).toUpperCase() + form.notes.slice(1) : undefined,
+        requirement_note: form.requirement_note || undefined,
         product_interest: form.product_interest ? sentenceCaseWords(form.product_interest) : undefined,
         assigned_to: form.assigned_to ? Number(form.assigned_to) : undefined,
+        follow_up_date: form.follow_up_date || undefined,
+        utm_source: form.utm_source || undefined,
+        utm_campaign: form.utm_campaign || undefined,
       };
       const res = await apiFetch('/crm/leads', {
         method: 'POST',
@@ -82,7 +95,7 @@ export default function LeadForm() {
         alert(`Lead created. Note: Another lead with phone ${phone} already exists — please check before contacting.`);
       }
       navigate(`/crm/leads/${lead.id}`);
-    } catch (err) {
+    } catch {
       setError('Network error. Please check your connection and try again.');
     } finally {
       setLoading(false);
@@ -111,6 +124,7 @@ export default function LeadForm() {
           </div>
         )}
 
+        {/* Name + Phone */}
         <div style={grid2}>
           <div style={row}>
             <label style={lbl}>Name *</label>
@@ -133,6 +147,29 @@ export default function LeadForm() {
           </div>
         </div>
 
+        {/* City + Country */}
+        <div style={grid2}>
+          <div style={row}>
+            <label style={lbl}>City *</label>
+            <input
+              style={inp} required value={form.city}
+              onChange={(e) => set('city', e.target.value)}
+              onBlur={(e) => set('city', sentenceCaseWords(e.target.value))}
+              placeholder="e.g. Mumbai"
+            />
+          </div>
+          <div style={row}>
+            <label style={lbl}>Country *</label>
+            <input
+              style={inp} required value={form.country}
+              onChange={(e) => set('country', e.target.value)}
+              onBlur={(e) => set('country', sentenceCaseWords(e.target.value))}
+              placeholder="e.g. India"
+            />
+          </div>
+        </div>
+
+        {/* Email */}
         <div style={row}>
           <label style={lbl}>Email</label>
           <input
@@ -142,6 +179,7 @@ export default function LeadForm() {
           />
         </div>
 
+        {/* Source + Priority */}
         <div style={grid2}>
           <div style={row}>
             <label style={lbl}>Lead Source *</label>
@@ -157,6 +195,7 @@ export default function LeadForm() {
           </div>
         </div>
 
+        {/* Product interest */}
         <div style={row}>
           <label style={lbl}>Product / Service Interest</label>
           <input
@@ -167,23 +206,36 @@ export default function LeadForm() {
           />
         </div>
 
+        {/* Requirement note */}
         <div style={row}>
-          <label style={lbl}>Notes</label>
+          <label style={lbl}>Requirement Details</label>
           <textarea
-            style={{ ...inp, minHeight: 80, resize: 'vertical' }}
-            value={form.notes}
-            onChange={(e) => set('notes', e.target.value)}
-            placeholder="Any additional context about this lead"
+            style={{ ...inp, minHeight: 72, resize: 'vertical' }}
+            value={form.requirement_note}
+            onChange={(e) => set('requirement_note', e.target.value)}
+            placeholder="Specific quantities, specs, or requirements shared by the lead"
           />
         </div>
 
+        {/* Notes */}
+        <div style={row}>
+          <label style={lbl}>Internal Notes</label>
+          <textarea
+            style={{ ...inp, minHeight: 64, resize: 'vertical' }}
+            value={form.notes}
+            onChange={(e) => set('notes', e.target.value)}
+            placeholder="Any additional context (not visible to lead)"
+          />
+        </div>
+
+        {/* Assign + Follow-up */}
         <div style={grid2}>
           <div style={row}>
             <label style={lbl}>Assign To</label>
             <select style={inp} value={form.assigned_to} onChange={(e) => set('assigned_to', e.target.value)}>
               <option value="">Auto (Round Robin)</option>
               {users
-                .filter((u) => ['Tele calling Executive','Territory Manager','Field Executive','Sales Manager'].includes(u.role))
+                .filter((u) => ['Tele calling Executive', 'Territory Manager', 'Field Executive', 'Sales Manager'].includes(u.role))
                 .map((u) => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
             </select>
           </div>
@@ -196,6 +248,7 @@ export default function LeadForm() {
           </div>
         </div>
 
+        {/* UTM tracking */}
         <div style={grid2}>
           <div style={row}>
             <label style={lbl}>UTM Source</label>

@@ -1,0 +1,52 @@
+.card {
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  background: #ffffff;
+  border: 1px solid #ddd;
+}
+
+.badge {
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  margin-right: 5px;
+}
+
+.overdue {
+  color: red;
+  font-weight: bold;
+}
+
+/* ── Lead card tap feedback ───────────────────────────────────────────────── */
+
+.ll-card {
+  transition: transform 0.08s ease;
+  -webkit-touch-callout: none;
+}
+
+.ll-card:active {
+  transform: scale(0.985);
+}
+
+/* ── Quick-filter tabs ───────────────────────────────────────────────────── */
+
+.ll-tab {
+  transition: transform 0.08s ease, opacity 0.08s ease;
+  -webkit-touch-callout: none;
+}
+
+.ll-tab:active {
+  transform: scale(0.95);
+  opacity: 0.75;
+}
+
+/* ── Phone link ──────────────────────────────────────────────────────────── */
+
+.ll-phone-link {
+  transition: opacity 0.08s ease;
+}
+
+.ll-phone-link:active {
+  opacity: 0.6;
+}

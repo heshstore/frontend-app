@@ -3,11 +3,16 @@ import { useNavigate } from "react-router-dom";
 import { ORDER_STATUS } from "./constants/orderStatus";
 import DocActions from "./components/DocActions";
 import { apiFetch } from "./utils/api";
+import { useNotifications } from "./context/NotificationContext";
+import { useRightPanel } from "./components/layout/RightPanel";
+import OrderDetail from "./OrderDetail";
 
 export default function OrderList() {
   const [orders, setOrders] = useState([]);
   const [search, setSearch] = useState("");
   const navigate = useNavigate();
+  const { dismissByEntity } = useNotifications();
+  const { openPanel } = useRightPanel();
 
   // 1. ADD SCREEN WIDTH DETECTION
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -46,27 +51,27 @@ export default function OrderList() {
   );
 
   return (
-    <div>
-      <div style={{ display: "flex", alignItems: "center", marginBottom: 20 }}>
-        <button
-          onClick={() => navigate(-1)}
-          style={{
-            marginRight: 10,
-            padding: "6px 12px",
-            cursor: "pointer"
-          }}
-        >
-          ← Back
-        </button>
-        <h3 style={{ margin: 0, flex: 1 }}>Orders</h3>
+    <div style={{ fontFamily: "'Inter','Segoe UI',Arial,sans-serif", background: '#f8fafc', minHeight: '100vh' }}>
+
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', padding: '16px 20px 0' }}>
+        <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 600 }}>Orders</h2>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={() => navigate('/order')}
+            style={{ padding: '8px 12px', borderRadius: '10px', border: 'none', background: '#2563eb', color: '#fff', cursor: 'pointer', fontSize: '13px' }}
+          >
+            + New Order
+          </button>
+        </div>
       </div>
 
-      {/* 1. CENTER SEARCH BAR */}
+      {/* Search bar */}
       <div style={{
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
-        marginBottom: 20,
+        padding: "16px 20px 0",
         flexWrap: "wrap",
         gap: 10
       }}>
@@ -76,34 +81,13 @@ export default function OrderList() {
           onChange={(e) => setSearch(e.target.value)}
           style={{
             padding: "10px",
-            width: "320px",
-            maxWidth: "90%",
-            border: "1px solid #ccc",
-            borderRadius: "6px",
-            textAlign: "center"
+            width: "360px",
+            maxWidth: "100%",
+            border: "1px solid #e2e8f0",
+            borderRadius: "8px",
+            fontSize: 13,
           }}
         />
-      </div>
-
-      {/* 2. MOVE CREATE BUTTON RIGHT SIDE (SEPARATE ROW) */}
-      <div style={{
-        display: "flex",
-        justifyContent: "flex-end",
-        marginBottom: 15
-      }}>
-        <button
-          onClick={() => navigate("/")}
-          style={{
-            padding: "8px 16px",
-            background: "#007bff",
-            color: "#fff",
-            border: "none",
-            cursor: "pointer",
-            borderRadius: "4px"
-          }}
-        >
-          + Create Order
-        </button>
       </div>
 
       {/* 5. MAKE TABLE RESPONSIVE */}
@@ -140,7 +124,7 @@ export default function OrderList() {
                 marginTop: "10px"
               }}>
                 {/* KEEP SAME BUTTONS */}
-                <button onClick={() => navigate(`/invoice/${row.id}`)}>View</button>
+                <button onClick={() => openPanel(`Order #${row.order_number || row.id}`, <OrderDetail orderId={row.id} />)}>View</button>
                 <button onClick={() => navigate(`/edit-order/${row.id}`)}>Edit</button>
                       {row.status === ORDER_STATUS.DRAFT && (
                   <button onClick={() => {
@@ -154,7 +138,7 @@ export default function OrderList() {
                 <button onClick={() => {
                   if (!window.confirm("Cancel order?")) return;
                   apiFetch(`/orders/${row.id}/cancel`, { method: "PATCH" })
-                    .then(r => { if (!r.ok) throw new Error(); window.location.reload(); })
+                    .then(r => { if (!r.ok) throw new Error(); dismissByEntity('order', row.id); window.location.reload(); })
                     .catch(() => alert("Cancel failed"));
                 }}>
                   Cancel
@@ -234,10 +218,7 @@ export default function OrderList() {
                     }}>
                       {/* KEEP EXISTING BUTTONS HERE */}
                       <button
-                        onClick={() => {
-                          console.log("ORDER 👉", row);
-                          navigate(`/invoice/${row.id}`);
-                        }}
+                        onClick={() => openPanel(`Order #${row.order_number || row.id}`, <OrderDetail orderId={row.id} />)}
                       >
                         View
                       </button>
@@ -266,6 +247,7 @@ export default function OrderList() {
                           apiFetch(`/orders/${row.id}/cancel`, { method: 'PATCH' })
                             .then(res => {
                               if (!res.ok) throw new Error();
+                              dismissByEntity('order', row.id);
                               alert('Order cancelled');
                               window.location.reload();
                             })
