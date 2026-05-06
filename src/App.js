@@ -12,6 +12,7 @@ import AddItem from "./AddItem";
 import ItemList from "./ItemList";
 import QuotationList from "./QuotationList";
 import OrderList from "./OrderList";
+import OrderDetail from "./OrderDetail";
 import ShopifyItems from "./ShopifyItems";
 import Invoice from "./Invoice";
 import PendingApproval from "./PendingApproval";
@@ -23,10 +24,30 @@ import LeadList from "./crm/LeadList";
 import LeadForm from "./crm/LeadForm";
 import LeadDetail from "./crm/LeadDetail";
 import CrmAnalytics from "./crm/CrmAnalytics";
+import LeadQueue from "./crm/LeadQueue";
+import FollowUpView from "./crm/FollowUpView";
+import AutomationSettings from "./crm/AutomationSettings";
 import WhatsAppQR from "./whatsapp/WhatsAppQR";
+import MyJobs from "./pages/MyJobs";
+import ProductionQueue from "./pages/ProductionQueue";
+import JobDetail from "./pages/JobDetail";
+import ReadyOrders from "./pages/dispatch/ReadyOrders";
+import DispatchForm from "./pages/dispatch/DispatchForm";
+import DispatchList from "./pages/dispatch/DispatchList";
+import OutstandingOrders from "./pages/accounts/OutstandingOrders";
+import PaymentForm from "./pages/accounts/PaymentForm";
+import PaymentHistory from "./pages/accounts/PaymentHistory";
 import { AuthProvider } from "./context/AuthContext";
+import { NotificationProvider } from "./context/NotificationContext";
+import GlobalNotifications from "./components/GlobalNotifications";
+import NotificationPanel from "./components/NotificationPanel";
+import Layout from "./components/layout/Layout";
+
+const BYPASS_AUTH = true; // DEBUG: set to false once auth is confirmed working
 
 const PrivateRoute = ({ children }) => {
+  if (BYPASS_AUTH) return children;
+
   const token = localStorage.getItem("access_token");
   const isLoggedIn = localStorage.getItem("isLoggedIn");
   if (token || isLoggedIn === "true") {
@@ -50,61 +71,93 @@ const AdminRoute = ({ children }) => {
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          {/* Login */}
-          <Route path="/" element={<Login />} />
+      <NotificationProvider>
+        <BrowserRouter>
+          <GlobalNotifications />
+          <NotificationPanel />
+          <Routes>
 
-          {/* Dashboard */}
-          <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+            {/* Login — no layout */}
+            <Route path="/" element={<Login />} />
 
-          {/* Orders */}
-          <Route path="/order" element={<PrivateRoute><OrderForm /></PrivateRoute>} />
-          <Route path="/order-list" element={<PrivateRoute><OrderList /></PrivateRoute>} />
-          <Route path="/orders" element={<PrivateRoute><OrderList /></PrivateRoute>} />
-          <Route path="/pending-approval" element={<PrivateRoute><PendingApproval /></PrivateRoute>} />
+            {/* All authenticated routes — rendered inside Layout via <Outlet /> */}
+            <Route element={<Layout />}>
 
-          {/* Quotations */}
-          <Route path="/quotation" element={<PrivateRoute><QuotationForm /></PrivateRoute>} />
-          <Route path="/quotations" element={<PrivateRoute><QuotationList /></PrivateRoute>} />
+              {/* Dashboard */}
+              <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
 
-          {/* Customers */}
-          <Route path="/customers" element={<PrivateRoute><CustomerList /></PrivateRoute>} />
-          <Route path="/add-customer" element={<PrivateRoute><AddCustomer /></PrivateRoute>} />
-          <Route path="/customer/create" element={<PrivateRoute><AddCustomer /></PrivateRoute>} />
-          <Route path="/edit-customer/:id" element={<PrivateRoute><EditCustomer /></PrivateRoute>} />
+              {/* Orders */}
+              <Route path="/order" element={<PrivateRoute><OrderForm /></PrivateRoute>} />
+              <Route path="/order-list" element={<PrivateRoute><OrderList /></PrivateRoute>} />
+              <Route path="/orders" element={<PrivateRoute><OrderList /></PrivateRoute>} />
+              <Route path="/orders/:id" element={<PrivateRoute><OrderDetail /></PrivateRoute>} />
+              <Route path="/edit-order/:id" element={<PrivateRoute><OrderForm /></PrivateRoute>} />
+              <Route path="/pending-approval" element={<PrivateRoute><PendingApproval /></PrivateRoute>} />
 
-          {/* Items */}
-          <Route path="/add-item" element={<PrivateRoute><AddItem /></PrivateRoute>} />
-          <Route path="/items" element={<PrivateRoute><ItemList /></PrivateRoute>} />
-          <Route path="/shopify-items" element={<PrivateRoute><ShopifyItems /></PrivateRoute>} />
+              {/* Quotations */}
+              <Route path="/quotation" element={<PrivateRoute><QuotationForm /></PrivateRoute>} />
+              <Route path="/quotations" element={<PrivateRoute><QuotationList /></PrivateRoute>} />
 
-          {/* Invoice */}
-          <Route path="/invoice/:id" element={<PrivateRoute><Invoice /></PrivateRoute>} />
-          <Route path="/payment/:orderId" element={<PrivateRoute><PaymentEntry /></PrivateRoute>} />
+              {/* Customers */}
+              <Route path="/customers" element={<PrivateRoute><CustomerList /></PrivateRoute>} />
+              <Route path="/add-customer" element={<PrivateRoute><AddCustomer /></PrivateRoute>} />
+              <Route path="/customer/create" element={<PrivateRoute><AddCustomer /></PrivateRoute>} />
+              <Route path="/edit-customer/:id" element={<PrivateRoute><EditCustomer /></PrivateRoute>} />
 
-          {/* Accounts */}
-          <Route path="/set-credit-limit" element={<PrivateRoute><SetCreditLimit /></PrivateRoute>} />
+              {/* Items */}
+              <Route path="/add-item" element={<PrivateRoute><AddItem /></PrivateRoute>} />
+              <Route path="/items" element={<PrivateRoute><ItemList /></PrivateRoute>} />
+              <Route path="/shopify-items" element={<PrivateRoute><ShopifyItems /></PrivateRoute>} />
 
-          {/* CRM */}
-          <Route path="/crm/leads" element={<PrivateRoute><LeadList /></PrivateRoute>} />
-          <Route path="/crm/leads/new" element={<PrivateRoute><LeadForm /></PrivateRoute>} />
-          <Route path="/crm/leads/:id" element={<PrivateRoute><LeadDetail /></PrivateRoute>} />
-          <Route path="/crm/analytics" element={<PrivateRoute><CrmAnalytics /></PrivateRoute>} />
-          <Route path="/whatsapp" element={<PrivateRoute><WhatsAppQR /></PrivateRoute>} />
+              {/* Invoice */}
+              <Route path="/invoice/:id" element={<PrivateRoute><Invoice /></PrivateRoute>} />
+              <Route path="/payment/:orderId" element={<PrivateRoute><PaymentEntry /></PrivateRoute>} />
 
-          {/* Staff & Settings — Admin only */}
-          <Route path="/staff" element={<AdminRoute><StaffManagement /></AdminRoute>} />
-          <Route path="/rbac" element={<AdminRoute><RbacMatrix /></AdminRoute>} />
+              {/* Accounts */}
+              <Route path="/set-credit-limit" element={<PrivateRoute><SetCreditLimit /></PrivateRoute>} />
+              <Route path="/accounts/outstanding" element={<PrivateRoute><OutstandingOrders /></PrivateRoute>} />
+              <Route path="/accounts/payment/:orderId" element={<PrivateRoute><PaymentForm /></PrivateRoute>} />
+              <Route path="/accounts/history/:orderId" element={<PrivateRoute><PaymentHistory /></PrivateRoute>} />
 
-          {/* Placeholder routes */}
-          <Route path="/accounts" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-          <Route path="/delivery" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+              {/* CRM */}
+              <Route path="/crm/leads" element={<PrivateRoute><LeadList /></PrivateRoute>} />
+              <Route path="/crm/leads/new" element={<PrivateRoute><LeadForm /></PrivateRoute>} />
+              <Route path="/crm/leads/:id" element={<PrivateRoute><LeadDetail /></PrivateRoute>} />
+              <Route path="/crm/queue" element={<PrivateRoute><LeadQueue /></PrivateRoute>} />
+              <Route path="/crm/analytics" element={<PrivateRoute><CrmAnalytics /></PrivateRoute>} />
+              <Route path="/crm/followups" element={<PrivateRoute><FollowUpView /></PrivateRoute>} />
+              <Route path="/crm/automation-settings" element={<PrivateRoute><AutomationSettings /></PrivateRoute>} />
+              <Route path="/whatsapp" element={<PrivateRoute><WhatsAppQR /></PrivateRoute>} />
 
-          {/* Catch-all */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
+              {/* Production */}
+              <Route path="/production/my-jobs" element={<PrivateRoute><MyJobs /></PrivateRoute>} />
+              <Route path="/production/queue" element={<PrivateRoute><ProductionQueue /></PrivateRoute>} />
+              <Route path="/production/jobs/:id" element={<PrivateRoute><JobDetail /></PrivateRoute>} />
+
+              {/* Dispatch */}
+              <Route path="/dispatch" element={<PrivateRoute><ReadyOrders /></PrivateRoute>} />
+              <Route path="/dispatch/create" element={<PrivateRoute><DispatchForm /></PrivateRoute>} />
+              <Route path="/dispatch/list" element={<PrivateRoute><DispatchList /></PrivateRoute>} />
+
+              {/* Staff & Settings — Admin only */}
+              <Route path="/staff" element={<AdminRoute><StaffManagement /></AdminRoute>} />
+              <Route path="/rbac" element={<AdminRoute><RbacMatrix /></AdminRoute>} />
+
+              {/* Placeholder routes */}
+              <Route path="/accounts" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+              <Route path="/delivery" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+
+            </Route>
+
+            {/* Debug route — outside Layout, no auth */}
+            <Route path="/test" element={<div style={{ padding: 20, fontSize: 18 }}>TEST PAGE WORKS</div>} />
+
+            {/* Catch-all */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+
+          </Routes>
+        </BrowserRouter>
+      </NotificationProvider>
     </AuthProvider>
   );
 }

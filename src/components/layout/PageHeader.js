@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { theme } from "../../theme";
+import NotificationBell from "../NotificationBell";
 
 export default function PageHeader({
   title,
@@ -61,6 +62,8 @@ export default function PageHeader({
           + Create
         </button>
       )}
+
+      <NotificationBell />
     </div>
   );
 }

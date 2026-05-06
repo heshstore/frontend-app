@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { API_URL } from './config';
+import { apiFetch } from './utils/api';
 import { theme } from './theme';
 import PageLayout from './components/layout/PageLayout';
 
@@ -31,8 +31,6 @@ const PERMISSION_DEPS = {
   'rbac.manage':       ['staff.view', 'settings.view'],
 };
 
-const authHeader = () => ({ Authorization: `Bearer ${localStorage.getItem('access_token')}` });
-
 export default function RbacMatrix() {
   const navigate = useNavigate();
   const [roles, setRoles] = useState([]);
@@ -47,7 +45,7 @@ export default function RbacMatrix() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/rbac/matrix`, { headers: authHeader() });
+      const res = await apiFetch('/rbac/matrix');
       if (res.status === 403) { navigate('/dashboard'); return; }
       const data = await res.json();
       setRoles(data.roles || []);
@@ -140,9 +138,8 @@ export default function RbacMatrix() {
         roleId: Number(roleId),
         permissionIds: Array.from(permSet),
       }));
-      const res = await fetch(`${API_URL}/rbac/matrix`, {
+      const res = await apiFetch('/rbac/matrix', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeader() },
         body: JSON.stringify({ data }),
       });
       if (res.ok) {
@@ -162,9 +159,8 @@ export default function RbacMatrix() {
     if (!newRoleName.trim()) return;
     setAddingRole(true);
     try {
-      const res = await fetch(`${API_URL}/rbac/roles`, {
+      const res = await apiFetch('/rbac/roles', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeader() },
         body: JSON.stringify({ name: newRoleName.trim() }),
       });
       if (res.ok) {

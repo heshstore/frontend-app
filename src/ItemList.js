@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { theme } from "./theme";
+import { API_URL } from "./config";
 
 export default function ItemList() {
   const [items, setItems] = useState([]);
@@ -9,7 +10,7 @@ export default function ItemList() {
   const [search, setSearch] = useState("");
 
   const loadItems = async () => {
-    const res = await fetch("http://localhost:3000/items");
+    const res = await fetch(`${API_URL}/items`);
     const data = await res.json();
     setItems(data);
   };
@@ -19,7 +20,7 @@ export default function ItemList() {
   }, []);
 
   const deleteItem = async (item) => {
-    await fetch(`http://localhost:3000/items/${item.sku}`, {
+    await fetch(`${API_URL}/items/${item.sku}`, {
       method: "DELETE"
     });
     loadItems();

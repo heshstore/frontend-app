@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import PageLayout from '../components/layout/PageLayout';
 import { apiFetch } from '../utils/api';
 import { theme } from '../theme';
+import { HOT_LEAD_WINDOWS, WAITING_L2_MINS, WAITING_L3_MINS, OVERDUE_MINS } from './crmConstants';
+import './LeadList.css';
 
 const STATUS_COLORS = {
   NEW:       { bg: '#fff3cd', text: '#856404' },
@@ -25,12 +27,83 @@ const SOURCE_LABELS = {
 
 const PRIORITY_COLORS = { HIGH: '#dc3545', MEDIUM: '#ffc107', LOW: '#198754' };
 
-function hotLeadAge(createdAt) {
-  const mins = Math.floor((Date.now() - new Date(createdAt)) / 60000);
-  if (mins < 60) return { label: `${mins}m ago`, urgent: mins < 10 };
+function compactAge(ms) {
+  const mins = Math.floor(ms / 60000);
+  if (mins < 60)  return `${mins}m`;
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return { label: `${hrs}h ago`, urgent: false };
-  return { label: `${Math.floor(hrs / 24)}d ago`, urgent: false };
+  if (hrs < 24) {
+    const rem = mins % 60;
+    return rem > 0 ? `${hrs}h ${rem}m` : `${hrs}h`;
+  }
+  const days    = Math.floor(hrs / 24);
+  const remHrs  = hrs % 24;
+  return remHrs > 0 ? `${days}d ${remHrs}h` : `${days}d`;
+}
+
+function ageLabel(createdAt) {
+  const mins = Math.floor((Date.now() - new Date(createdAt)) / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+/**
+ * Single badge per lead row. Priority: OVERDUE > WAITING(3) > WAITING(2) > WAITING(1) > HOT.
+ *
+ * WAITING/OVERDUE conditions (all must hold):
+ *   • last_customer_reply_at exists
+ *   • status not CONVERTED or LOST
+ *   • last_salesman_reply_at IS NULL OR < last_customer_reply_at  (strict <)
+ *     Same-second timestamps: treated as "salesman replied" — no false WAITING.
+ *
+ * OVERDUE: unanswered ≥ OVERDUE_MINS. No expiry — stays until salesman replies.
+ * WAITING: unanswered < OVERDUE_MINS. Three escalation levels from crmConstants.
+ *
+ * HOT: only when WAITING/OVERDUE are absent.
+ *   • status === 'NEW' (clears automatically on first status change)
+ *   • source in HOT_LEAD_WINDOWS
+ *   • age < maxMins for that source
+ */
+function leadBadge(lead) {
+  const now        = Date.now();
+  const replyAt    = lead.last_customer_reply_at  ? +new Date(lead.last_customer_reply_at)  : null;
+  const salesmanAt = lead.last_salesman_reply_at  ? +new Date(lead.last_salesman_reply_at)  : null;
+
+  if (replyAt && !['CONVERTED', 'LOST'].includes(lead.status)) {
+    // Strict <: if salesmanAt === replyAt (same second), treat as "replied" — no badge
+    const unanswered = !salesmanAt || salesmanAt < replyAt;
+    if (unanswered) {
+      const waitMs = now - replyAt;
+      if (waitMs <= 0) return null;  // server clock ahead of browser — suppress badge
+      const waitMins = Math.floor(waitMs / 60000);
+      const age      = compactAge(waitMs);
+
+      if (waitMins >= OVERDUE_MINS) {
+        return { text: `OVERDUE · ${age}`, bg: '#dc2626', color: '#fff', border: 'transparent', cardBorder: '#dc2626' };
+      }
+      if (waitMins >= WAITING_L3_MINS) {
+        return { text: `WAITING · ${age}`, bg: '#fee2e2', color: '#991b1b', border: '#fca5a5', cardBorder: '#f87171' };
+      }
+      if (waitMins >= WAITING_L2_MINS) {
+        return { text: `WAITING · ${age}`, bg: '#ffedd5', color: '#9a3412', border: '#fb923c', cardBorder: '#fb923c' };
+      }
+      return { text: `WAITING · ${age}`, bg: '#fef9c3', color: '#854d0e', border: '#fde047', cardBorder: '#fde047' };
+    }
+  }
+
+  if (lead.status === 'NEW') {
+    const w = HOT_LEAD_WINDOWS[lead.source];
+    if (w) {
+      const ageMs   = now - +new Date(lead.created_at);
+      const ageMins = Math.floor(ageMs / 60000);
+      if (ageMins < w.maxMins) {
+        return { text: `HOT · ${w.shortLabel} · ${compactAge(ageMs)}`, bg: '#dc3545', color: '#fff', border: 'transparent', cardBorder: '#dc3545' };
+      }
+    }
+  }
+
+  return null;
 }
 
 const PAGE_SIZE = 50;
@@ -81,6 +154,16 @@ export default function LeadList() {
 
   return (
     <PageLayout title="Leads">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+        <h2 style={{ margin: 0 }}>Leads</h2>
+        <button
+          onClick={() => navigate('/crm/queue')}
+          style={{ background: '#ff9800', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
+        >
+          ⚡ Priority Queue
+        </button>
+      </div>
+
       {/* Filters */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
         <input
@@ -115,15 +198,20 @@ export default function LeadList() {
 
       {/* Lead rows */}
       {paginated.map((lead) => {
-        const age = hotLeadAge(lead.created_at);
-        const sc = STATUS_COLORS[lead.status] || { bg: '#eee', text: '#333' };
-        const isOpen = expanded === lead.id;
+        const badge       = leadBadge(lead);
+        const sc          = STATUS_COLORS[lead.status] || { bg: '#eee', text: '#333' };
+        const isOpen      = expanded === lead.id;
+        const isAutoActive = lead.assigned_to && !['CONVERTED', 'LOST'].includes(lead.status);
+        const lastAutoTime = lead.follow_up_date
+          ? new Date(lead.follow_up_date).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+          : null;
+        const isWaiting   = badge?.text?.startsWith('WAITING');
 
         return (
           <div
             key={lead.id}
             style={{
-              border: `1px solid ${theme.border}`,
+              border: `1px solid ${badge?.cardBorder ?? theme.border}`,
               borderRadius: 8,
               marginBottom: 8,
               background: lead.duplicate_flag ? '#fff8e1' : '#fff',
@@ -138,10 +226,24 @@ export default function LeadList() {
               }}
               onClick={() => setExpanded(isOpen ? null : lead.id)}
             >
-              {/* Hot lead indicator */}
-              {lead.status === 'NEW' && age.urgent && (
-                <span style={{ fontSize: 11, background: '#dc3545', color: '#fff', borderRadius: 4, padding: '2px 6px', fontWeight: 700 }}>
-                  HOT
+              {badge && (
+                <span style={{
+                  fontSize: 11, fontWeight: 700, flexShrink: 0,
+                  background: badge.bg, color: badge.color,
+                  border: `1px solid ${badge.border}`,
+                  borderRadius: 4, padding: '2px 7px',
+                }}>
+                  {badge.text}
+                </span>
+              )}
+              {/* Auto active badge */}
+              {isAutoActive && (
+                <span style={{
+                  fontSize: 9, fontWeight: 700, letterSpacing: 0.5,
+                  background: '#e0f2fe', color: '#0369a1',
+                  padding: '2px 6px', borderRadius: 3, flexShrink: 0,
+                }}>
+                  AUTO{lastAutoTime ? ` · ${lastAutoTime}` : ''}
                 </span>
               )}
               <span style={{ fontWeight: 600, fontSize: 14, flex: '1 1 120px' }}>{lead.name}</span>
@@ -159,8 +261,8 @@ export default function LeadList() {
               }}>
                 {lead.lead_priority}
               </span>
-              <span style={{ fontSize: 11, color: age.urgent ? '#dc3545' : theme.textMuted, marginLeft: 'auto' }}>
-                {age.label}
+              <span style={{ fontSize: 11, color: theme.textMuted, marginLeft: 'auto' }}>
+                {ageLabel(lead.created_at)}
               </span>
               <span style={{ fontSize: 12, color: theme.primary }}>{isOpen ? '▲' : '▼'}</span>
             </div>
@@ -188,6 +290,11 @@ export default function LeadList() {
                 {lead.follow_up_date && (
                   <p style={{ margin: '0 0 6px', fontSize: 13 }}>
                     <strong>Follow-up:</strong> {new Date(lead.follow_up_date).toLocaleString('en-IN')}
+                  </p>
+                )}
+                {lead.last_customer_reply_at && (
+                  <p style={{ margin: '0 0 6px', fontSize: 13, color: isWaiting ? '#854d0e' : theme.textMuted }}>
+                    <strong>Customer replied:</strong> {new Date(lead.last_customer_reply_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                   </p>
                 )}
                 <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>

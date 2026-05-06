@@ -4,6 +4,8 @@ import PageLayout from '../components/layout/PageLayout';
 import { apiFetch } from '../utils/api';
 import { theme } from '../theme';
 import ConvertToCustomerModal from './ConvertToCustomerModal';
+import LeadTimeline from './LeadTimeline';
+import { useCurrentUser } from '../utils/useCurrentUser';
 
 const STATUSES = ['NEW','CONTACTED','INTERESTED','QUOTATION','CONVERTED','LOST'];
 const STATUS_COLORS = {
@@ -12,31 +14,29 @@ const STATUS_COLORS = {
 };
 const NOTE_TYPES = ['GENERAL','CALL','EMAIL','WHATSAPP'];
 const SOURCE_LABELS = {
-  INDIAMART:'IndiaMart', META_ADS:'Meta Ads', GOOGLE_ADS:'Google Ads',
-  SHOPIFY:'Shopify', WHATSAPP:'WhatsApp', DIRECT_CALL:'Direct Call', MANUAL:'Manual',
+  DIRECT:'Direct / Manual', INDIAMART:'IndiaMart', META:'Meta Ads',
+  GOOGLE:'Google', SHOPIFY:'Shopify', WHATSAPP:'WhatsApp',
+  // legacy keys kept for existing records
+  META_ADS:'Meta Ads', GOOGLE_ADS:'Google Ads', MANUAL:'Direct / Manual', DIRECT_CALL:'Direct / Manual',
 };
-
-function canConvert(user) {
-  try {
-    const perms = JSON.parse(localStorage.getItem('permissions') || '[]');
-    return perms.includes('lead.convert');
-  } catch { return false; }
-}
 
 export default function LeadDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { hasPermission } = useCurrentUser();
   const [lead, setLead] = useState(null);
   const [notes, setNotes] = useState([]);
   const [followups, setFollowups] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState('notes');
+  const [tab, setTab] = useState('timeline');
   const [newNote, setNewNote] = useState({ note: '', type: 'GENERAL' });
   const [newFu, setNewFu] = useState({ due_date: '', note: '' });
   const [editStatus, setEditStatus] = useState('');
   const [showConvert, setShowConvert] = useState(false);
   const [convertData, setConvertData] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [automationPaused, setAutomationPaused] = useState(false);
+  const [togglingAuto, setTogglingAuto] = useState(false);
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
   const chatBottomRef = useRef(null);
@@ -48,9 +48,10 @@ export default function LeadDetail() {
       if (!res.ok) { navigate('/crm/leads'); return; }
       const data = await res.json();
       setLead(data);
-      setNotes(data.notes || []);
+      setNotes(data.activityNotes || []);
       setFollowups(data.followups || []);
       setEditStatus(data.status);
+      setAutomationPaused(Array.isArray(data.tags) && data.tags.includes('automation_off'));
 
       if (data.whatsapp_chat_id) {
         const cr = await apiFetch(`/whatsapp/chat/${encodeURIComponent(data.whatsapp_chat_id)}/messages?leadId=${id}`);
@@ -142,6 +143,18 @@ export default function LeadDetail() {
     }
   };
 
+  const toggleAutomation = async () => {
+    setTogglingAuto(true);
+    try {
+      const nextPaused = !automationPaused;
+      const res = await apiFetch(`/crm/leads/${id}/automation`, {
+        method: 'PATCH',
+        body: JSON.stringify({ paused: nextPaused }),
+      });
+      if (res.ok) setAutomationPaused(nextPaused);
+    } finally { setTogglingAuto(false); }
+  };
+
   const sendChat = async (e) => {
     e.preventDefault();
     if (!chatInput.trim() || !lead?.whatsapp_chat_id) return;
@@ -156,7 +169,6 @@ export default function LeadDetail() {
   };
 
   const inp = { width: '100%', padding: '9px 11px', borderRadius: 6, border: `1px solid ${theme.border}`, fontSize: 13, boxSizing: 'border-box' };
-  const lbl = { display: 'block', fontSize: 11, fontWeight: 600, color: theme.textMuted, marginBottom: 3, textTransform: 'uppercase' };
   const tabBtn = (t) => ({
     padding: '7px 16px', border: 'none', borderRadius: '6px 6px 0 0',
     cursor: 'pointer', fontSize: 13, fontWeight: 600,
@@ -197,7 +209,7 @@ export default function LeadDetail() {
             >
               {STATUSES.map((s) => <option key={s}>{s}</option>)}
             </select>
-            {canConvert() && lead.status !== 'CONVERTED' && (
+            {hasPermission('lead.convert') && lead.status !== 'CONVERTED' && (
               <button
                 onClick={handleConvertClick}
                 style={{ padding: '7px 14px', background: '#198754', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
@@ -217,7 +229,7 @@ export default function LeadDetail() {
         {/* Action buttons */}
         <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
           <button
-            onClick={() => navigate(`/crm/leads/new?name=${lead.name}&phone=${lead.phone}&email=${lead.email || ''}`)}
+            onClick={() => navigate(`/crm/leads/${id}/edit`)}
             style={{ padding: '6px 14px', background: theme.primary, color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}
           >
             Edit Lead
@@ -240,8 +252,48 @@ export default function LeadDetail() {
         </div>
       </div>
 
+      {/* Automation state bar */}
+      {!['CONVERTED', 'LOST'].includes(lead.status) && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '8px 14px', marginBottom: 10,
+          background: automationPaused ? '#fef9c3' : '#f0fdf4',
+          border: `1px solid ${automationPaused ? '#fde047' : '#86efac'}`,
+          borderRadius: 8,
+          flexWrap: 'wrap', gap: 8,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 14 }}>{automationPaused ? '⏸' : '🤖'}</span>
+            <div>
+              <span style={{ fontSize: 13, fontWeight: 600, color: automationPaused ? '#854d0e' : '#15803d' }}>
+                Automation {automationPaused ? 'paused' : 'active'}
+              </span>
+              <span style={{ fontSize: 11, color: theme.textMuted, marginLeft: 8 }}>
+                {automationPaused
+                  ? 'No auto reminders or WhatsApp will be sent for this lead'
+                  : 'Follow-up reminders and WhatsApp are running'}
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={toggleAutomation}
+            disabled={togglingAuto}
+            style={{
+              padding: '4px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              border: `1px solid ${automationPaused ? '#fde047' : '#86efac'}`,
+              borderRadius: 5, background: '#fff',
+              color: automationPaused ? '#854d0e' : '#15803d',
+              opacity: togglingAuto ? 0.6 : 1,
+            }}
+          >
+            {togglingAuto ? '...' : automationPaused ? 'Resume' : 'Pause'}
+          </button>
+        </div>
+      )}
+
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 2, borderBottom: `1px solid ${theme.border}`, marginBottom: 0 }}>
+      <div style={{ display: 'flex', gap: 2, borderBottom: `1px solid ${theme.border}`, marginBottom: 0, flexWrap: 'wrap' }}>
+        <button style={tabBtn('timeline')} onClick={() => setTab('timeline')}>Timeline</button>
         <button style={tabBtn('notes')} onClick={() => setTab('notes')}>Notes ({notes.length})</button>
         <button style={tabBtn('followups')} onClick={() => setTab('followups')}>Follow-ups ({followups.length})</button>
         {lead.whatsapp_chat_id && (
@@ -250,6 +302,11 @@ export default function LeadDetail() {
       </div>
 
       <div style={{ background: '#fff', border: `1px solid ${theme.border}`, borderTop: 'none', borderRadius: '0 0 8px 8px', padding: 16 }}>
+        {/* Timeline tab */}
+        {tab === 'timeline' && (
+          <LeadTimeline lead={lead} notes={notes} followups={followups} chatMessages={chatMessages} />
+        )}
+
         {/* Notes tab */}
         {tab === 'notes' && (
           <>
