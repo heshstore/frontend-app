@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { apiFetch } from './utils/api';
+import { normalizePhoneForWhatsApp } from './utils/phone';
 import { ORDER_STATUS_LABELS } from './constants/orderStatus';
 import DocActions from './components/DocActions';
 
@@ -233,7 +234,7 @@ export default function OrderDetail({ orderId: propId }) {
   const statusSt    = STATUS_STYLE[order.status] ?? { bg: '#f1f5f9', color: '#374151' };
   const completedN  = stagesCompleted(order.status);
   const pending     = order.pending_amount ?? (order.total_amount - (order.paid_amount || 0));
-  const waPhone     = (order.mobile || order.phone || '').replace(/\D/g, '');
+  const waPhone     = normalizePhoneForWhatsApp(order.mobile || order.phone);
 
   return (
     <div style={{
@@ -437,7 +438,7 @@ export default function OrderDetail({ orderId: propId }) {
               <ActionBtn
                 label="WhatsApp"
                 bg="#25D366"
-                href={`https://wa.me/91${waPhone}`}
+                href={`https://wa.me/${waPhone}`}
                 target="_blank"
               />
             )}

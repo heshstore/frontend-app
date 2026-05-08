@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PageLayout from '../components/layout/PageLayout';
 import { apiFetch } from '../utils/api';
+import { normalizePhoneForWhatsApp } from '../utils/phone';
 import { theme } from '../theme';
 import { toast } from '../utils/toast';
 
@@ -49,7 +50,7 @@ function LeadCard({ lead, groupKey, groups, onRemove, cardRef }) {
 
   const togglePanel = (p) => setPanel(prev => (prev === p ? null : p));
 
-  const waPhone = (lead.phone || '').replace(/\D/g, '').slice(-10);
+  const waPhone = normalizePhoneForWhatsApp(lead.phone);
   const isOverdue = !isToday(lead.follow_up_date) && new Date(lead.follow_up_date) < new Date();
 
   // Find next lead in same group for auto-scroll
@@ -174,7 +175,7 @@ function LeadCard({ lead, groupKey, groups, onRemove, cardRef }) {
 
         {/* Secondary actions */}
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <a href={`https://wa.me/91${waPhone}`} target="_blank" rel="noreferrer" style={{
+          <a href={`https://wa.me/${waPhone}`} target="_blank" rel="noreferrer" style={{
             padding: '7px 11px', background: '#25D366', color: '#fff', textDecoration: 'none',
             borderRadius: 6, fontSize: 12, fontWeight: 700,
           }}>💬 WA</a>

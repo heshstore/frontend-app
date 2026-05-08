@@ -1,11 +1,12 @@
 import React, { useState, useCallback } from 'react';
 import { apiFetch } from '../utils/api';
+import { normalizePhoneForWhatsApp } from '../utils/phone';
 
 const SCORE_BG   = (s) => s >= 60 ? '#dcfce7' : s >= 30 ? '#fef3c7' : '#fee2e2';
 const SCORE_TEXT = (s) => s >= 60 ? '#15803d' : s >= 30 ? '#92400e' : '#b91c1c';
 
 function digits(phone) {
-  return (phone || '').replace(/\D/g, '').slice(-10);
+  return normalizePhoneForWhatsApp(phone);
 }
 
 // ── All-done screen ───────────────────────────────────────────────────────────
@@ -270,7 +271,7 @@ export default function WorkMode({ items, onExit, onRefresh }) {
           </button>
           <div style={{ display: 'flex', gap: 8 }}>
             <a
-              href={`https://wa.me/91${d}`}
+              href={`https://wa.me/${d}`}
               target="_blank"
               rel="noreferrer"
               style={{ flex: 1, padding: 12, background: '#25D366', color: '#fff', textDecoration: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, textAlign: 'center', display: 'block' }}

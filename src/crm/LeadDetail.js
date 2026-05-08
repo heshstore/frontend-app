@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import PageLayout from '../components/layout/PageLayout';
 import { apiFetch } from '../utils/api';
+import { normalizePhoneForWhatsApp } from '../utils/phone';
 import { theme } from '../theme';
 import ConvertToCustomerModal from './ConvertToCustomerModal';
 import LeadTimeline from './LeadTimeline';
@@ -381,7 +382,7 @@ export default function LeadDetail() {
             Edit Lead
           </button>
           <a
-            href={`https://wa.me/91${lead.phone}`}
+            href={`https://wa.me/${normalizePhoneForWhatsApp(lead.phone)}`}
             target="_blank" rel="noreferrer"
             style={{ padding: '6px 14px', background: '#25D366', color: '#fff', borderRadius: 6, fontSize: 13, textDecoration: 'none' }}
           >

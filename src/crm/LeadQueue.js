@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PageLayout from '../components/layout/PageLayout';
 import { apiFetch } from '../utils/api';
+import { normalizePhoneForWhatsApp } from '../utils/phone';
 import { theme } from '../theme';
 import WorkMode from './WorkMode';
 
@@ -22,7 +23,7 @@ const SCORE_COLOR = (s) => s >= 60 ? '#16a34a' : s >= 30 ? '#d97706' : '#dc2626'
 const SCORE_BG    = (s) => s >= 60 ? '#dcfce7' : s >= 30 ? '#fef3c7' : '#fee2e2';
 
 function phoneDigits(phone) {
-  return (phone || '').replace(/\D/g, '').slice(-10);
+  return normalizePhoneForWhatsApp(phone);
 }
 
 function ageLabel(hours) {
@@ -96,7 +97,7 @@ function LeadCard({ item, onRefresh }) {
       window.location.href = `tel:+91${d}`;
       setTimeout(() => setCallState('confirming'), 500);
     } else if (pType === 'WHATSAPP') {
-      window.open(`https://wa.me/91${d}`, '_blank');
+      window.open(`https://wa.me/${d}`, '_blank');
     } else {
       togglePanel('followup');
     }

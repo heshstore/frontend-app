@@ -293,6 +293,7 @@ export default function QuotationList() {
                           type="quotation"
                           id={q.id}
                           docNo={q.quotation_no}
+                          docDate={q.created_at}
                           amount={q.total_amount}
                           customerMobile={q.customer_phone}
                           customerName={q.customer_name}
@@ -305,7 +306,7 @@ export default function QuotationList() {
                             onClick={() => handleConvert(q.id)}
                             style={btn({ background: '#0066B3', color: '#fff' })}
                           >
-                            🔄 Convert to Order
+                            🔄 Convert to order
                           </button>
                         )}
                       </div>

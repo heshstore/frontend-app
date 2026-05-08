@@ -120,7 +120,6 @@ function App() {
               <Route path="/quotation" element={<PrivateRoute><QuotationForm /></PrivateRoute>} />
               <Route path="/quotations" element={<PrivateRoute><QuotationList /></PrivateRoute>} />
               <Route path="/quotations/:id/view" element={<PrivateRoute><QuotationView /></PrivateRoute>} />
-              <Route path="/quotations/:id/print" element={<PrivateRoute><QuotationPrint /></PrivateRoute>} />
 
               {/* Customers */}
               <Route path="/customers" element={<PrivateRoute><CustomerList /></PrivateRoute>} />
@@ -185,6 +184,9 @@ function App() {
               <Route path="/delivery" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
 
             </Route>
+
+            {/* Print pages — outside Layout (no sidebar/navbar) */}
+            <Route path="/quotations/:id/print" element={<PrivateRoute><QuotationPrint /></PrivateRoute>} />
 
             {/* Debug route — outside Layout, no auth */}
             <Route path="/test" element={<div style={{ padding: 20, fontSize: 18 }}>TEST PAGE WORKS</div>} />

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PageLayout from '../components/layout/PageLayout';
 import { apiFetch } from '../utils/api';
+import { normalizePhoneForWhatsApp } from '../utils/phone';
 import { theme } from '../theme';
 import { HOT_LEAD_WINDOWS, WAITING_L2_MINS, WAITING_L3_MINS, OVERDUE_MINS } from './crmConstants';
 import './LeadList.css';
@@ -319,7 +320,7 @@ export default function LeadList() {
                     </a>
                   )}
                   <a
-                    href={`https://wa.me/91${lead.phone}`}
+                    href={`https://wa.me/${normalizePhoneForWhatsApp(lead.phone)}`}
                     target="_blank"
                     rel="noreferrer"
                     style={{ padding: '6px 14px', background: '#25D366', color: '#fff', borderRadius: 6, fontSize: 13, textDecoration: 'none' }}
