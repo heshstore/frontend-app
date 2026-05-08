@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import PageLayout from '../components/layout/PageLayout';
 import { apiFetch } from '../utils/api';
 import { theme } from '../theme';
+import { toast } from '../utils/toast';
 
 const STATUS_COLORS = {
   NEW: '#6c757d', CONTACTED: '#0d6efd', INTERESTED: '#0f5132',
@@ -93,7 +94,7 @@ function LeadCard({ lead, groupKey, groups, onRemove, cardRef }) {
       setNote('');
       setPanel(null);
     } catch {
-      alert('Failed to save note.');
+      toast.error('Failed to save note.');
     } finally {
       setSubmitting(false);
     }
@@ -110,7 +111,7 @@ function LeadCard({ lead, groupKey, groups, onRemove, cardRef }) {
       // Remove from current view, will appear in upcoming after refresh
       onRemove(lead.id, groupKey, null, () => {});
     } catch {
-      alert('Failed to reschedule.');
+      toast.error('Failed to reschedule.');
     } finally {
       setSubmitting(false);
     }

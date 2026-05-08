@@ -6,6 +6,8 @@ import { apiFetch } from "./utils/api";
 import { useNotifications } from "./context/NotificationContext";
 import { useRightPanel } from "./components/layout/RightPanel";
 import OrderDetail from "./OrderDetail";
+import { toast } from "./utils/toast";
+import { useConfirm } from "./components/ui/ConfirmModal";
 
 export default function OrderList() {
   const [orders, setOrders] = useState([]);
@@ -13,6 +15,7 @@ export default function OrderList() {
   const navigate = useNavigate();
   const { dismissByEntity } = useNotifications();
   const { openPanel } = useRightPanel();
+  const [confirm, confirmModal] = useConfirm();
 
   // 1. ADD SCREEN WIDTH DETECTION
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -50,7 +53,33 @@ export default function OrderList() {
     String(o.id).includes(search)
   );
 
+  const handleSendForApproval = async (row) => {
+    try {
+      const res = await apiFetch(`/orders/${row.id}/send-for-approval`, { method: "PATCH" });
+      if (!res.ok) throw new Error();
+      toast.success('Sent for approval');
+      navigate('/pending-approval');
+    } catch {
+      toast.error('Failed to send for approval');
+    }
+  };
+
+  const handleCancelOrder = async (row) => {
+    if (!await confirm('Cancel this order?', '', { danger: true, confirmLabel: 'Cancel Order' })) return;
+    try {
+      const res = await apiFetch(`/orders/${row.id}/cancel`, { method: 'PATCH' });
+      if (!res.ok) throw new Error();
+      dismissByEntity('order', row.id);
+      toast.success('Order cancelled');
+      loadOrders();
+    } catch {
+      toast.error('Cancel failed');
+    }
+  };
+
   return (
+    <>
+    {confirmModal}
     <div style={{ fontFamily: "'Inter','Segoe UI',Arial,sans-serif", background: '#f8fafc', minHeight: '100vh' }}>
 
       {/* Header */}
@@ -127,20 +156,11 @@ export default function OrderList() {
                 <button onClick={() => openPanel(`Order #${row.order_number || row.id}`, <OrderDetail orderId={row.id} />)}>View</button>
                 <button onClick={() => navigate(`/edit-order/${row.id}`)}>Edit</button>
                       {row.status === ORDER_STATUS.DRAFT && (
-                  <button onClick={() => {
-                    apiFetch(`/orders/${row.id}/send-for-approval`, { method: "PATCH" })
-                      .then(() => { alert("Sent for approval"); navigate("/pending-approval"); })
-                      .catch(() => alert("Failed to send for approval"));
-                  }}>
+                  <button onClick={() => handleSendForApproval(row)}>
                     Send
                   </button>
                 )}
-                <button onClick={() => {
-                  if (!window.confirm("Cancel order?")) return;
-                  apiFetch(`/orders/${row.id}/cancel`, { method: "PATCH" })
-                    .then(r => { if (!r.ok) throw new Error(); dismissByEntity('order', row.id); window.location.reload(); })
-                    .catch(() => alert("Cancel failed"));
-                }}>
+                <button onClick={() => handleCancelOrder(row)}>
                   Cancel
                 </button>
               </div>
@@ -230,30 +250,12 @@ export default function OrderList() {
 
                       {/* SEND FOR APPROVAL BUTTON (ONLY for status = order) */}
                       {row.status === ORDER_STATUS.DRAFT && (
-                        <button
-                          onClick={() => {
-                            apiFetch(`/orders/${row.id}/send-for-approval`, { method: "PATCH" })
-                              .then(() => { alert("Sent for approval"); navigate("/pending-approval"); })
-                              .catch(() => alert("Failed to send for approval"));
-                          }}
-                        >
+                        <button onClick={() => handleSendForApproval(row)}>
                           Send for Approval
                         </button>
                       )}
 
-                      <button
-                        onClick={() => {
-                          if (!window.confirm("Cancel this order?")) return;
-                          apiFetch(`/orders/${row.id}/cancel`, { method: 'PATCH' })
-                            .then(res => {
-                              if (!res.ok) throw new Error();
-                              dismissByEntity('order', row.id);
-                              alert('Order cancelled');
-                              window.location.reload();
-                            })
-                            .catch(() => alert('Cancel failed'));
-                        }}
-                      >
+                      <button onClick={() => handleCancelOrder(row)}>
                         Cancel
                       </button>
                       {/* PAY BUTTON REMOVED PER INSTRUCTIONS */}
@@ -275,5 +277,6 @@ export default function OrderList() {
         )}
       </div>
     </div>
+    </>
   );
 }

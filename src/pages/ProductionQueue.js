@@ -8,6 +8,8 @@ import { getSocket } from '../lib/socket';
 import InlineAlert from '../components/InlineAlert';
 import { useRightPanel } from '../components/layout/RightPanel';
 import JobDetail from './JobDetail';
+import { toast } from '../utils/toast';
+import { useConfirm } from '../components/ui/ConfirmModal';
 
 const POLL_MS = 30_000;
 
@@ -100,6 +102,7 @@ export default function ProductionQueue() {
   const [showFilters, setShowFilters]               = useState(false);
   const [hoveredRow, setHoveredRow]                 = useState(null);
   const pollRef = useRef(null);
+  const [confirm, confirmModal] = useConfirm();
 
   const loadJobs = useCallback(async () => {
     try {
@@ -156,14 +159,14 @@ export default function ProductionQueue() {
   const handleAssign = async (jobId, userId) => {
     const res = await apiFetch(`/production/${jobId}/assign/${userId}`, { method: 'PATCH' });
     if (res.ok) loadJobs();
-    else alert('Assign failed.');
+    else toast.error('Assign failed.');
   };
 
   const handleNextStage = async (job) => {
-    if (!window.confirm(`Move job #${job.id} to next stage?`)) return;
+    if (!await confirm(`Move job #${job.id} to next stage?`, '', { confirmLabel: 'Advance' })) return;
     const res = await apiFetch(`/production/${job.id}/next-stage`, { method: 'PATCH' });
     if (res.ok) loadJobs();
-    else alert('Could not advance job.');
+    else toast.error('Could not advance job.');
   };
 
   // ── Derived data ─────────────────────────────────────────────────────────
@@ -222,6 +225,8 @@ export default function ProductionQueue() {
   };
 
   return (
+    <>
+    {confirmModal}
     <div style={{
       fontFamily: "'Inter','Segoe UI',Arial,sans-serif",
       background: '#f8fafc', minHeight: '100vh',
@@ -542,5 +547,6 @@ export default function ProductionQueue() {
 
       </div>
     </div>
+    </>
   );
 }

@@ -1,5 +1,4 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
 import { apiFetch } from '../utils/api';
@@ -8,6 +7,8 @@ import InlineAlert from '../components/InlineAlert';
 import IssueModal from '../components/production/IssueModal';
 import { useRightPanel } from '../components/layout/RightPanel';
 import JobDetail from './JobDetail';
+import { toast } from '../utils/toast';
+import { useConfirm } from '../components/ui/ConfirmModal';
 
 const POLL_MS = 30_000;
 
@@ -217,7 +218,6 @@ function JobCard({ job, onStart, onStop, onComplete, onIssue, onHold, onDetails,
 }
 
 export default function MyJobs() {
-  const navigate                                        = useNavigate();
   const { currentUser }                                 = useAuth();
   const { notifications, dismissByEntity, fetchNextAction } = useNotifications();
   const { openPanel }                                   = useRightPanel();
@@ -228,6 +228,7 @@ export default function MyJobs() {
   const [issueJob, setIssueJob] = useState(null);
   const [busyJob, setBusyJob]   = useState(null);
   const pollRef                 = useRef(null);
+  const [confirm, confirmModal] = useConfirm();
 
   const loadJobs = useCallback(async () => {
     if (!currentUser?.id) return;
@@ -268,7 +269,7 @@ export default function MyJobs() {
     try {
       const res = await apiFetch(`/production/${job.id}/start`, { method: 'PATCH' });
       if (res.ok) { loadJobs(); fetchNextAction(); }
-      else alert('Could not start job.');
+      else toast.error('Could not start job.');
     } finally { setBusyJob(null); }
   };
 
@@ -278,31 +279,33 @@ export default function MyJobs() {
     try {
       const res = await apiFetch(`/production/${job.id}/stop`, { method: 'PATCH' });
       if (res.ok) { loadJobs(); fetchNextAction(); }
-      else alert('Could not stop job.');
+      else toast.error('Could not stop job.');
     } finally { setBusyJob(null); }
   };
 
   const handleComplete = async (job) => {
     if (busyJob === job.id) return;
-    if (!window.confirm(
-      `Complete "${job.item_name || job.sku || `Job #${job.id}`}" — ${job.current_stage} stage for ORD-${job.order_id}?\n\nThis cannot be undone.`
+    if (!await confirm(
+      `Complete "${job.item_name || job.sku || `Job #${job.id}`}"?`,
+      `Stage: ${job.current_stage} — ORD-${job.order_id}. This cannot be undone.`,
+      { confirmLabel: 'Complete' }
     )) return;
     setBusyJob(job.id);
     try {
       const res = await apiFetch(`/production/${job.id}/next-stage`, { method: 'PATCH' });
       if (res.ok) { dismissByEntity('job', job.id); loadJobs(); fetchNextAction(); }
-      else alert('Could not complete job.');
+      else toast.error('Could not complete job.');
     } finally { setBusyJob(null); }
   };
 
   const handleHold = async (job) => {
     if (busyJob === job.id) return;
-    if (!window.confirm(`Put job #${job.id} on hold?`)) return;
+    if (!await confirm(`Put job #${job.id} on hold?`, '', { confirmLabel: 'Hold' })) return;
     setBusyJob(job.id);
     try {
       const res = await apiFetch(`/production/${job.id}/hold`, { method: 'PATCH' });
       if (res.ok) { loadJobs(); fetchNextAction(); }
-      else alert('Could not put job on hold.');
+      else toast.error('Could not put job on hold.');
     } finally { setBusyJob(null); }
   };
 
@@ -316,7 +319,7 @@ export default function MyJobs() {
         body: JSON.stringify({ note }),
       });
       if (res.ok) { loadJobs(); fetchNextAction(); }
-      else alert('Could not report issue.');
+      else toast.error('Could not report issue.');
     } finally { setBusyJob(null); }
   };
 
@@ -324,6 +327,8 @@ export default function MyJobs() {
   const doneJobs   = jobs.filter(j => j.status === 'DONE');
 
   return (
+    <>
+    {confirmModal}
     <div style={{
       fontFamily: "'Inter','Segoe UI',Arial,sans-serif",
       background: '#f8fafc', minHeight: '100vh',
@@ -415,5 +420,6 @@ export default function MyJobs() {
         />
       )}
     </div>
+    </>
   );
 }

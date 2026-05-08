@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { apiFetch } from "./utils/api";
+import { toast } from "./utils/toast";
 
 export default function Invoice() {
   const { id } = useParams();
@@ -29,10 +30,10 @@ export default function Invoice() {
         const inv = data.invoice || data;
         setInvoiceCreated({ invoice_no: inv.invoice_no || data.invoice_no, id: inv.id || data.id });
       } else {
-        alert(data.message || "Invoice creation failed");
+        toast.error(data.message || "Invoice creation failed");
       }
     } catch (err) {
-      alert("Error: " + err.message);
+      toast.error("Error: " + err.message);
     } finally {
       setCreatingInvoice(false);
     }

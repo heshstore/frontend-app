@@ -7,6 +7,7 @@ import ConvertToCustomerModal from './ConvertToCustomerModal';
 import LeadTimeline from './LeadTimeline';
 import ActivityTimeline from '../components/activity/ActivityTimeline';
 import { useCurrentUser } from '../utils/useCurrentUser';
+import { toast } from '../utils/toast';
 
 const URGENCY_BG = { HIGH: '#fff3f3', MEDIUM: '#fffbea', LOW: '#f8f9fa' };
 const URGENCY_BORDER = { HIGH: '#dc3545', MEDIUM: '#ffc107', LOW: '#6c757d' };
@@ -107,7 +108,7 @@ export default function LeadDetail() {
       setLead((l) => ({ ...l, status }));
     } catch {
       setEditStatus(prevStatus);
-      alert('Failed to update status');
+      toast.error('Failed to update status');
     }
   };
 
@@ -200,7 +201,7 @@ export default function LeadDetail() {
         await load();
       } else {
         const err = await res.json().catch(() => ({}));
-        alert(err.message || 'Failed to log action');
+        toast.error(err.message || 'Failed to log action');
       }
     } finally { setLogging(false); }
   };

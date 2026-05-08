@@ -3,8 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { ORDER_STATUS } from "./constants/orderStatus";
 import { apiFetch } from "./utils/api";
 import { usePermission } from "./utils/usePermission";
+import { toast } from "./utils/toast";
+import { usePromptModal } from "./components/ui/ConfirmModal";
 
 export default function PendingApproval() {
+  const [prompt, promptModal] = usePromptModal();
   const [orders, setOrders] = useState([]);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const navigate = useNavigate();
@@ -42,15 +45,15 @@ export default function PendingApproval() {
     try {
       const res = await apiFetch(`/orders/${id}/approve`, { method: "PATCH" });
       if (!res.ok) throw new Error();
-      alert("Order Approved");
+      toast.success('Order approved');
       loadOrders();
     } catch {
-      alert("Approve failed");
+      toast.error('Approve failed');
     }
   };
 
   const rejectOrder = async (id) => {
-    const reason = prompt("Enter rejection reason");
+    const reason = await prompt('Enter rejection reason', '', 'Reason for rejection…');
     if (!reason) return;
 
     try {
@@ -59,10 +62,10 @@ export default function PendingApproval() {
         body: JSON.stringify({ reason }),
       });
       if (!res.ok) throw new Error();
-      alert("Order Rejected");
+      toast.success('Order rejected');
       loadOrders();
     } catch {
-      alert("Reject failed");
+      toast.error('Reject failed');
     }
   };
 
@@ -76,6 +79,8 @@ export default function PendingApproval() {
   });
 
   return (
+    <>
+    {promptModal}
     <div style={{ padding: 20 }}>
       <h2>Order Pending Approval</h2>
       <div style={{
@@ -223,5 +228,6 @@ export default function PendingApproval() {
         </div>
       )}
     </div>
+    </>
   );
 }

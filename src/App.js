@@ -11,6 +11,8 @@ import CustomerList from "./CustomerList";
 import AddItem from "./AddItem";
 import ItemList from "./ItemList";
 import QuotationList from "./QuotationList";
+import QuotationView from "./QuotationView";
+import QuotationPrint from "./QuotationPrint";
 import OrderList from "./OrderList";
 import OrderDetail from "./OrderDetail";
 import ShopifyItems from "./ShopifyItems";
@@ -43,6 +45,7 @@ import { AuthProvider } from "./context/AuthContext";
 import { NotificationProvider } from "./context/NotificationContext";
 import GlobalNotifications from "./components/GlobalNotifications";
 import NotificationPanel from "./components/NotificationPanel";
+import ToastContainer from "./components/ui/ToastContainer";
 import Layout from "./components/layout/Layout";
 import SlaDashboard from "./pages/sla/SlaDashboard";
 import ActivityCenter from "./pages/activity/ActivityCenter";
@@ -93,6 +96,7 @@ function App() {
         <BrowserRouter>
           <GlobalNotifications />
           <NotificationPanel />
+          <ToastContainer />
           <Routes>
 
             {/* Login — no layout */}
@@ -115,6 +119,8 @@ function App() {
               {/* Quotations */}
               <Route path="/quotation" element={<PrivateRoute><QuotationForm /></PrivateRoute>} />
               <Route path="/quotations" element={<PrivateRoute><QuotationList /></PrivateRoute>} />
+              <Route path="/quotations/:id/view" element={<PrivateRoute><QuotationView /></PrivateRoute>} />
+              <Route path="/quotations/:id/print" element={<PrivateRoute><QuotationPrint /></PrivateRoute>} />
 
               {/* Customers */}
               <Route path="/customers" element={<PrivateRoute><CustomerList /></PrivateRoute>} />

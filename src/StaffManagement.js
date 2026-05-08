@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { apiFetch } from './utils/api';
 import { theme } from './theme';
 import PageLayout from './components/layout/PageLayout';
+import { toast } from './utils/toast';
+import { useConfirm } from './components/ui/ConfirmModal';
 
 
 const EMPTY_FORM = {
@@ -51,6 +53,7 @@ export default function StaffManagement() {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
+  const [confirm, confirmModal] = useConfirm();
 
   const loadStaff = useCallback(async () => {
     setLoading(true);
@@ -94,15 +97,15 @@ export default function StaffManagement() {
   };
 
   const handleSave = async () => {
-    if (!form.name.trim()) { alert('Name is required'); return; }
+    if (!form.name.trim()) { toast.error('Name is required'); return; }
     const mobileDigits = (form.mobile || '').replace(/\D/g, '');
     const mobileKey = mobileDigits.length >= 10 ? mobileDigits.slice(-10) : mobileDigits;
     if (!mobileKey || mobileKey.length < 10) {
-      alert('Mobile is required (10 digits) — staff sign in with this number');
+      toast.error('Mobile is required (10 digits) — staff sign in with this number');
       return;
     }
-    if (!form.role) { alert('Please select a role'); return; }
-    if (!editId && !form.password) { alert('Password is required for new staff'); return; }
+    if (!form.role) { toast.error('Please select a role'); return; }
+    if (!editId && !form.password) { toast.error('Password is required for new staff'); return; }
 
     setSaving(true);
     try {
@@ -124,10 +127,10 @@ export default function StaffManagement() {
         await loadStaff();
       } else {
         const err = await res.json();
-        alert(err.message || 'Save failed');
+        toast.error(err.message || 'Save failed');
       }
     } catch (e) {
-      alert('Save failed: ' + e.message);
+      toast.error('Save failed: ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -135,14 +138,15 @@ export default function StaffManagement() {
 
   const handleDeactivate = async (s) => {
     const action = s.is_active ? 'deactivate' : 'reactivate';
-    if (!window.confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} ${s.name}?`)) return;
+    const label   = action.charAt(0).toUpperCase() + action.slice(1);
+    if (!await confirm(`${label} ${s.name}?`, '', { danger: s.is_active, confirmLabel: label })) return;
     try {
       await apiFetch(`/users/${s.id}/deactivate`, {
         method: 'PATCH',
       });
       await loadStaff();
     } catch (e) {
-      alert('Failed: ' + e.message);
+      toast.error('Failed: ' + e.message);
     }
   };
 
@@ -156,6 +160,8 @@ export default function StaffManagement() {
   );
 
   return (
+    <>
+    {confirmModal}
     <PageLayout title="Staff Management">
       <div style={{ padding: '16px 16px 80px' }}>
 
@@ -342,5 +348,6 @@ export default function StaffManagement() {
         )}
       </div>
     </PageLayout>
+    </>
   );
 }

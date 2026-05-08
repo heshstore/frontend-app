@@ -78,7 +78,7 @@ function LeadCard({ item, onRefresh }) {
   const [fuNote, setFuNote]         = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [localStatus, setLocalStatus] = useState(lead.status);
-  const [removed, setRemoved]       = useState(false);
+  const [removed] = useState(false);
 
   const sc     = STATUS_COLOR[localStatus] || { bg: '#f3f4f6', text: '#374151' };
   const d      = phoneDigits(lead.phone);

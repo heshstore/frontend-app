@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { apiFetch } from '../../utils/api';
+import { toast } from '../../utils/toast';
 
 const TRANSPORT_TYPES = ['Courier', 'Transport', 'Bus', 'Train', 'Air'];
 
@@ -74,7 +75,7 @@ export default function DispatchForm() {
       if (!res.ok) throw new Error(data?.message || 'Dispatch creation failed');
       // Idempotent response: a prior dispatch already existed for this order.
       if (data.tracking_number && trackingNumber.trim() && data.tracking_number !== trackingNumber.trim()) {
-        alert(`Note: This order was already dispatched with tracking number "${data.tracking_number}". No duplicate was created.`);
+        toast.info(`This order was already dispatched with tracking number "${data.tracking_number}". No duplicate was created.`);
       }
       navigate('/dispatch/list', { replace: true });
     } catch (err) {

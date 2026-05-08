@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { apiFetch } from "./utils/api";
 import { theme, buttonStyle } from "./theme";
 import PageLayout from "./components/layout/PageLayout";
+import { toast } from "./utils/toast";
 
 const inp = {
   width: "100%",
@@ -119,7 +120,7 @@ export default function SetCreditLimit() {
   const handleSave = async () => {
     if (!selected) return;
     if (creditLimit !== "" && isNaN(Number(creditLimit))) {
-      alert("Credit Limit must be a number");
+      toast.error("Credit Limit must be a number");
       return;
     }
     setSaving(true);
@@ -140,7 +141,7 @@ export default function SetCreditLimit() {
       setSelected(updatedData);
       loadWholesalers();
     } catch (err) {
-      alert("Error: " + err.message);
+      toast.error("Error: " + err.message);
     } finally {
       setSaving(false);
     }

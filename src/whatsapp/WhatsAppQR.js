@@ -4,8 +4,10 @@ import { apiFetch } from '../utils/api';
 import { getToken } from '../utils/api';
 import { API_URL } from '../config';
 import { theme } from '../theme';
+import { useConfirm } from '../components/ui/ConfirmModal';
 
 export default function WhatsAppQR() {
+  const [confirm, confirmModal] = useConfirm();
   const [status, setStatus] = useState('DISCONNECTED');
   const [phone, setPhone] = useState(null);
   const [qrDataUrl, setQrDataUrl] = useState(null);
@@ -69,7 +71,11 @@ export default function WhatsAppQR() {
   }, []);
 
   const handleDisconnect = async () => {
-    if (!window.confirm('Disconnect WhatsApp? A new QR code will appear to link a different number.')) return;
+    if (!await confirm(
+      'Disconnect WhatsApp?',
+      'A new QR code will appear to link a different number.',
+      { danger: true, confirmLabel: 'Disconnect' }
+    )) return;
     setDisconnecting(true);
     try {
       await apiFetch('/whatsapp/disconnect', { method: 'POST' });
@@ -81,6 +87,8 @@ export default function WhatsAppQR() {
   const statusColor = { CONNECTED: '#198754', CONNECTING: '#ffc107', DISCONNECTED: '#dc3545', INITIALIZING: '#0d6efd' };
 
   return (
+    <>
+    {confirmModal}
     <PageLayout title="WhatsApp Connection">
       <div style={{ maxWidth: 480, margin: '0 auto' }}>
         {/* Status card */}
@@ -173,5 +181,6 @@ export default function WhatsAppQR() {
         </div>
       </div>
     </PageLayout>
+    </>
   );
 }

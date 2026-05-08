@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from './utils/api';
+import { toast } from './utils/toast';
 import { useRightPanel } from './components/layout/RightPanel';
 import JobDetail from './pages/JobDetail';
 import { getUserCapabilities } from './config/roleCapabilities';
@@ -411,7 +412,17 @@ export default function Dashboard() {
         if (st.total > 0) setProgress(Math.min(Math.round((st.processed / st.total) * 100), 99));
         if (st.status === 'done') {
           clearInterval(iv); setProgress(100); setSyncPhase('done');
-          alert(`Sync done: ${st.processed} items synced${st.skipped ? ` · ${st.skipped} skipped` : ''}`);
+          const parts = [];
+          if (st.inserted > 0) parts.push(`${st.inserted} new`);
+          if (st.updated  > 0) parts.push(`${st.updated} updated`);
+          if (st.skipped  > 0) parts.push(`${st.skipped} skipped`);
+          if (st.errors   > 0) parts.push(`${st.errors} errors`);
+          const summary = parts.length > 0 ? parts.join(' · ') : '0 items synced';
+          if (st.errors > 0) {
+            toast.warn(`Sync done: ${summary}`);
+          } else {
+            toast.success(`Sync done: ${summary}`);
+          }
           setSyncing(false); setSyncPhase('idle');
         }
       } catch {}

@@ -182,6 +182,66 @@ function SideLabel({ children }) {
   );
 }
 
+// ── Shopify nav item with live pending count badge ────────────────────────────
+
+function ShopifyNavItem() {
+  const navigate    = useNavigate();
+  const { pathname} = useLocation();
+  const onClose     = useContext(CloseCtx);
+  const [hov, setHov] = useState(false);
+  const [pendingCount, setPendingCount] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const r = await apiFetch('/items/stats');
+        if (!r.ok || cancelled) return;
+        const d = await r.json();
+        if (!cancelled) setPendingCount(d.shopifyPending ?? null);
+      } catch {}
+    };
+    load();
+    const id = setInterval(load, 120_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
+
+  const active = pathname.startsWith('/shopify-items');
+
+  return (
+    <button
+      onClick={() => { navigate('/shopify-items'); onClose(); }}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        width: '100%', padding: '7px 10px',
+        background: active ? 'rgba(255,255,255,0.09)' : hov ? 'rgba(255,255,255,0.04)' : 'transparent',
+        border: 'none',
+        borderLeft: `3px solid ${active ? '#60a5fa' : 'transparent'}`,
+        color: active ? '#fff' : NAV_TEXT,
+        fontSize: 12, fontWeight: active ? 600 : 400,
+        cursor: 'pointer', textAlign: 'left',
+        transition: 'background 0.1s', minHeight: 36,
+        borderRadius: '0 7px 7px 0', marginBottom: 1,
+      }}
+    >
+      <span style={{ fontSize: 13, width: 20, textAlign: 'center', flexShrink: 0 }}>🛍</span>
+      <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        Shopify Catalog
+      </span>
+      {pendingCount != null && pendingCount > 0 && (
+        <span style={{
+          fontSize: 10, fontWeight: 800, padding: '1px 6px', borderRadius: 99,
+          background: '#f59e0b', color: '#fff', flexShrink: 0,
+        }}>
+          {pendingCount > 999 ? '999+' : pendingCount}
+        </span>
+      )}
+    </button>
+  );
+}
+
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 
 export default function Sidebar({ onClose }) {
@@ -448,10 +508,10 @@ export default function Sidebar({ onClose }) {
                   )}
                   {canSeeItems && (
                     <>
-                      <SideLabel>Items</SideLabel>
-                      <NavItem label="Item List" href="/items"         icon="📋" />
-                      <NavItem label="Add Item"  href="/add-item"      icon="➕" />
-                      <NavItem label="Shopify"   href="/shopify-items" icon="🛍" />
+                      <SideLabel>Inventory</SideLabel>
+                      <NavItem label="Service Item Master" href="/items"         icon="📋" />
+                      <NavItem label="Add Item"            href="/add-item"      icon="➕" />
+                      <ShopifyNavItem />
                     </>
                   )}
                   {canSeeOrders && (

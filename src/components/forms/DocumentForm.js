@@ -16,6 +16,7 @@ import { useNavigate } from "react-router-dom";
 import { apiFetch } from "../../utils/api";
 import { theme } from "../../theme";
 import PageLayout from "../layout/PageLayout";
+import { toast } from "../../utils/toast";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const DELIVERY_TYPES = ["Courier", "Transport", "Bus", "Railways", "Air", "Porter", "Self-Pickup", "Hesh Vehicle"];
@@ -469,9 +470,9 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (submitting) return;
-    if (!billTo) { alert("Please select a Bill To customer"); return; }
+    if (!billTo) { toast.error("Please select a Bill To customer"); return; }
     const validRows = rows.filter(r => r.item_name || r.sku);
-    if (validRows.length === 0) { alert("Please add at least one item"); return; }
+    if (validRows.length === 0) { toast.error("Please add at least one item"); return; }
 
     setSubmitting(true);
     const payload = {
@@ -509,13 +510,13 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
     try {
       const result = await onSubmit(payload, editId);
       if (result?.ok) {
-        alert(result.message || "Saved ✅");
+        toast.success(result.message || "Saved");
         navigate(result.redirect || -1);
       } else {
-        alert(result?.message || "Failed to save");
+        toast.error(result?.message || "Failed to save");
       }
     } catch (err) {
-      alert("Error: " + err.message);
+      toast.error("Error: " + err.message);
     } finally {
       setSubmitting(false);
     }

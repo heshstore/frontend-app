@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { theme } from './theme';
 import PageLayout from './components/layout/PageLayout';
 import { apiFetch } from './utils/api';
+import { toast } from './utils/toast';
+import { useConfirm } from './components/ui/ConfirmModal';
 
 // ── Permission dependency map (mirrors backend exactly) ──────────────────────
 const PERMISSION_DEPS = {
@@ -52,6 +54,7 @@ export default function RbacMatrix() {
   // Edit role state
   const [editingRoleId, setEditingRoleId] = useState(null);
   const [editingRoleName, setEditingRoleName] = useState('');
+  const [confirm, confirmModal] = useConfirm();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -157,10 +160,10 @@ export default function RbacMatrix() {
           }
         } catch { /* non-critical */ }
       } else {
-        alert('Save failed');
+        toast.error('Save failed');
       }
     } catch (e) {
-      alert('Save failed: ' + e.message);
+      toast.error('Save failed: ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -178,7 +181,7 @@ export default function RbacMatrix() {
         setNewRoleName('');
         await load();
       } else {
-        alert('Failed to add role');
+        toast.error('Failed to add role');
       }
     } finally {
       setAddingRole(false);
@@ -206,26 +209,26 @@ export default function RbacMatrix() {
         cancelEditRole();
         await load();
       } else {
-        alert('Failed to rename role');
+        toast.error('Failed to rename role');
       }
     } catch (e) {
-      alert('Error: ' + e.message);
+      toast.error('Error: ' + e.message);
     }
   };
 
   const handleDeleteRole = async (role) => {
-    if (role.is_system) { alert('System roles cannot be deleted.'); return; }
-    if (!window.confirm(`Delete role "${role.name}"? This will remove all its permissions.`)) return;
+    if (role.is_system) { toast.warn('System roles cannot be deleted.'); return; }
+    if (!await confirm(`Delete role "${role.name}"?`, 'This will remove all its permissions.', { danger: true, confirmLabel: 'Delete' })) return;
     try {
       const res = await apiFetch(`/rbac/roles/${role.id}`, { method: 'DELETE' });
       if (res.ok || res.status === 204) {
         await load();
       } else {
         const d = await res.json().catch(() => ({}));
-        alert(d.message || 'Failed to delete role');
+        toast.error(d.message || 'Failed to delete role');
       }
     } catch (e) {
-      alert('Error: ' + e.message);
+      toast.error('Error: ' + e.message);
     }
   };
 
@@ -241,6 +244,8 @@ export default function RbacMatrix() {
   const LABEL_W = 210;
 
   return (
+    <>
+    {confirmModal}
     <PageLayout title="Roles & Permissions">
       <div style={{ padding: '0 0 80px' }}>
 
@@ -456,5 +461,6 @@ export default function RbacMatrix() {
         </div>
       </div>
     </PageLayout>
+    </>
   );
 }

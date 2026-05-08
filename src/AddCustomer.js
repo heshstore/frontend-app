@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import PageLayout from "./components/layout/PageLayout";
 import { API_URL } from "./config";
 import { apiFetch } from "./utils/api";
+import { toast } from "./utils/toast";
 
 const theme = {
   card: "#fff",
@@ -231,12 +232,12 @@ export default function AddCustomer() {
     e.preventDefault();
 
     if (!form.companyName || !form.mobile1 || !form.tag) {
-      alert("Company Name, Tag & Mobile required");
+      toast.error("Company Name, Tag & Mobile required");
       return;
     }
 
     if (form.mobile1.length !== 10) {
-      alert("Mobile must be 10 digits");
+      toast.error("Mobile must be 10 digits");
       return;
     }
 
@@ -250,7 +251,7 @@ export default function AddCustomer() {
           };
 
     if (!selectedCity.name) {
-      alert("Please select a city from dropdown");
+      toast.error("Please select a city from dropdown");
       return;
     }
 
@@ -270,14 +271,14 @@ export default function AddCustomer() {
       const data = await res.json();
 
       if (!res.ok) {
-        alert(data.message || "Error saving customer");
+        toast.error(data.message || "Error saving customer");
         return;
       }
 
-      alert("Customer Added ✅");
+      toast.success("Customer added successfully");
       navigate("/dashboard");
     } catch {
-      alert("Error saving customer");
+      toast.error("Error saving customer");
     }
   };
 
@@ -566,7 +567,7 @@ export default function AddCustomer() {
                                       handleCitySelect(place);
                                       setShowDropdown(false); // ✅ MOVE HERE
                                     } else {
-                                      alert("Failed to load city details. Try again.");
+                                      toast.error("Failed to load city details. Try again.");
                                     }
 
                                   }

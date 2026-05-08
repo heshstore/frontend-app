@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import PageLayout from "./components/layout/PageLayout";
 import { buttonStyle, inputStyle } from "./theme";
 import { apiFetch } from "./utils/api";
+import { toast } from "./utils/toast";
 
 const PAYMENT_MODES = ["Cash", "UPI", "Bank Transfer", "Cheque", "NEFT/RTGS"];
 
@@ -28,7 +29,7 @@ export default function PaymentEntry() {
     if (submitted || loading) return;
 
     if (!form.amount || Number(form.amount) <= 0) {
-      alert("Please enter a valid amount");
+      toast.error("Please enter a valid amount");
       return;
     }
 
@@ -46,14 +47,14 @@ export default function PaymentEntry() {
 
       if (res.ok) {
         setSubmitted(true);
-        alert("Payment recorded successfully");
+        toast.success("Payment recorded successfully");
         navigate(`/invoice/${orderId}`);
       } else {
         const err = await res.json();
-        alert(err.message || "Payment failed");
+        toast.error(err.message || "Payment failed");
       }
     } catch (err) {
-      alert("Payment failed: " + err.message);
+      toast.error("Payment failed: " + err.message);
     } finally {
       setLoading(false);
     }

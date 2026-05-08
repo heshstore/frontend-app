@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { theme } from "./theme";
 import { apiFetch } from "./utils/api";
+import { toast } from "./utils/toast";
 
 export default function AddItem() {
   const navigate = useNavigate();
@@ -24,15 +25,15 @@ export default function AddItem() {
 
   const validate = () => {
     if (!form.sku) {
-      alert("SKU required ❌");
+      toast.error("SKU required");
       return false;
     }
     if (!form.itemName) {
-      alert("Item Name required ❌");
+      toast.error("Item Name required");
       return false;
     }
     if (!form.sellingPrice) {
-      alert("Selling Price required ❌");
+      toast.error("Selling Price required");
       return false;
     }
     return true;
@@ -55,7 +56,7 @@ export default function AddItem() {
 
       console.log("SENDING 👉", payload);
 
-      const res = await apiFetch(`/items`, {
+      const res = await apiFetch(`/service-items`, {
         method: "POST",
         body: JSON.stringify(payload)
       });
@@ -68,7 +69,7 @@ export default function AddItem() {
       const data = await res.json();
       console.log("RESPONSE 👉", data);
 
-      alert("Item Added ✅");
+      toast.success("Item added successfully");
 
       // ✅ RESET FORM (IMPORTANT UX FIX)
       setForm({
@@ -85,7 +86,7 @@ export default function AddItem() {
 
     } catch (err) {
       console.error("ERROR ❌", err);
-      alert("Error saving item ❌");
+      toast.error("Error saving item");
     } finally {
       setLoading(false);
     }

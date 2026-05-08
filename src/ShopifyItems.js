@@ -1,773 +1,714 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { theme } from "./theme";
 import { apiFetch } from "./utils/api";
+import { toast } from "./utils/toast";
 
-export default function ShopifyItems() {
-  const navigate = useNavigate();
-  const [items, setItems] = useState([]);
-  const [search, setSearch] = useState("");
-  const [openSku, setOpenSku] = useState(null);
-  const [mainData, setMainData] = useState({});
-  const [updatedSku, setUpdatedSku] = useState({});
-  const [selectedItems, setSelectedItems] = useState({});
-  const [selectedVariants, setSelectedVariants] = useState({});
-  
+// ── helpers ──────────────────────────────────────────────────────────────────
 
+function isSalesReady(item) {
+  return item.hsnCode && item.hsnCode.trim() !== "" && Number(item.costPrice) > 0;
+}
+
+const calcWholesalePrice = (data, retailPrice) => {
+  if (!data || !data.wholesale || Number(data.wholesale) <= 0) return 0;
+  if (data.wholesaleMode === "percent") {
+    const pct = Math.min(Number(data.wholesale), 100);
+    return Math.max(0, retailPrice - (retailPrice * pct / 100));
+  }
+  return Math.max(0, retailPrice - Number(data.wholesale));
+};
+
+const deriveProductSku = (variantSkus) => {
+  if (!variantSkus || variantSkus.length === 0) return "";
+  if (variantSkus.length === 1) {
+    const idx = variantSkus[0].lastIndexOf(" - ");
+    return idx !== -1 ? variantSkus[0].slice(0, idx).trim() : variantSkus[0];
+  }
+  const parts = variantSkus.map(s => s.split(" - ")[0].trim());
+  const first = parts[0];
+  return parts.every(p => p === first) ? first : variantSkus[0];
+};
+
+function groupItems(items) {
+  const map = {};
+  for (const item of items) {
+    const key = item.itemName;
+    if (!map[key]) {
+      map[key] = { sku: item.sku, title: item.itemName, variants: [] };
+    }
+    map[key].variants.push(item);
+  }
+  return Object.values(map)
+    .map(g => ({
+      ...g,
+      productSku: deriveProductSku(g.variants.map(v => v.sku)),
+      variants: [...g.variants].sort((a, b) => (a.sku || "").localeCompare(b.sku || "")),
+    }))
+    .sort((a, b) => {
+      const c = (a.productSku || a.title || "").localeCompare(b.productSku || b.title || "");
+      return c !== 0 ? c : (a.title || "").localeCompare(b.title || "");
+    });
+}
+
+// ── Sync status banner ────────────────────────────────────────────────────────
+
+function StatsBanner({ stats, onSync, syncing }) {
+  return (
+    <div style={{
+      display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center",
+      padding: "10px 14px", background: "#f8fafc", borderBottom: "1px solid #e2e8f0",
+    }}>
+      <div style={{ display: "flex", gap: 16, flex: 1 }}>
+        <Stat label="Pending Config" value={stats.shopifyPending} color="#dc2626" />
+        <Stat label="Ready" value={stats.shopifyReady} color="#16a34a" />
+        <Stat label="Hidden" value={stats.shopifyIgnored} color="#9ca3af" />
+      </div>
+      <button
+        onClick={onSync}
+        disabled={syncing}
+        style={{
+          padding: "7px 16px", borderRadius: 6, border: "none", cursor: syncing ? "not-allowed" : "pointer",
+          background: syncing ? "#94a3b8" : "#0f172a", color: "#fff", fontWeight: 600, fontSize: 13,
+        }}
+      >
+        {syncing ? "Syncing…" : "Sync Now"}
+      </button>
+    </div>
+  );
+}
+
+function Stat({ label, value, color }) {
+  return (
+    <div style={{ textAlign: "center" }}>
+      <div style={{ fontSize: 18, fontWeight: 800, color }}>{value ?? "…"}</div>
+      <div style={{ fontSize: 10, color: "#64748b", fontWeight: 600 }}>{label}</div>
+    </div>
+  );
+}
+
+// ── Inline config form (pending = configure, ready = re-edit) ─────────────────
+
+function InlineConfigForm({ item, mainData, selectedItems, selectedVariants,
+  setMainData, setSelectedItems, setSelectedVariants, onSaved, onHide, isEditMode }) {
+
+  const data = mainData[item.sku] || {};
+
+  // In edit mode all fields are always enabled; in pending mode gated by checkbox
+  const fieldsEnabled = isEditMode || (selectedItems[item.sku] || false);
+
+  // Auto-select all variants when entering edit mode
   useEffect(() => {
-    loadItems();
-  }, []);
-
-  /**
-   * Compute the actual wholesale price in Rs from the stored entry.
-   * data.wholesaleMode: "percent" → price = retailPrice * (1 - pct/100)
-   * data.wholesaleMode: "rs"      → price = retailPrice - discount (discount off selling price)
-   */
-  const calcWholesalePrice = (data, retailPrice) => {
-    if (!data || !data.wholesale || Number(data.wholesale) <= 0) return 0;
-    if (data.wholesaleMode === "percent") {
-      const pct = Math.min(Number(data.wholesale), 100);
-      return Math.max(0, retailPrice - (retailPrice * pct / 100));
+    if (isEditMode) {
+      const upd = {};
+      item.variants.forEach(v => { upd[v.sku] = true; });
+      setSelectedVariants(prev => ({ ...prev, ...upd }));
     }
-    // Rs mode: treat entered value as a discount off selling price
-    return Math.max(0, retailPrice - Number(data.wholesale));
-  };
+  }, [isEditMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const saveItem = async (item) => {
-    const data = mainData[item.sku];
-    const gstValue = Number(data && data.gst !== "" ? data.gst : null);
-    const costValue = Number(data && data.cost) || 0;
+  const fieldsReady =
+    data.hsn && data.hsn.trim() !== "" &&
+    data.gst !== "" && data.gst !== undefined && data.gst !== null &&
+    !isNaN(Number(data.cost)) && Number(data.cost) > 0;
 
-    // All 3 fields must be filled before sending to Item Master
+  const btnEnabled = fieldsEnabled && fieldsReady;
+
+  const handleSave = async (e) => {
+    e.stopPropagation();
     const missing = [];
-    if (!data || !data.hsn || data.hsn.trim() === "") missing.push("HSN Code");
-    if (!data || data.gst === "" || data.gst === undefined || data.gst === null) missing.push("GST %");
-    if (!data || isNaN(Number(data.cost)) || Number(data.cost) <= 0) missing.push("Cost Price");
+    if (!data.hsn || data.hsn.trim() === "") missing.push("HSN Code");
+    if (data.gst === "" || data.gst === undefined) missing.push("GST %");
+    if (!data.cost || Number(data.cost) <= 0) missing.push("Cost Price");
+    if (missing.length) { toast.error(`Fill: ${missing.join(", ")}`); return; }
 
-    if (missing.length > 0) {
-      alert(`Please fill: ${missing.join(", ")} before adding to Item Master`);
-      return;
+    const variantsToSave = isEditMode
+      ? item.variants
+      : item.variants.filter(v => selectedVariants[v.sku]);
+
+    if (!isEditMode && variantsToSave.length === 0) {
+      toast.error("Select at least one variant"); return;
     }
 
-    const anySelected = Object.values(selectedVariants).some(v => v);
-    if (!anySelected) {
-      alert("Please select at least one variant to update");
-      return;
-    }
+    const gstValue  = Number(data.gst);
+    const costValue = Number(data.cost);
 
-    // Validate: discount amount cannot exceed selling price of any variant (Rs mode)
-    if (data && data.wholesale && Number(data.wholesale) > 0 && (data.wholesaleMode || "rs") === "rs") {
-      const badVariants = item.variants
-        .filter(v => selectedVariants[v.sku])
-        .filter(v => Number(data.wholesale) >= Number(v.sellingPrice || 0));
-      if (badVariants.length > 0) {
-        const names = badVariants.map(v => `${v.sku} (₹${v.sellingPrice})`).join(", ");
-        alert(`⚠ Discount ₹${data.wholesale} is equal to or exceeds the selling price for: ${names}\nPlease reduce the discount amount.`);
+    if (data.wholesale && Number(data.wholesale) > 0 && (data.wholesaleMode || "rs") === "rs") {
+      const bad = variantsToSave.filter(v => Number(data.wholesale) >= Number(v.sellingPrice || 0));
+      if (bad.length) {
+        toast.warn(`Discount ₹${data.wholesale} exceeds selling price for: ${bad.map(v => v.sku).join(", ")}`);
         return;
       }
     }
 
+    const payload = variantsToSave.map(v => {
+      const retail = Number(v.sellingPrice || 0);
+      return {
+        sku: v.sku, hsnCode: data.hsn,
+        gst: gstValue, costPrice: costValue,
+        wholesalePrice: calcWholesalePrice(data, retail),
+        unit: "Nos",
+      };
+    });
+
     try {
-      // Collect selected variants — compute per-variant wholesale price
-      const selectedData = item.variants
-        .filter(v => selectedVariants[v.sku])
-        .map(v => {
-          const variantRetail = Number(v.sellingPrice || 0);
-          const variantWholesale = calcWholesalePrice(data, variantRetail);
-          return {
-            itemName: item.title,
-            sku: v.sku,
-            hsnCode: data.hsn,
-            gst: gstValue || 0,
-            costPrice: costValue,
-            sellingPrice: variantRetail,
-            retail_price: variantRetail,
-            wholesale_price: variantWholesale,
-            image: v.image || "",
-            unit: "Nos",
-            source: "shopify",
-          };
-        });
-
-      console.log("BULK SAVE:", selectedData);
-
-      const res = await apiFetch(`/items/bulk`, {
-        method: "POST",
-        body: JSON.stringify(selectedData),
-      });
-
-      const result = await res.json();
-      console.log("BULK RESPONSE:", result);
-
-      // mark as updated
-      setUpdatedSku(prev => ({
-        ...prev,
-        [item.sku]: true
-      }));
-
-      // 🔥 UNCHECK ITEM
-      setSelectedItems(prev => ({
-        ...prev,
-        [item.sku]: false
-      }));
-
-      // 🔥 UNCHECK ALL VARIANTS OF THIS ITEM
-      const clearedVariants = {};
-      item.variants.forEach(v => {
-        clearedVariants[v.sku] = false;
-      });
-
-      setSelectedVariants(prev => ({
-        ...prev,
-        ...clearedVariants
-      }));
-
-      // ✅ FIX 3 — FORCE UI SYNC AFTER SAVE
-      alert("✅ Saved Successfully");
-      await loadItems();
-
-    } catch (err) {
-      console.error(err);
-      alert("Error saving item");
-    }
-  };
-
-  const loadItems = async () => {
-    try {
-      const res = await apiFetch(`/items`);
-      const data = await res.json();
-
-      console.log("ALL ITEMS:", data);
-
-      const shopifyItems = data.filter(item => item.source === "shopify");
-      setItems(shopifyItems);
-
-      // Reuse same data for Item Master mapping (no second fetch)
-      const updated = {};
-      const main = {};
-
-      data.forEach(item => {
-        // 🚀 STRICT MODE PATCH — FIX DATA MAPPING (FINAL ROOT FIX)
-        // DO NOT split SKU, use full SKU always
-        const mainSku = item.sku?.trim() || "NO-SKU";
-        if (mainSku) {
-          updated[mainSku] = true;
-
-          main[mainSku] = {
-            hsn: item.hsnCode,
-            gst: item.gst ? String(item.gst) : "",
-            cost: item.costPrice,
-            wholesale: item.wholesale_price > 0 ? String(item.wholesale_price) : "",
-            wholesaleMode: "rs",   // default — stored wholesale_price is always an Rs value
-          };
-        }
-      });
-
-      setUpdatedSku(updated);
-      setMainData(main);
-
-    } catch (err) {
-      console.error("Load error:", err);
-    }
-  };
-
-  /** Returns true only when HSN + GST + Cost Price are all filled for this SKU */
-  const isManualFilled = (sku) => {
-    const d = mainData[sku];
-    if (!d) return false;
-    return (
-      d.hsn && d.hsn.trim() !== "" &&
-      d.gst && String(d.gst) !== "" &&
-      d.cost && Number(d.cost) > 0
-    );
-  };
-
-  // ── helpers ─────────────────────────────────────────────────────────────
-  /**
-   * From a list of variant SKUs (e.g. ["F3 - 1624 Clear", "F3 - 1424 Clear"])
-   * derive the product-level SKU = the common prefix before " - ".
-   * Falls back to the first SKU if no common " - " prefix is found.
-   */
-  const deriveProductSku = (variantSkus) => {
-    if (!variantSkus || variantSkus.length === 0) return "";
-    // If single-SKU product just return it
-    if (variantSkus.length === 1) {
-      const idx = variantSkus[0].lastIndexOf(" - ");
-      return idx !== -1 ? variantSkus[0].slice(0, idx).trim() : variantSkus[0];
-    }
-    // Find longest common prefix token (split by " - ")
-    const parts = variantSkus.map(s => s.split(" - ")[0].trim());
-    const first = parts[0];
-    const allMatch = parts.every(p => p === first);
-    return allMatch ? first : variantSkus[0];
-  };
-
-  // ✅ GROUPING
-  const groupedItems = Object.values(
-    items.reduce((acc, item) => {
-      const key = item.itemName; // group by clean product title
-
-      if (!acc[key]) {
-        acc[key] = {
-          sku: item.sku,          // first variant SKU (used as collapse key)
-          title: item.itemName,   // clean product title
-          variants: []
-        };
+      const res = await apiFetch(`/shopify-catalog/bulk-configure`, { method: "POST", body: JSON.stringify(payload) });
+      if (!res.ok) throw new Error();
+      toast.success(isEditMode ? "Configuration updated" : "Saved — item is now ready for quotations");
+      if (!isEditMode) {
+        setSelectedItems(prev => ({ ...prev, [item.sku]: false }));
+        const cleared = {};
+        item.variants.forEach(v => { cleared[v.sku] = false; });
+        setSelectedVariants(prev => ({ ...prev, ...cleared }));
       }
-      acc[key].variants.push(item);
-      return acc;
-    }, {})
-  ).map(group => ({
-    ...group,
-    // derive a concise product-level SKU from variant SKUs
-    productSku: deriveProductSku(group.variants.map(v => v.sku)),
-    // sort variants within the group by SKU ascending
-    variants: [...group.variants].sort((a, b) => (a.sku || "").localeCompare(b.sku || "")),
-  }))
-  // sort groups by productSku A→Z, then by title A→Z as tiebreak
-  .sort((a, b) => {
-    const skuCmp = (a.productSku || a.title || "").localeCompare(b.productSku || b.title || "");
-    if (skuCmp !== 0) return skuCmp;
-    return (a.title || "").localeCompare(b.title || "");
-  });
+      onSaved();
+    } catch { toast.error("Save failed"); }
+  };
 
-  // ✅ FILTER (MUST BE HERE — NOT INSIDE JSX)
-  const filteredItems = groupedItems.filter(item => {
-    const searchText = search.toLowerCase();
+  return (
+    <div style={{ marginTop: 12, paddingLeft: isEditMode ? 0 : 60 }}>
+      {isEditMode && (
+        <div style={{ fontSize: 11, color: "#2563eb", fontWeight: 600, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>
+          Edit Configuration
+        </div>
+      )}
+      <div style={{ padding: 10, background: "#f5f5f5", borderRadius: 10, marginBottom: 10 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <input
+            placeholder="HSN Code"
+            maxLength={8}
+            inputMode="numeric"
+            value={data.hsn || ""}
+            onClick={e => e.stopPropagation()}
+            onChange={e => {
+              const v = e.target.value.replace(/\D/g, "");
+              setMainData(p => ({ ...p, [item.sku]: { ...(p[item.sku] || {}), hsn: v } }));
+            }}
+            disabled={!fieldsEnabled}
+            style={{ padding: 8, borderRadius: 6, border: "1px solid #ccc" }}
+          />
+          <select
+            value={String(data.gst ?? "")}
+            onClick={e => e.stopPropagation()}
+            onChange={e => setMainData(p => ({ ...p, [item.sku]: { ...(p[item.sku] || {}), gst: e.target.value } }))}
+            disabled={!fieldsEnabled}
+            style={{ padding: 8, borderRadius: 6, border: "1px solid #ccc" }}
+          >
+            <option value="">Select GST %</option>
+            <option value="0">0%</option>
+            <option value="5">5%</option>
+            <option value="12">12%</option>
+            <option value="18">18%</option>
+            <option value="28">28%</option>
+          </select>
+          <input
+            placeholder="Cost Price (₹)"
+            value={data.cost || ""}
+            onClick={e => e.stopPropagation()}
+            onChange={e => setMainData(p => ({ ...p, [item.sku]: { ...(p[item.sku] || {}), cost: e.target.value } }))}
+            disabled={!fieldsEnabled}
+            style={{ padding: 8, borderRadius: 6, border: "1px solid #ccc" }}
+          />
 
-    if (
-      item.title?.toLowerCase().includes(searchText) ||
-      item.sku?.toLowerCase().includes(searchText) ||
-      item.productSku?.toLowerCase().includes(searchText)
-    ) {
-      return true;
-    }
+          {/* Wholesale */}
+          <div onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 11, color: "#a16207", fontWeight: 600, marginBottom: 4 }}>
+              Wholesale Price (per variant)
+            </div>
+            <div style={{ display: "flex", borderRadius: 6, overflow: "hidden", border: "1px solid #ca8a04" }}>
+              {["percent", "rs"].map(mode => (
+                <button key={mode} type="button" disabled={!fieldsEnabled}
+                  onClick={() => setMainData(p => ({ ...p, [item.sku]: { ...(p[item.sku] || {}), wholesaleMode: mode, wholesale: "" } }))}
+                  style={{
+                    padding: "6px 12px", border: "none",
+                    borderRight: mode === "percent" ? "1px solid #ca8a04" : "none",
+                    background: (data.wholesaleMode || "rs") === mode ? "#ca8a04" : "#fefce8",
+                    color: (data.wholesaleMode || "rs") === mode ? "#fff" : "#a16207",
+                    fontWeight: 700, fontSize: 12, cursor: fieldsEnabled ? "pointer" : "not-allowed",
+                    opacity: fieldsEnabled ? 1 : 0.5,
+                  }}>{mode === "percent" ? "%" : "₹"}</button>
+              ))}
+              <input
+                value={data.wholesale || ""}
+                placeholder={(data.wholesaleMode || "rs") === "percent" ? "Discount %" : "Discount ₹"}
+                onChange={e => setMainData(p => ({ ...p, [item.sku]: { ...(p[item.sku] || {}), wholesale: e.target.value } }))}
+                disabled={!fieldsEnabled}
+                style={{ flex: 1, padding: "6px 8px", border: "none", background: fieldsEnabled ? "#fefce8" : "#fafafa", outline: "none" }}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
 
-    return item.variants.some(v =>
-      v.sku?.toLowerCase().includes(searchText) ||
-      v.itemName?.toLowerCase().includes(searchText)
-    );
-  });
+      <div style={{ display: "flex", gap: 8 }}>
+        <button
+          onClick={handleSave}
+          disabled={!btnEnabled}
+          style={{
+            flex: 1, padding: "10px 14px",
+            background: btnEnabled ? (isEditMode ? "#2563eb" : "#16a34a") : "#d1d5db",
+            color: "#fff", border: "none", borderRadius: 6,
+            cursor: btnEnabled ? "pointer" : "not-allowed",
+            fontWeight: 600, fontSize: 14,
+          }}
+        >
+          {isEditMode
+            ? (btnEnabled ? "✓ Update Configuration" : "Fill HSN + GST + Cost to Update")
+            : (btnEnabled ? "✓ Configure & Make Ready" : "Fill HSN + GST + Cost to Enable")}
+        </button>
+        {!isEditMode && onHide && (
+          <button
+            onClick={e => { e.stopPropagation(); onHide(); }}
+            style={{
+              padding: "10px 14px", background: "#fee2e2", color: "#dc2626",
+              border: "none", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600,
+            }}
+            title="Hide this item — it won't reappear on future syncs"
+          >
+            Hide
+          </button>
+        )}
+      </div>
 
-  // Mobile layout fix: compute flexDirection for responsive design
-  const getFlexDirection = () => (typeof window !== "undefined" && window.innerWidth < 600 ? "column" : "row");
+      {/* Variants */}
+      <div style={{ fontSize: 11, fontWeight: 600, color: "#888", margin: "10px 0 4px", textTransform: "uppercase" }}>
+        Variants ({item.variants.length})
+      </div>
+      {item.variants.map((v, i) => {
+        const retail    = Number(v.sellingPrice || 0);
+        const cost      = Number(data.cost || 0);
+        const wholesale = calcWholesalePrice(data, retail);
+        const profit    = cost > 0 && retail > 0 ? retail - cost : null;
+        const markup    = profit !== null && cost > 0 ? ((profit / cost) * 100).toFixed(1) : null;
+        return (
+          <div key={i} style={{
+            display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 0",
+            borderBottom: i < item.variants.length - 1 ? "1px solid #f0f0f0" : "none",
+          }}>
+            {!isEditMode && (
+              <input type="checkbox"
+                checked={selectedVariants[v.sku] || false}
+                onClick={e => e.stopPropagation()}
+                onChange={e => setSelectedVariants(p => ({ ...p, [v.sku]: e.target.checked }))}
+                style={{ marginTop: 4 }}
+              />
+            )}
+            <img src={v.image || "https://via.placeholder.com/40"} alt=""
+              style={{ width: 40, height: 40, borderRadius: 6, objectFit: "cover", flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, background: "#e0eeff", color: "#0066b3",
+                borderRadius: 4, padding: "2px 7px", display: "inline-block", marginBottom: 3 }}>
+                {v.sku || "N/A"}
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 500 }}>{v.itemName || item.title}</div>
+              <div style={{ fontSize: 12, color: "#444", marginTop: 3 }}>
+                Retail: <strong>₹{retail}</strong>
+                {wholesale > 0 && <span style={{ marginLeft: 10 }}>Wholesale: <strong>₹{wholesale.toFixed(2)}</strong></span>}
+                {profit !== null && (
+                  <span style={{ marginLeft: 10, color: profit >= 0 ? "#16a34a" : "#dc2626" }}>
+                    Margin: ₹{profit.toFixed(2)} ({markup}%)
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Product card (collapsible, used in both tabs) ─────────────────────────────
+
+function ProductCard({ item, tab, mainData, selectedItems, selectedVariants,
+  setMainData, setSelectedItems, setSelectedVariants, openSku, setOpenSku, onSaved, onHide, onRestore }) {
+
+  const isOpen  = openSku === item.sku;
+  const ready   = item.variants.every(v => isSalesReady(v));
 
   return (
     <div
+      onClick={e => {
+        if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || e.target.tagName === "BUTTON") return;
+        setOpenSku(isOpen ? null : item.sku);
+      }}
       style={{
-        background: theme.background,
-        minHeight: "100vh",
-        padding: "10px",
+        padding: 12, borderRadius: 12, background: theme.card, marginBottom: 12,
+        cursor: "pointer", transition: "all 0.2s",
+        boxShadow: isOpen ? "0 4px 12px rgba(0,0,0,0.12)" : "0 1px 4px rgba(0,0,0,0.05)",
+        borderLeft: tab === "ready" ? "4px solid #22c55e" : tab === "hidden" ? "4px solid #9ca3af" : "4px solid #ef4444",
       }}
     >
-      <button onClick={() => navigate(-1)}>← Back</button>
+      {/* Header row */}
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <img src={item.variants[0]?.image || "https://via.placeholder.com/60"} alt=""
+          style={{ width: 50, height: 50, objectFit: "cover", borderRadius: 8 }} />
 
-      {/* SEARCH BAR */}
-      <div
-        style={{
-          width: "100%",
-          display: "flex",
-          justifyContent: "center",
-          marginTop: 10,
-        }}
-      >
+        {tab === "pending" && (
+          <input type="checkbox"
+            checked={selectedItems[item.sku] || false}
+            onClick={e => e.stopPropagation()}
+            onChange={e => {
+              const checked = e.target.checked;
+              setSelectedItems(p => ({ ...p, [item.sku]: checked }));
+              const upd = {};
+              item.variants.forEach(v => { upd[v.sku] = checked; });
+              setSelectedVariants(p => ({ ...p, ...upd }));
+            }}
+          />
+        )}
+
+        <div style={{ flex: 1, minWidth: 120 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 13, fontWeight: 700, background: "#e0eeff", color: "#0066b3",
+              borderRadius: 4, padding: "2px 8px" }}>
+              {item.productSku || item.sku}
+            </span>
+            <span style={{ fontSize: 11, color: "#888" }}>
+              {item.variants.length} variant{item.variants.length !== 1 ? "s" : ""}
+            </span>
+          </div>
+          <div style={{ fontWeight: 600, fontSize: 14, color: "#1a1a1a" }}>{item.title}</div>
+          {tab === "ready" && item.variants[0] && (
+            <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
+              HSN: {item.variants[0].hsnCode} | GST: {item.variants[0].gst}% | Cost: ₹{item.variants[0].costPrice}
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {/* Ready badge — always visible for non-hidden items */}
+          {tab !== "hidden" && (
+            <div style={{
+              padding: "2px 8px", borderRadius: 10, fontSize: 11, fontWeight: 700,
+              background: ready ? "#dcfce7" : "#fee2e2",
+              color: ready ? "#16a34a" : "#dc2626",
+            }}>
+              {ready ? "✓ Ready" : "✕ Pending"}
+            </div>
+          )}
+
+          {/* Edit button — visible on ALL tabs except hidden */}
+          {tab !== "hidden" && (
+            <button
+              onClick={e => { e.stopPropagation(); setOpenSku(isOpen ? null : item.sku); }}
+              style={{
+                padding: "4px 10px", borderRadius: 5, border: "1px solid #cbd5e1",
+                cursor: "pointer", background: isOpen ? "#f1f5f9" : "#fff",
+                color: "#374151", fontSize: 12, fontWeight: 600,
+              }}
+            >
+              {isOpen ? "Close" : "Edit"}
+            </button>
+          )}
+
+          {/* Restore button for hidden items */}
+          {tab === "hidden" && (
+            <button
+              onClick={e => { e.stopPropagation(); onRestore(item.variants.map(v => v.id)); }}
+              style={{ padding: "4px 10px", borderRadius: 5, border: "none", cursor: "pointer",
+                background: "#f0fdf4", color: "#16a34a", fontSize: 12, fontWeight: 600 }}
+            >Restore</button>
+          )}
+
+          <div style={{ fontSize: 18 }}>{isOpen ? "▲" : "▼"}</div>
+        </div>
+      </div>
+
+      {/* Expand */}
+      {isOpen && (
+        <div>
+          {/* Pending: config form with checkbox + Hide button */}
+          {tab === "pending" && (
+            <InlineConfigForm
+              item={item}
+              mainData={mainData}
+              selectedItems={selectedItems}
+              selectedVariants={selectedVariants}
+              setMainData={setMainData}
+              setSelectedItems={setSelectedItems}
+              setSelectedVariants={setSelectedVariants}
+              onSaved={onSaved}
+              onHide={() => onHide(item.variants.map(v => v.id))}
+              isEditMode={false}
+            />
+          )}
+
+          {/* Ready: config form in edit mode (always enabled, no checkbox) + per-variant hide */}
+          {tab === "ready" && (
+            <div style={{ marginTop: 10 }}>
+              <InlineConfigForm
+                item={item}
+                mainData={mainData}
+                selectedItems={selectedItems}
+                selectedVariants={selectedVariants}
+                setMainData={setMainData}
+                setSelectedItems={setSelectedItems}
+                setSelectedVariants={setSelectedVariants}
+                onSaved={onSaved}
+                isEditMode={true}
+              />
+              <div style={{ marginTop: 12, borderTop: "1px solid #f0f0f0", paddingTop: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: "#888", marginBottom: 6, textTransform: "uppercase" }}>
+                  Hide individual variants
+                </div>
+                {item.variants.map((v, i) => (
+                  <div key={i} style={{
+                    display: "flex", alignItems: "center", gap: 8, padding: "5px 0",
+                    borderBottom: i < item.variants.length - 1 ? "1px solid #f9f9f9" : "none",
+                  }}>
+                    <img src={v.image || "https://via.placeholder.com/32"} alt=""
+                      style={{ width: 32, height: 32, borderRadius: 4, objectFit: "cover" }} />
+                    <span style={{ flex: 1, fontSize: 12 }}>
+                      <strong>{v.sku}</strong> — ₹{v.sellingPrice}
+                    </span>
+                    <button
+                      onClick={e => { e.stopPropagation(); onHide([v.id]); }}
+                      style={{ padding: "3px 8px", borderRadius: 4, border: "none", cursor: "pointer",
+                        background: "#fef2f2", color: "#dc2626", fontSize: 11, fontWeight: 600 }}
+                    >Hide</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Hidden: read-only variant list */}
+          {tab === "hidden" && (
+            <div style={{ marginTop: 10, paddingLeft: 60 }}>
+              {item.variants.map((v, i) => (
+                <div key={i} style={{
+                  display: "flex", alignItems: "center", gap: 8, padding: "6px 0",
+                  borderBottom: i < item.variants.length - 1 ? "1px solid #f0f0f0" : "none",
+                }}>
+                  <img src={v.image || "https://via.placeholder.com/40"} alt=""
+                    style={{ width: 36, height: 36, borderRadius: 5, objectFit: "cover" }} />
+                  <div style={{ flex: 1 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, background: "#e0eeff", color: "#0066b3",
+                      borderRadius: 4, padding: "1px 6px", marginRight: 6 }}>{v.sku}</span>
+                    <span style={{ fontSize: 13 }}>{v.itemName || item.title}</span>
+                    <div style={{ fontSize: 12, color: "#64748b" }}>
+                      Cost: ₹{v.costPrice} | Retail: ₹{v.sellingPrice}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+
+export default function ShopifyItems() {
+  const navigate = useNavigate();
+  const [tab, setTab] = useState("pending");
+  const [allItems, setAllItems] = useState([]);
+  const [stats, setStats] = useState({});
+  const [search, setSearch] = useState("");
+  const [openSku, setOpenSku] = useState(null);
+  const [mainData, setMainData] = useState({});
+  const [selectedItems, setSelectedItems] = useState({});
+  const [selectedVariants, setSelectedVariants] = useState({});
+  const [syncing, setSyncing] = useState(false);
+
+  const loadStats = useCallback(async () => {
+    try {
+      const r = await apiFetch("/shopify-catalog/stats");
+      setStats(await r.json());
+    } catch {}
+  }, []);
+
+  const loadItems = useCallback(async () => {
+    try {
+      const res = await apiFetch("/shopify-catalog");
+      const data = await res.json();
+      const shopify = Array.isArray(data) ? data : [];
+      setAllItems(shopify);
+
+      // Seed mainData from existing DB values so already-configured items show their data
+      const md = {};
+      shopify.forEach(item => {
+        const sku = item.sku?.trim();
+        if (sku) {
+          md[sku] = {
+            hsn: item.hsnCode || "",
+            gst: item.gst ? String(item.gst) : "",
+            cost: item.costPrice || "",
+            wholesale: item.wholesale_price > 0 ? String(item.wholesale_price) : "",
+            wholesaleMode: "rs",
+          };
+        }
+      });
+      setMainData(md);
+    } catch (e) { console.error("Load error:", e); }
+  }, []);
+
+  useEffect(() => {
+    loadItems();
+    loadStats();
+  }, [loadItems, loadStats]);
+
+  const refresh = useCallback(() => { loadItems(); loadStats(); }, [loadItems, loadStats]);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      const res = await apiFetch("/shopify/sync-products", { method: "POST" });
+      const result = await res.json();
+      const { inserted = 0, updated = 0, skipped = 0, errors = 0 } = result;
+      const parts = [];
+      if (inserted) parts.push(`${inserted} new`);
+      if (updated) parts.push(`${updated} updated`);
+      if (skipped) parts.push(`${skipped} skipped`);
+      if (errors) parts.push(`${errors} errors`);
+      if (errors) toast.warn(`Sync done: ${parts.join(" · ")}`);
+      else toast.success(`Sync done: ${parts.join(" · ") || "no changes"}`);
+      refresh();
+    } catch { toast.error("Sync failed"); }
+    setSyncing(false);
+  };
+
+  const handleHide = async (ids) => {
+    try {
+      await Promise.all(ids.map(id => apiFetch(`/shopify-catalog/${id}/ignore`, { method: "PATCH" })));
+      toast.success("Item hidden — won't reappear on future syncs");
+      setOpenSku(null);
+      refresh();
+    } catch { toast.error("Failed to hide item"); }
+  };
+
+  const handleRestore = async (ids) => {
+    try {
+      await Promise.all(ids.map(id => apiFetch(`/shopify-catalog/${id}/restore`, { method: "PATCH" })));
+      toast.success("Item restored");
+      setOpenSku(null);
+      refresh();
+    } catch { toast.error("Failed to restore item"); }
+  };
+
+  // Filter allItems into three buckets
+  const pending = allItems.filter(i => !isSalesReady(i) && !i.syncIgnored);
+  const ready   = allItems.filter(i => isSalesReady(i) && !i.syncIgnored);
+  const hidden  = allItems.filter(i => i.syncIgnored);
+
+  const sourceItems = tab === "pending" ? pending : tab === "ready" ? ready : hidden;
+  const grouped = groupItems(sourceItems);
+
+  const filtered = grouped.filter(g => {
+    const q = search.toLowerCase();
+    return !q ||
+      (g.title || "").toLowerCase().includes(q) ||
+      (g.productSku || "").toLowerCase().includes(q) ||
+      g.variants.some(v => (v.sku || "").toLowerCase().includes(q));
+  });
+
+  const TABS = [
+    { key: "pending", label: "Pending Config", count: pending.length, color: "#dc2626" },
+    { key: "ready",   label: "Ready Products", count: ready.length,   color: "#16a34a" },
+    { key: "hidden",  label: "Hidden",          count: hidden.length,  color: "#9ca3af" },
+  ];
+
+  return (
+    <div style={{ background: theme.background, minHeight: "100vh" }}>
+
+      {/* Header */}
+      <div style={{ padding: "12px 14px", background: theme.card, borderBottom: "1px solid #e2e8f0" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button onClick={() => navigate(-1)}>← Back</button>
+            <div>
+              <h2 style={{ margin: 0 }}>Shopify Catalog</h2>
+              <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>
+                Synced ecommerce products requiring configuration
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Stats + Sync */}
+      <StatsBanner stats={stats} onSync={handleSync} syncing={syncing} />
+
+      {/* Tabs */}
+      <div style={{ display: "flex", gap: 4, padding: "10px 14px", background: theme.card, borderBottom: "1px solid #e2e8f0" }}>
+        {TABS.map(t => (
+          <button key={t.key} onClick={() => { setTab(t.key); setOpenSku(null); }}
+            style={{
+              padding: "6px 14px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 13,
+              background: tab === t.key ? "#0f172a" : "#e2e8f0",
+              color: tab === t.key ? "#fff" : "#374151",
+              fontWeight: tab === t.key ? 700 : 400,
+            }}>
+            {t.label}
+            <span style={{
+              marginLeft: 6, fontSize: 11,
+              color: tab === t.key ? "rgba(255,255,255,0.75)" : t.color,
+              fontWeight: 800,
+            }}>({t.count})</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Tab description */}
+      {tab === "pending" && (
+        <div style={{ padding: "8px 14px", background: "#fffbeb", fontSize: 12, color: "#92400e", borderBottom: "1px solid #fde68a" }}>
+          These Shopify products need HSN Code, Cost Price and GST before they can appear in quotations/orders.
+        </div>
+      )}
+      {tab === "ready" && (
+        <div style={{ padding: "8px 14px", background: "#f0fdf4", fontSize: 12, color: "#15803d", borderBottom: "1px solid #bbf7d0" }}>
+          These products are fully configured and available in quotation/order/invoice search.
+        </div>
+      )}
+      {tab === "hidden" && (
+        <div style={{ padding: "8px 14px", background: "#f1f5f9", fontSize: 12, color: "#475569", borderBottom: "1px solid #e2e8f0" }}>
+          Hidden items are excluded from sync and from all searches. Restore to bring them back.
+        </div>
+      )}
+
+      {/* Search */}
+      <div style={{ padding: "10px 14px" }}>
         <input
           type="text"
-          placeholder="🔍 Search anything (name, sku...)"
+          placeholder="Search by name or SKU…"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={e => setSearch(e.target.value)}
           style={{
-            width: "90%",
-            maxWidth: "800px",
-            padding: "14px 18px",
-            borderRadius: 12,
-            border: "1px solid #ddd",
-            fontSize: 16,
-            background: "#f9f9f9",
+            width: "100%", maxWidth: 600, padding: "10px 14px",
+            borderRadius: 10, border: "1px solid #ddd", fontSize: 14, background: "#f9f9f9",
           }}
         />
       </div>
 
-      {/* HEADER */}
-      <h2 style={{ marginTop: 20 }}>
-        Shopify Items (
-        {filteredItems.length} Items • {items.length} Variants
-        )
-      </h2>
-
-      {/* LIST */}
-      <div style={{ marginTop: 15 }}>
-        {filteredItems.length === 0 ? (
-          <p>No Shopify items found...</p>
+      {/* List */}
+      <div style={{ padding: "0 14px 20px" }}>
+        {filtered.length === 0 ? (
+          <div style={{ textAlign: "center", color: "#94a3b8", marginTop: 40 }}>
+            {tab === "pending" ? "All Shopify products are configured." :
+             tab === "ready"   ? "No ready products yet. Configure items in the Pending tab." :
+             "No hidden items."}
+          </div>
         ) : (
-          filteredItems.map((item, i) => (
-            <div
+          filtered.map((item, i) => (
+            <ProductCard
               key={i}
-              onClick={(e) => {
-                // prevent collapse when clicking inputs
-                if (
-                  e.target.tagName === "INPUT" ||
-                  e.target.tagName === "SELECT"
-                )
-                  return;
-                setOpenSku(openSku === item.sku ? null : item.sku);
-              }}
-              style={{
-                padding: 12,
-                borderRadius: 12,
-                background: theme.card,
-                marginBottom: 12,
-                cursor: "pointer",
-                transition: "all 0.3s ease",
-                boxShadow:
-                  openSku === item.sku
-                    ? "0 4px 12px rgba(0,0,0,0.15)"
-                    : "0 1px 4px rgba(0,0,0,0.05)",
-              }}
-            >
-              {/* TOP */}
-              <div
-                style={{
-                  display: "flex",
-                  gap: 10,
-                  alignItems: "center",
-                  flexWrap: "wrap",
-                  flexDirection: getFlexDirection(),
-                }}
-              >
-                <img
-                  src={item.variants[0]?.image || "https://via.placeholder.com/60"}
-                  alt=""
-                  style={{
-                    width: 50,
-                    height: 50,
-                    objectFit: "cover",
-                    borderRadius: 8,
-                  }}
-                />
-
-                <input
-                  type="checkbox"
-                  checked={selectedItems[item.sku] || false}
-                  onClick={(e) => e.stopPropagation()}
-                  onChange={(e) => {
-                    const checked = e.target.checked;
-
-                    setSelectedItems((prev) => ({
-                      ...prev,
-                      [item.sku]: checked,
-                    }));
-
-                    const updated = {};
-                    item.variants.forEach((v) => {
-                      updated[v.sku] = checked;
-                    });
-
-                    setSelectedVariants((prev) => ({
-                      ...prev,
-                      ...updated,
-                    }));
-                  }}
-                />
-
-                <div style={{ flex: 1, minWidth: "120px" }}>
-                  {/* SKU first */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3, flexWrap: "wrap" }}>
-                    <span style={{
-                      fontSize: 13, fontWeight: 700,
-                      background: "#e0eeff", color: "#0066b3",
-                      borderRadius: 4, padding: "2px 8px",
-                      letterSpacing: "0.03em",
-                    }}>
-                      {item.productSku || item.sku}
-                    </span>
-                    <span style={{ fontSize: 11, color: "#888" }}>
-                      {item.variants.length} variant{item.variants.length !== 1 ? "s" : ""}
-                    </span>
-                  </div>
-                  {/* Title second */}
-                  <div style={{ fontWeight: "600", fontSize: 14, wordBreak: "break-word", color: "#1a1a1a" }}>
-                    {item.title}
-                  </div>
-                </div>
-
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  {/* STATUS — green tick if all manual fields filled, red cross if not */}
-                  <div
-                    style={{
-                      width: 26,
-                      height: 26,
-                      borderRadius: "50%",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontWeight: 700,
-                      fontSize: 15,
-                      background: isManualFilled(item.sku) ? "#dcfce7" : "#fee2e2",
-                      color: isManualFilled(item.sku) ? "#16a34a" : "#dc2626",
-                      flexShrink: 0,
-                    }}
-                    title={isManualFilled(item.sku) ? "HSN, GST & Cost filled" : "HSN, GST or Cost missing"}
-                  >
-                    {isManualFilled(item.sku) ? "✓" : "✕"}
-                  </div>
-
-                  {/* EXPAND ICON */}
-                  <div style={{ fontSize: 18 }}>
-                    {openSku === item.sku ? "▲" : "▼"}
-                  </div>
-                </div>
-              </div>
-
-              {/* EXPAND */}
-              <div
-                style={{
-                  maxHeight: openSku === item.sku ? "2500px" : 0,
-                  overflow: "hidden",
-                  transition: "max-height 0.3s ease",
-                }}
-              >
-                <div style={{ marginTop: 12, paddingLeft: 60 }}>
-                  {/* MAIN SKU INPUTS */}
-                  <div
-                    style={{
-                      marginBottom: 10,
-                      padding: 10,
-                      background: "#f5f5f5",
-                      borderRadius: 10,
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 8,
-                      }}
-                    >
-                      <input
-                        placeholder="HSN Code"
-                        maxLength={8}
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        value={mainData[item.sku]?.hsn || ""}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => {
-                          const value = e.target.value.replace(/\D/g, "");
-                          setMainData((prev) => ({
-                            ...prev,
-                            [item.sku]: {
-                              ...(prev[item.sku] || {}),
-                              hsn: value,
-                            },
-                          }));
-                        }}
-                        disabled={!selectedItems[item.sku]}
-                        style={{
-                          padding: 8,
-                          borderRadius: 6,
-                          border: "1px solid #ccc",
-                        }}
-                      />
-
-                      {/* ✅ FIX 4 — FIX GST DISPLAY (FINAL SAFE) */}
-                      <select
-                        value={String(mainData[item.sku]?.gst || "")}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={(e) =>
-                          setMainData((prev) => ({
-                            ...prev,
-                            [item.sku]: {
-                              ...(prev[item.sku] || {}),
-                              gst: e.target.value,
-                            },
-                          }))
-                        }
-                        style={{
-                          padding: 8,
-                          borderRadius: 6,
-                          border: "1px solid #ccc",
-                        }}
-                        disabled={!selectedItems[item.sku]}
-                      >
-                        <option value="">Select GST %</option>
-                        <option value="5">5%</option>
-                        <option value="18">18%</option>
-                      </select>
-
-                      <input
-                        placeholder="Cost Price (₹)"
-                        value={mainData[item.sku]?.cost || ""}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={(e) =>
-                          setMainData((prev) => ({
-                            ...prev,
-                            [item.sku]: {
-                              ...(prev[item.sku] || {}),
-                              cost: e.target.value,
-                            },
-                          }))
-                        }
-                        disabled={!selectedItems[item.sku]}
-                        style={{
-                          padding: 8,
-                          borderRadius: 6,
-                          border: "1px solid #ccc",
-                        }}
-                      />
-
-                      {/* Wholesale price — % or Rs */}
-                      <div onClick={(e) => e.stopPropagation()}>
-                        <div style={{ fontSize: 11, color: "#a16207", fontWeight: 600, marginBottom: 4 }}>
-                          Wholesale Price (applied per variant)
-                        </div>
-                        <div style={{ display: "flex", gap: 0, borderRadius: 6, overflow: "hidden", border: "1px solid #ca8a04" }}>
-                          {/* Mode toggle: % | ₹ */}
-                          {["percent", "rs"].map(mode => (
-                            <button
-                              key={mode}
-                              type="button"
-                              onClick={() =>
-                                setMainData(prev => ({
-                                  ...prev,
-                                  [item.sku]: { ...(prev[item.sku] || {}), wholesaleMode: mode, wholesale: "" },
-                                }))
-                              }
-                              disabled={!selectedItems[item.sku]}
-                              style={{
-                                padding: "6px 12px",
-                                border: "none",
-                                borderRight: mode === "percent" ? "1px solid #ca8a04" : "none",
-                                background: (mainData[item.sku]?.wholesaleMode || "rs") === mode ? "#ca8a04" : "#fefce8",
-                                color: (mainData[item.sku]?.wholesaleMode || "rs") === mode ? "#fff" : "#a16207",
-                                fontWeight: 700,
-                                fontSize: 12,
-                                cursor: selectedItems[item.sku] ? "pointer" : "not-allowed",
-                                opacity: selectedItems[item.sku] ? 1 : 0.5,
-                              }}
-                            >
-                              {mode === "percent" ? "%" : "₹"}
-                            </button>
-                          ))}
-                          <input
-                            placeholder={(mainData[item.sku]?.wholesaleMode || "rs") === "percent" ? "Discount % off selling price" : "Discount amount in ₹"}
-                            value={mainData[item.sku]?.wholesale || ""}
-                            onChange={(e) =>
-                              setMainData(prev => ({
-                                ...prev,
-                                [item.sku]: { ...(prev[item.sku] || {}), wholesale: e.target.value },
-                              }))
-                            }
-                            disabled={!selectedItems[item.sku]}
-                            style={{
-                              flex: 1,
-                              padding: "6px 8px",
-                              border: "none",
-                              background: selectedItems[item.sku] ? "#fefce8" : "#fafafa",
-                              fontSize: 13,
-                              outline: "none",
-                              minWidth: 0,
-                            }}
-                          />
-                        </div>
-                        <div style={{ fontSize: 11, color: "#888", marginTop: 3 }}>
-                          {(mainData[item.sku]?.wholesaleMode || "rs") === "percent"
-                            ? `Each variant's wholesale = selling price − ${mainData[item.sku]?.wholesale || 0}%`
-                            : `Each variant's wholesale = selling price − ₹${mainData[item.sku]?.wholesale || 0} discount`}
-                        </div>
-                      </div>
-
-                      {/* Margin summary for first variant (as representative) */}
-                      {(() => {
-                        const cost = Number(mainData[item.sku]?.cost || 0);
-                        const retail = Number(item.variants[0]?.sellingPrice || 0);
-                        const wholesale = calcWholesalePrice(mainData[item.sku], retail);
-                        if (cost <= 0 || retail <= 0) return null;
-                        const retailProfit = retail - cost;
-                        const retailMarkupPct = ((retailProfit / cost) * 100).toFixed(1);
-                        const wholesaleProfit = wholesale > 0 ? wholesale - cost : null;
-                        const wholesaleMarkupPct = wholesaleProfit !== null ? ((wholesaleProfit / cost) * 100).toFixed(1) : null;
-                        return (
-                          <div style={{ fontSize: 12, color: "#444", background: "#f9fafb", borderRadius: 6, padding: "6px 8px" }}>
-                            <div style={{ fontWeight: 600, fontSize: 11, color: "#666", marginBottom: 4 }}>
-                              Margin preview (first variant · ₹{retail})
-                            </div>
-                            <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-                              <div>
-                                <div style={{ fontSize: 11, color: "#888" }}>Retail</div>
-                                <div>
-                                  <strong style={{ color: retailProfit >= 0 ? "#16a34a" : "#dc2626" }}>
-                                    ₹{retailProfit.toFixed(2)}
-                                  </strong>
-                                  <span style={{ color: "#888", marginLeft: 4 }}>
-                                    ({retailMarkupPct}% on cost)
-                                  </span>
-                                </div>
-                              </div>
-                              {wholesale > 0 && wholesaleProfit !== null && (
-                                <div>
-                                  <div style={{ fontSize: 11, color: "#888" }}>Wholesale</div>
-                                  <div>
-                                    <strong style={{ color: wholesaleProfit >= 0 ? "#a16207" : "#dc2626" }}>
-                                      ₹{wholesaleProfit.toFixed(2)}
-                                    </strong>
-                                    <span style={{ color: "#888", marginLeft: 4 }}>
-                                      ({wholesaleMarkupPct}% on cost)
-                                    </span>
-                                    {wholesale > retail && (
-                                      <span style={{ color: "#dc2626", marginLeft: 6, fontWeight: 600 }}>⚠ exceeds retail</span>
-                                    )}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                            {retailProfit < 0 && (
-                              <div style={{ color: "#dc2626", marginTop: 4, fontWeight: 600 }}>⚠ Cost price exceeds selling price</div>
-                            )}
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  </div>
-
-                  {(() => {
-                    const d = mainData[item.sku];
-                    const hsnOk = d && d.hsn && d.hsn.trim() !== "";
-                    const gstOk = d && d.gst !== "" && d.gst !== undefined && d.gst !== null;
-                    const costOk = d && !isNaN(Number(d.cost)) && Number(d.cost) > 0;
-                    const fieldsReady = hsnOk && gstOk && costOk;
-                    const btnEnabled = selectedItems[item.sku] && fieldsReady;
-
-                    return (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          e.preventDefault();
-                          saveItem(item);
-                        }}
-                        disabled={!btnEnabled}
-                        title={
-                          !selectedItems[item.sku]
-                            ? "Select at least one variant"
-                            : !fieldsReady
-                            ? `Fill ${[!hsnOk && "HSN", !gstOk && "GST %", !costOk && "Cost Price"].filter(Boolean).join(", ")} first`
-                            : "Add to Item Master"
-                        }
-                        style={{
-                          marginTop: 10,
-                          padding: "10px 14px",
-                          background: btnEnabled ? "#16a34a" : "#d1d5db",
-                          color: "#fff",
-                          border: "none",
-                          borderRadius: 6,
-                          width: "100%",
-                          cursor: btnEnabled ? "pointer" : "not-allowed",
-                          fontWeight: 600,
-                          fontSize: 14,
-                          transition: "background 0.2s",
-                        }}
-                      >
-                        {btnEnabled ? "✓ Update & Add to Item Master" : "Fill HSN + GST + Cost to Enable"}
-                      </button>
-                    );
-                  })()}
-
-                  {/* Variants header */}
-                  <div style={{ fontSize: 11, fontWeight: 600, color: "#888", margin: "8px 0 4px", textTransform: "uppercase", letterSpacing: 0.5 }}>
-                    Variants ({item.variants.length})
-                  </div>
-
-                  {item.variants.map((v, index) => {
-                    const d = mainData[item.sku];
-                    const cost = Number(d?.cost || 0);
-                    const variantRetail = Number(v.sellingPrice || 0);
-                    const variantWholesale = calcWholesalePrice(d, variantRetail);
-                    const retailProfit = cost > 0 && variantRetail > 0 ? variantRetail - cost : null;
-                    const retailMarkup = retailProfit !== null && cost > 0 ? ((retailProfit / cost) * 100).toFixed(1) : null;
-                    const wholesaleProfit = variantWholesale > 0 && cost > 0 ? variantWholesale - cost : null;
-                    const wholesaleMarkup = wholesaleProfit !== null && cost > 0 ? ((wholesaleProfit / cost) * 100).toFixed(1) : null;
-                    const wholesaleExceedsRetail = variantWholesale > 0 && variantWholesale > variantRetail;
-
-                    return (
-                      <div
-                        key={index}
-                        style={{
-                          display: "flex",
-                          alignItems: "flex-start",
-                          gap: 8,
-                          padding: "8px 0",
-                          borderBottom: index < item.variants.length - 1 ? "1px solid #f0f0f0" : "none",
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedVariants[v.sku] || false}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={(e) => {
-                            const checked = e.target.checked;
-                            setSelectedVariants((prev) => ({ ...prev, [v.sku]: checked }));
-                          }}
-                          style={{ marginTop: 4 }}
-                        />
-
-                        <img
-                          src={v.image || "https://via.placeholder.com/40"}
-                          alt=""
-                          style={{ width: 40, height: 40, borderRadius: 6, objectFit: "cover", flexShrink: 0 }}
-                        />
-
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          {/* SKU badge */}
-                          <div style={{
-                            fontSize: 12, fontWeight: 700,
-                            background: "#e0eeff", color: "#0066b3",
-                            borderRadius: 4, padding: "2px 7px",
-                            display: "inline-block", marginBottom: 3,
-                          }}>
-                            {v.sku || "N/A"}
-                          </div>
-                          {/* Title */}
-                          <div style={{ fontSize: 13, fontWeight: 500, color: "#1a1a1a" }}>
-                            {v.itemName || item.title || "No Name"}
-                          </div>
-
-                          {/* Price row */}
-                          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 3, alignItems: "center" }}>
-                            {/* Selling price */}
-                            <span style={{ fontSize: 12, color: "#444" }}>
-                              Retail: <strong>₹{variantRetail}</strong>
-                            </span>
-
-                            {/* Wholesale price */}
-                            {variantWholesale > 0 && (
-                              <span style={{ fontSize: 12, color: wholesaleExceedsRetail ? "#dc2626" : "#a16207" }}>
-                                Wholesale: <strong>₹{variantWholesale.toFixed(2)}</strong>
-                                {wholesaleExceedsRetail && <span style={{ marginLeft: 4 }}>⚠ exceeds retail</span>}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Margin row */}
-                          {cost > 0 && variantRetail > 0 && (
-                            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 2, fontSize: 11 }}>
-                              {retailProfit !== null && (
-                                <span style={{ color: retailProfit >= 0 ? "#16a34a" : "#dc2626" }}>
-                                  Retail margin: ₹{retailProfit.toFixed(2)} ({retailMarkup}%)
-                                </span>
-                              )}
-                              {wholesaleProfit !== null && (
-                                <span style={{ color: wholesaleProfit >= 0 ? "#a16207" : "#dc2626" }}>
-                                  Wholesale margin: ₹{wholesaleProfit.toFixed(2)} ({wholesaleMarkup}%)
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
+              item={item}
+              tab={tab}
+              mainData={mainData}
+              selectedItems={selectedItems}
+              selectedVariants={selectedVariants}
+              setMainData={setMainData}
+              setSelectedItems={setSelectedItems}
+              setSelectedVariants={setSelectedVariants}
+              openSku={openSku}
+              setOpenSku={setOpenSku}
+              onSaved={refresh}
+              onHide={handleHide}
+              onRestore={handleRestore}
+            />
           ))
         )}
       </div>

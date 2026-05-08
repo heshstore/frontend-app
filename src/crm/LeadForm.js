@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import PageLayout from '../components/layout/PageLayout';
 import { apiFetch } from '../utils/api';
 import { theme } from '../theme';
+import { toast } from '../utils/toast';
 
 const SOURCES = ['DIRECT', 'INDIAMART', 'META', 'GOOGLE', 'SHOPIFY', 'WHATSAPP'];
 const SOURCE_LABELS = {
@@ -92,7 +93,7 @@ export default function LeadForm() {
       }
       const lead = data?.lead ?? data;
       if (data?.warning === 'duplicate_phone') {
-        alert(`Lead created. Note: Another lead with phone ${phone} already exists — please check before contacting.`);
+        toast.warn(`Lead created. Note: Another lead with phone ${phone} already exists — please check before contacting.`);
       }
       navigate(`/crm/leads/${lead.id}`);
     } catch {

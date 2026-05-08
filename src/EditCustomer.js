@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { theme } from "./theme";
 import PageLayout from "./components/layout/PageLayout";
 import { apiFetch } from "./utils/api";
+import { toast } from "./utils/toast";
 
 export default function EditCustomer() {
   const { id } = useParams();
@@ -89,16 +90,16 @@ export default function EditCustomer() {
 
       if (!res.ok) {
         console.error(data);
-        alert("Update failed ❌");
+        toast.error("Update failed");
         return;
       }
 
-      alert("Customer Updated ✅");
+      toast.success("Customer updated successfully");
       navigate("/customers");
 
     } catch (err) {
       console.error(err);
-      alert("Server error ❌");
+      toast.error("Server error — please try again");
     }
   };
 

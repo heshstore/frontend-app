@@ -3,6 +3,7 @@ import { apiFetch, getToken } from '../../utils/api';
 import { API_URL } from '../../config';
 import { theme } from '../../theme';
 import PageLayout from '../../components/layout/PageLayout';
+import { useConfirm } from '../../components/ui/ConfirmModal';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -91,6 +92,7 @@ function Row({ label, value, valueColor }) {
 // ── Main component ───────────────────────────────────────────────────────────
 
 export default function WhatsAppMonitor() {
+  const [confirm, confirmModal] = useConfirm();
   const [status, setStatus]     = useState(null);
   const [qrData, setQrData]     = useState(null);
   const [log, setLog]           = useState([]);
@@ -193,7 +195,11 @@ export default function WhatsAppMonitor() {
   // ── Restart handler ───────────────────────────────────────────────────────
 
   const handleRestart = async () => {
-    if (!window.confirm('Restart the WhatsApp client?\n\nThis will NOT clear the auth session. The existing phone number will reconnect automatically if the session files are intact.')) return;
+    if (!await confirm(
+      'Restart WhatsApp client?',
+      'This will NOT clear the auth session. The existing phone number will reconnect automatically if the session files are intact.',
+      { confirmLabel: 'Restart' }
+    )) return;
     setRestarting(true);
     try {
       await apiFetch('/whatsapp/admin/restart', { method: 'POST' });
@@ -208,6 +214,8 @@ export default function WhatsAppMonitor() {
   const isConnected = status?.connected;
 
   return (
+    <>
+    {confirmModal}
     <PageLayout title="WhatsApp Monitor">
       <style>{`
         @keyframes dotPulse {
@@ -348,5 +356,6 @@ export default function WhatsAppMonitor() {
 
       </div>
     </PageLayout>
+    </>
   );
 }

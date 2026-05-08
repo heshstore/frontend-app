@@ -4,6 +4,8 @@ import { theme } from "./theme";
 import PageLayout from "./components/layout/PageLayout";
 import { formatCustomer } from "./utils/formatCustomer";
 import { apiFetch } from "./utils/api";
+import { toast } from "./utils/toast";
+import { useConfirm } from "./components/ui/ConfirmModal";
 
 export default function CustomerList() {
   const [customers, setCustomers] = useState([]);
@@ -13,6 +15,7 @@ export default function CustomerList() {
 
   const navigate = useNavigate();
   const perPage = 50;
+  const [confirm, confirmModal] = useConfirm();
 
   // Modified: fetch with search if search present, using /customers/search?q=
   const loadCustomers = async (searchValue = "") => {
@@ -43,15 +46,15 @@ export default function CustomerList() {
   }, [search]);
 
   const deleteCustomer = async (id) => {
-    if (!window.confirm("Delete this customer?")) return;
+    if (!await confirm("Delete this customer?", "This cannot be undone.", { danger: true, confirmLabel: "Delete" })) return;
 
     try {
       await apiFetch(`/customers/${id}`, { method: "DELETE" });
 
-      alert("Deleted successfully");
+      toast.success("Customer deleted");
       loadCustomers();
     } catch (err) {
-      alert("Delete failed");
+      toast.error("Delete failed");
     }
   };
 
@@ -69,6 +72,8 @@ export default function CustomerList() {
   };
 
   return (
+    <>
+    {confirmModal}
     <PageLayout
       title="Customer Master"
       subtitle={`${customers.length} Customers`}
@@ -272,5 +277,6 @@ export default function CustomerList() {
         </div>
       </div>
     </PageLayout>
+    </>
   );
 }

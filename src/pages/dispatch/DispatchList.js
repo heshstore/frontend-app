@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../utils/api';
+import { toast } from '../../utils/toast';
+import { useConfirm } from '../../components/ui/ConfirmModal';
 
 const STATUS_STYLE = {
   PENDING:    { bg: '#f1f5f9', color: '#475569', label: 'Pending'    },
@@ -39,6 +41,7 @@ export default function DispatchList() {
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState(null);
   const [marking, setMarking]       = useState(null); // dispatch id being marked
+  const [confirm, confirmModal]     = useConfirm();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -58,7 +61,7 @@ export default function DispatchList() {
   useEffect(() => { load(); }, [load]);
 
   const handleMarkDelivered = async (dispatch) => {
-    if (!window.confirm(`Mark dispatch #${dispatch.id} as delivered?`)) return;
+    if (!await confirm(`Mark dispatch #${dispatch.id} as delivered?`, '', { confirmLabel: 'Mark Delivered' })) return;
     setMarking(dispatch.id);
     try {
       const res = await apiFetch('/dispatch/mark-delivered', {
@@ -67,13 +70,13 @@ export default function DispatchList() {
       });
       const d = await res.json();
       if (!res.ok) {
-        alert(d?.message || 'Could not mark as delivered.');
+        toast.error(d?.message || 'Could not mark as delivered.');
       } else {
-        if (d?.warning) alert(`⚠ ${d.warning}`);
+        if (d?.warning) toast.warn(d.warning);
         load();
       }
     } catch {
-      alert('Network error. Please try again.');
+      toast.error('Network error. Please try again.');
     } finally {
       setMarking(null);
     }
@@ -83,6 +86,8 @@ export default function DispatchList() {
   const delivered = dispatches.filter(d => d.dispatch_status === 'DELIVERED');
 
   return (
+    <>
+    {confirmModal}
     <div style={{ maxWidth: 680, margin: '0 auto', padding: '16px 12px' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
@@ -143,6 +148,7 @@ export default function DispatchList() {
         </div>
       )}
     </div>
+    </>
   );
 }
 

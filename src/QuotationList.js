@@ -1,23 +1,57 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from './utils/api';
+import { API_URL } from './config';
 import { theme, buttonStyle } from './theme';
 import DocActions from './components/DocActions';
+import { toast } from './utils/toast';
+import { useConfirm } from './components/ui/ConfirmModal';
+
+// Statuses that allow editing, cancelling, converting
+const EDITABLE_STATUSES  = ['DRAFT', 'SENT', 'APPROVED'];
+const CONVERTIBLE_STATUSES = ['DRAFT', 'SENT', 'APPROVED'];
 
 const STATUS_COLORS = {
-  OPEN: '#198754',
-  CONVERTED: '#0066B3',
+  DRAFT:     '#6c757d',
+  SENT:      '#0d6efd',
+  APPROVED:  '#198754',
+  REJECTED:  '#dc3545',
   CANCELLED: '#dc3545',
-  EXPIRED: '#6c757d',
+  CONVERTED: '#0066B3',
 };
+
+const STATUS_LABELS = {
+  DRAFT:     'Draft',
+  SENT:      'Sent',
+  APPROVED:  'Approved',
+  REJECTED:  'Rejected',
+  CANCELLED: 'Cancelled',
+  CONVERTED: 'Converted',
+};
+
+const btn = (extra = {}) => ({
+  ...buttonStyle,
+  padding: '6px 13px',
+  fontSize: 12,
+  fontWeight: 600,
+  borderRadius: 5,
+  height: 32,
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 4,
+  cursor: 'pointer',
+  border: 'none',
+  ...extra,
+});
 
 export default function QuotationList() {
   const navigate = useNavigate();
   const [quotations, setQuotations] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [search, setSearch] = useState('');
+  const [loading, setLoading]       = useState(false);
+  const [search, setSearch]         = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [expanded, setExpanded] = useState(null);
+  const [expanded, setExpanded]     = useState(null);
+  const [confirm, confirmModal]     = useConfirm();
 
   const loadQuotations = useCallback(async () => {
     setLoading(true);
@@ -36,9 +70,7 @@ export default function QuotationList() {
     }
   }, [statusFilter]);
 
-  useEffect(() => {
-    loadQuotations();
-  }, [loadQuotations]);
+  useEffect(() => { loadQuotations(); }, [loadQuotations]);
 
   const filtered = quotations.filter((q) => {
     const text = search.toLowerCase();
@@ -50,186 +82,242 @@ export default function QuotationList() {
   });
 
   const handleCancel = async (id) => {
-    if (!window.confirm('Cancel this quotation?')) return;
+    if (!await confirm('Cancel this quotation?', 'This cannot be undone. The quotation will remain in history as Cancelled.', { danger: true, confirmLabel: 'Yes, Cancel' })) return;
     try {
       const res = await apiFetch(`/quotations/${id}/cancel`, { method: 'PATCH' });
       if (res.ok) {
-        alert('Quotation cancelled');
+        toast.success('Quotation cancelled');
         loadQuotations();
       } else {
-        alert('Cancel failed');
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.message || 'Cancel failed');
       }
-    } catch {
-      alert('Cancel failed');
-    }
+    } catch { toast.error('Cancel failed'); }
   };
 
   const handleConvert = async (id) => {
-    if (!window.confirm('Convert this quotation to an order?')) return;
+    if (!await confirm('Convert to Order?', 'A new order will be created from this quotation. The quotation status will change to Converted.', { confirmLabel: 'Convert to Order' })) return;
     try {
-      const res = await apiFetch(`/quotations/${id}/convert-to-order`, { method: 'POST' });
+      const res  = await apiFetch(`/quotations/${id}/convert-to-order`, { method: 'POST' });
       const data = await res.json();
       if (res.ok) {
-        const orderNo = data.order_id ? `#ORD-${String(data.order_id).padStart(5, '0')}` : '';
-        alert(`Order ${orderNo} created successfully!`);
+        const orderNo = data.order_id ? `ORD-${String(data.order_id).padStart(5, '0')}` : '';
+        toast.success(`Order ${orderNo} created successfully`);
         loadQuotations();
         navigate('/orders');
       } else {
-        alert(data?.message || 'Conversion failed');
+        toast.error(data?.message || 'Conversion failed');
       }
-    } catch {
-      alert('Conversion failed');
-    }
+    } catch { toast.error('Conversion failed'); }
   };
 
   return (
-    <div style={{ fontFamily: theme.fontFamily, background: theme.background, minHeight: '100vh', padding: '0 0 40px' }}>
-      {/* Header */}
-      <div style={{ background: theme.primary, color: '#fff', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, position: 'sticky', top: 0, zIndex: 100 }}>
-        <button onClick={() => navigate(-1)} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.5)', color: '#fff', borderRadius: 4, padding: '4px 10px', cursor: 'pointer' }}>
-          ← Back
-        </button>
-        <h2 style={{ margin: 0, flex: 1, fontSize: 18 }}>Quotations</h2>
-        <button onClick={() => navigate('/quotation')} style={{ ...buttonStyle, background: '#fff', color: theme.primary, fontWeight: 600 }}>
-          + New
-        </button>
-      </div>
+    <>
+      {confirmModal}
+      <div style={{ fontFamily: theme.fontFamily, background: theme.background, minHeight: '100vh', padding: '0 0 40px' }}>
 
-      <div style={{ maxWidth: 960, margin: '0 auto', padding: 16 }}>
-        {/* Search + Filter */}
-        <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-          <input
-            placeholder="Search by No. / Customer"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ flex: 1, minWidth: 200, padding: '8px 12px', border: `1px solid ${theme.border}`, borderRadius: 4, fontSize: 14 }}
-          />
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            style={{ padding: '8px 12px', border: `1px solid ${theme.border}`, borderRadius: 4, fontSize: 14 }}
-          >
-            <option value="">All Statuses</option>
-            <option value="OPEN">Open</option>
-            <option value="CONVERTED">Converted</option>
-            <option value="CANCELLED">Cancelled</option>
-            <option value="EXPIRED">Expired</option>
-          </select>
+        {/* Header */}
+        <div style={{
+          background: theme.primary, color: '#fff', padding: '12px 16px',
+          display: 'flex', alignItems: 'center', gap: 12, position: 'sticky', top: 0, zIndex: 100,
+        }}>
+          <button onClick={() => navigate(-1)} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.5)', color: '#fff', borderRadius: 4, padding: '4px 10px', cursor: 'pointer' }}>
+            ← Back
+          </button>
+          <h2 style={{ margin: 0, flex: 1, fontSize: 18 }}>Quotations</h2>
+          <button onClick={() => navigate('/quotation')} style={{ ...buttonStyle, background: '#fff', color: theme.primary, fontWeight: 600 }}>
+            + New
+          </button>
         </div>
 
-        {loading && <div style={{ padding: 24, textAlign: 'center', color: theme.textMuted }}>Loading...</div>}
+        <div style={{ maxWidth: 960, margin: '0 auto', padding: 16 }}>
 
-        {!loading && filtered.length === 0 && (
-          <div style={{ padding: 24, textAlign: 'center', color: theme.textMuted }}>
-            No quotations found.{' '}
-            <button onClick={() => navigate('/quotation')} style={{ ...buttonStyle, padding: '6px 14px' }}>
-              Create one
-            </button>
-          </div>
-        )}
-
-        {!loading && filtered.map((q) => (
-          <div
-            key={q.id}
-            style={{
-              border: `1px solid ${theme.border}`,
-              borderRadius: 8,
-              marginBottom: 12,
-              background: '#fff',
-              overflow: 'hidden',
-            }}
-          >
-            {/* Card header */}
-            <div
-              onClick={() => setExpanded(expanded === q.id ? null : q.id)}
-              style={{ padding: '12px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}
+          {/* Search + Filter */}
+          <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+            <input
+              placeholder="Search by No. / Customer"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{ flex: 1, minWidth: 200, padding: '8px 12px', border: `1px solid ${theme.border}`, borderRadius: 4, fontSize: 14 }}
+            />
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              style={{ padding: '8px 12px', border: `1px solid ${theme.border}`, borderRadius: 4, fontSize: 14 }}
             >
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600, fontSize: 15 }}>
-                  {q.quotation_no || `QUO-${q.id}`}
-                  <span
-                    style={{
-                      marginLeft: 8,
-                      fontSize: 11,
-                      background: STATUS_COLORS[q.status] || '#6c757d',
-                      color: '#fff',
-                      borderRadius: 4,
-                      padding: '2px 8px',
-                    }}
-                  >
-                    {q.status}
-                  </span>
-                </div>
-                <div style={{ fontSize: 13, color: theme.textMuted, marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                  <span>{q.customer_name || '—'} · ₹{Number(q.total_amount || 0).toLocaleString('en-IN')}</span>
-                  {q.is_wholesaler !== undefined && (
-                    <span style={{
-                      fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 10,
-                      background: q.is_wholesaler ? '#fef9c3' : '#dbeafe',
-                      color: q.is_wholesaler ? '#a16207' : '#1e40af',
-                    }}>
-                      {q.is_wholesaler ? 'WHOLESALER' : 'RETAILER'}
-                    </span>
-                  )}
-                </div>
-                <div style={{ fontSize: 12, color: theme.textMuted }}>
-                  {q.created_at ? new Date(q.created_at).toLocaleDateString('en-IN') : ''}
-                  {q.valid_till ? ` · Valid till ${new Date(q.valid_till).toLocaleDateString('en-IN')}` : ''}
-                </div>
-              </div>
-              <span style={{ fontSize: 18, color: theme.textMuted }}>{expanded === q.id ? '▲' : '▼'}</span>
-            </div>
+              <option value="">All Statuses</option>
+              <option value="DRAFT">Draft</option>
+              <option value="SENT">Sent</option>
+              <option value="APPROVED">Approved</option>
+              <option value="CONVERTED">Converted</option>
+              <option value="CANCELLED">Cancelled</option>
+            </select>
+          </div>
 
-            {/* Expanded details */}
-            {expanded === q.id && (
-              <div style={{ borderTop: `1px solid ${theme.border}`, padding: '12px 16px' }}>
-                {/* Items */}
-                {q.items && q.items.length > 0 && (
-                  <div style={{ marginBottom: 12 }}>
-                    <div style={{ fontWeight: 600, marginBottom: 6, fontSize: 13 }}>Items</div>
-                    {q.items.map((item, i) => (
-                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '3px 0', borderBottom: `1px solid ${theme.border}` }}>
-                        <span>{item.item_name || item.sku || `Item ${i + 1}`}</span>
-                        <span>× {item.qty} @ ₹{Number(item.rate || 0).toLocaleString('en-IN')} = ₹{Number(item.amount || 0).toLocaleString('en-IN')}</span>
+          {loading && <div style={{ padding: 24, textAlign: 'center', color: theme.textMuted }}>Loading...</div>}
+
+          {!loading && filtered.length === 0 && (
+            <div style={{ padding: 24, textAlign: 'center', color: theme.textMuted }}>
+              No quotations found.{' '}
+              <button onClick={() => navigate('/quotation')} style={{ ...buttonStyle, padding: '6px 14px' }}>Create one</button>
+            </div>
+          )}
+
+          {!loading && filtered.map((q) => {
+            const isEditable    = EDITABLE_STATUSES.includes(q.status);
+            const isConvertible = CONVERTIBLE_STATUSES.includes(q.status);
+            const isCancellable = isEditable;
+            const isReadOnly    = !isEditable;
+
+            return (
+              <div
+                key={q.id}
+                style={{
+                  border: `1px solid ${theme.border}`,
+                  borderLeft: `4px solid ${STATUS_COLORS[q.status] || '#6c757d'}`,
+                  borderRadius: 8,
+                  marginBottom: 12,
+                  background: '#fff',
+                  overflow: 'hidden',
+                }}
+              >
+                {/* Card header — click to expand */}
+                <div
+                  onClick={() => setExpanded(expanded === q.id ? null : q.id)}
+                  style={{ padding: '12px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}
+                >
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: 15, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      {q.quotation_no || `QUO-${q.id}`}
+                      <span style={{
+                        fontSize: 11,
+                        background: STATUS_COLORS[q.status] || '#6c757d',
+                        color: '#fff',
+                        borderRadius: 4,
+                        padding: '2px 8px',
+                      }}>
+                        {STATUS_LABELS[q.status] || q.status}
+                      </span>
+                      {q.is_wholesaler !== undefined && (
+                        <span style={{
+                          fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 10,
+                          background: q.is_wholesaler ? '#fef9c3' : '#dbeafe',
+                          color: q.is_wholesaler ? '#a16207' : '#1e40af',
+                        }}>
+                          {q.is_wholesaler ? 'WHOLESALER' : 'RETAILER'}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 13, color: theme.textMuted, marginTop: 3 }}>
+                      {q.customer_name || '—'} · ₹{Number(q.total_amount || 0).toLocaleString('en-IN')}
+                    </div>
+                    <div style={{ fontSize: 12, color: theme.textMuted }}>
+                      {q.created_at ? new Date(q.created_at).toLocaleDateString('en-IN') : ''}
+                      {q.valid_till ? ` · Valid till ${new Date(q.valid_till).toLocaleDateString('en-IN')}` : ''}
+                      {q.status === 'CONVERTED' && q.order_id
+                        ? <span style={{ marginLeft: 8, color: '#0066B3', fontWeight: 600 }}>→ Order #{q.order_id}</span>
+                        : null}
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 18, color: theme.textMuted }}>{expanded === q.id ? '▲' : '▼'}</span>
+                </div>
+
+                {/* Expanded */}
+                {expanded === q.id && (
+                  <div style={{ borderTop: `1px solid ${theme.border}`, padding: '12px 16px' }}>
+
+                    {/* Items */}
+                    {q.items && q.items.length > 0 && (
+                      <div style={{ marginBottom: 14 }}>
+                        <div style={{ fontWeight: 600, marginBottom: 6, fontSize: 13, color: '#374151' }}>Items</div>
+                        {q.items.map((item, i) => (
+                          <div key={i} style={{
+                            display: 'flex', justifyContent: 'space-between', fontSize: 13,
+                            padding: '4px 0', borderBottom: `1px solid #f3f4f6`,
+                          }}>
+                            <span style={{ color: '#111' }}>{item.item_name || item.sku || `Item ${i + 1}`}</span>
+                            <span style={{ color: '#6b7280' }}>
+                              ×{item.qty} @ ₹{Number(item.rate || 0).toLocaleString('en-IN')} = <strong>₹{Number(item.amount || 0).toLocaleString('en-IN')}</strong>
+                            </span>
+                          </div>
+                        ))}
+                        <div style={{ textAlign: 'right', fontSize: 13, fontWeight: 700, marginTop: 6 }}>
+                          Total: ₹{Number(q.total_amount || 0).toLocaleString('en-IN')}
+                        </div>
                       </div>
-                    ))}
+                    )}
+
+                    {/* ── Action row ────────────────────────────────────── */}
+                    <div style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      flexWrap: 'wrap', gap: 8, paddingTop: 8, borderTop: `1px solid #f3f4f6`,
+                    }}>
+
+                      {/* LEFT: View · Edit · Cancel */}
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        <button
+                          onClick={() => navigate(`/quotations/${q.id}/view`)}
+                          style={btn({ background: '#f8fafc', color: '#374151', border: '1px solid #e2e8f0' })}
+                        >
+                          👁 View
+                        </button>
+
+                        {isEditable && (
+                          <button
+                            onClick={() => navigate(`/quotation?id=${q.id}`)}
+                            style={btn({ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' })}
+                          >
+                            ✏ Edit
+                          </button>
+                        )}
+
+                        {isCancellable && (
+                          <button
+                            onClick={() => handleCancel(q.id)}
+                            style={btn({ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' })}
+                          >
+                            ✕ Cancel
+                          </button>
+                        )}
+
+                        {isReadOnly && (
+                          <span style={{ fontSize: 12, color: theme.textMuted, alignSelf: 'center', padding: '0 4px' }}>
+                            {q.status === 'CANCELLED' ? 'Cancelled — read only' : 'Converted — read only'}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* RIGHT: Print · PDF · Email · WhatsApp · Convert */}
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                        <DocActions
+                          type="quotation"
+                          id={q.id}
+                          docNo={q.quotation_no}
+                          amount={q.total_amount}
+                          customerMobile={q.customer_phone}
+                          customerName={q.customer_name}
+                          customerEmail={q.customer_email}
+                          publicPdfUrl={q.quotation_no ? `${API_URL}/quotations/public/${encodeURIComponent(q.quotation_no)}/pdf` : ''}
+                        />
+
+                        {isConvertible && (
+                          <button
+                            onClick={() => handleConvert(q.id)}
+                            style={btn({ background: '#0066B3', color: '#fff' })}
+                          >
+                            🔄 Convert to Order
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
                   </div>
                 )}
-
-                {/* Actions */}
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-                  {q.status === 'OPEN' && (
-                    <>
-                      <button onClick={() => navigate(`/quotation?id=${q.id}`)} style={{ ...buttonStyle, padding: '6px 14px' }}>
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleConvert(q.id)}
-                        style={{ ...buttonStyle, background: theme.success || '#198754', padding: '6px 14px' }}
-                      >
-                        Convert to Order
-                      </button>
-                      <button
-                        onClick={() => handleCancel(q.id)}
-                        style={{ ...buttonStyle, background: '#dc3545', padding: '6px 14px' }}
-                      >
-                        Cancel
-                      </button>
-                    </>
-                  )}
-                  <DocActions
-                    type="quotation"
-                    id={q.id}
-                    docNo={q.quotation_no}
-                    amount={q.total_amount}
-                    customerMobile={q.mobile}
-                  />
-                </div>
               </div>
-            )}
-          </div>
-        ))}
+            );
+          })}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
