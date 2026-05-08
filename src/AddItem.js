@@ -1,234 +1,130 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { theme } from "./theme";
+import PageLayout from "./components/layout/PageLayout";
+import {
+  FormSection, FormCard, FormGrid, FormField, FormActions,
+  inputStyle, selectStyle,
+} from "./components/ui/FormComponents";
 import { apiFetch } from "./utils/api";
 import { toast } from "./utils/toast";
+
+const GST_OPTIONS  = [{ value: '', label: 'Select GST %' }, { value: '0', label: '0%' }, { value: '5', label: '5%' }, { value: '12', label: '12%' }, { value: '18', label: '18%' }, { value: '28', label: '28%' }];
+const UNIT_OPTIONS = ['pcs', 'box', 'doz', 'pair', 'set', 'kg', 'ltr'];
 
 export default function AddItem() {
   const navigate = useNavigate();
 
   const [form, setForm] = useState({
-    sku: "",
-    itemName: "",
-    hsnCode: "",
-    gst: "",
-    costPrice: "",
-    sellingPrice: "",
-    unit: "pcs"
+    sku:          '',
+    itemName:     '',
+    hsnCode:      '',
+    gst:          '',
+    costPrice:    '',
+    sellingPrice: '',
+    unit:         'pcs',
   });
-
   const [loading, setLoading] = useState(false);
 
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
-
-  const validate = () => {
-    if (!form.sku) {
-      toast.error("SKU required");
-      return false;
-    }
-    if (!form.itemName) {
-      toast.error("Item Name required");
-      return false;
-    }
-    if (!form.sellingPrice) {
-      toast.error("Selling Price required");
-      return false;
-    }
-    return true;
-  };
+  const handleChange = (e) => setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!form.sku)          { toast.error('SKU is required');           return; }
+    if (!form.itemName)     { toast.error('Item name is required');     return; }
+    if (!form.sellingPrice) { toast.error('Selling price is required'); return; }
 
-    if (!validate()) return;
-
+    setLoading(true);
     try {
-      setLoading(true);
-
-      const payload = {
-        ...form,
-        gst: Number(form.gst || 0),
-        costPrice: Number(form.costPrice || 0),
-        sellingPrice: Number(form.sellingPrice || 0),
-      };
-
-      console.log("SENDING 👉", payload);
-
-      const res = await apiFetch(`/service-items`, {
-        method: "POST",
-        body: JSON.stringify(payload)
+      const res = await apiFetch('/service-items', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...form,
+          gst:          Number(form.gst         || 0),
+          costPrice:    Number(form.costPrice    || 0),
+          sellingPrice: Number(form.sellingPrice || 0),
+        }),
       });
-
-      // ✅ HANDLE RESPONSE PROPERLY
-      if (!res.ok) {
-        throw new Error("Failed to save item");
-      }
-
-      const data = await res.json();
-      console.log("RESPONSE 👉", data);
-
-      toast.success("Item added successfully");
-
-      // ✅ RESET FORM (IMPORTANT UX FIX)
-      setForm({
-        sku: "",
-        itemName: "",
-        hsnCode: "",
-        gst: "",
-        costPrice: "",
-        sellingPrice: "",
-        unit: "pcs"
-      });
-
-      navigate("/items");
-
-    } catch (err) {
-      console.error("ERROR ❌", err);
-      toast.error("Error saving item");
+      if (!res.ok) throw new Error();
+      toast.success('Item added');
+      navigate('/items');
+    } catch {
+      toast.error('Error saving item');
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <div style={{ background: theme.background, minHeight: "100vh" }}>
+  const rupeeInput = (name) => ({
+    ...inputStyle,
+    paddingLeft: 28,
+  });
 
-      {/* HEADER */}
-      <div style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        position: "relative",
-        padding: 15,
-        background: theme.card
-      }}>
-        <button
-          onClick={() => navigate(-1)}
-          style={{
-            position: "absolute",
-            left: 15,
-            background: theme.primary,
-            color: "#fff",
-            borderRadius: "50%",
-            width: 36,
-            height: 36,
-            border: "none"
-          }}
-        >
-          ←
-        </button>
-
-        <h3>Add Item</h3>
+  const RupeeField = ({ name, label, required, help }) => (
+    <FormField label={label} required={required} help={help}>
+      <div style={{ position: 'relative' }}>
+        <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af', fontSize: 13, pointerEvents: 'none' }}>₹</span>
+        <input name={name} type="number" min="0" step="0.01" value={form[name]} onChange={handleChange} style={rupeeInput(name)} />
       </div>
+    </FormField>
+  );
 
-      {/* FORM */}
-      <form
-        onSubmit={handleSubmit}
-        style={{
-          maxWidth: 500,
-          margin: "20px auto",
-          background: theme.card,
-          padding: 20,
-          borderRadius: 12
-        }}
-      >
+  return (
+    <PageLayout title="Add item">
+      <form onSubmit={handleSubmit} style={{ maxWidth: 560 }}>
 
-        {[
-          ["SKU", "sku"],
-          ["Item Name", "itemName"],
-        ].map(([label, name]) => (
-          <div key={name} style={{ marginBottom: 15 }}>
-            <label>{label}</label>
-            <input
-              name={name}
-              value={form[name]}
-              onChange={handleChange}
-              required={name === "sku"}
-              style={{ width: "100%", padding: 10, borderRadius: 6 }}
-            />
-          </div>
-        ))}
+        {/* ── Identification ─────────────────────────────────── */}
+        <FormSection title="Identification">
+          <FormCard>
+            <FormGrid cols={2} minColWidth={180}>
+              <FormField label="SKU" required help="Unique product code">
+                <input name="sku" value={form.sku} onChange={handleChange} placeholder="e.g. SP-1.00-CYL" style={inputStyle} />
+              </FormField>
+              <FormField label="Item name" required colSpan={2}>
+                <input name="itemName" value={form.itemName} onChange={handleChange} placeholder="Full product name" style={inputStyle} />
+              </FormField>
+            </FormGrid>
+          </FormCard>
+        </FormSection>
 
-        {/* HSN Code — max 8 digits */}
-        <div style={{ marginBottom: 15 }}>
-          <label>HSN Code</label>
-          <input
-            name="hsnCode"
-            value={form.hsnCode}
-            onChange={(e) => {
-              const val = e.target.value.replace(/\D/g, "").slice(0, 8);
-              setForm((prev) => ({ ...prev, hsnCode: val }));
-            }}
-            maxLength={8}
-            placeholder="Up to 8 digits"
-            style={{ width: "100%", padding: 10, borderRadius: 6 }}
-          />
-        </div>
+        {/* ── Classification ─────────────────────────────────── */}
+        <FormSection title="Classification">
+          <FormCard>
+            <FormGrid cols={2} minColWidth={180}>
+              <FormField label="HSN code" help="Up to 8 digits">
+                <input
+                  name="hsnCode"
+                  value={form.hsnCode}
+                  onChange={(e) => setForm(prev => ({ ...prev, hsnCode: e.target.value.replace(/\D/g, '').slice(0, 8) }))}
+                  placeholder="e.g. 90013000"
+                  style={inputStyle}
+                />
+              </FormField>
+              <FormField label="GST rate">
+                <select name="gst" value={form.gst} onChange={handleChange} style={selectStyle}>
+                  {GST_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </FormField>
+              <FormField label="Unit">
+                <select name="unit" value={form.unit} onChange={handleChange} style={selectStyle}>
+                  {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
+                </select>
+              </FormField>
+            </FormGrid>
+          </FormCard>
+        </FormSection>
 
-        {/* GST % — dropdown */}
-        <div style={{ marginBottom: 15 }}>
-          <label>Gst Tax</label>
-          <select
-            name="gst"
-            value={form.gst}
-            onChange={handleChange}
-            style={{ width: "100%", padding: 10, borderRadius: 6 }}
-          >
-            <option value="">Select GST %</option>
-            <option value="5">5%</option>
-            <option value="18">18%</option>
-          </select>
-        </div>
+        {/* ── Pricing ────────────────────────────────────────── */}
+        <FormSection title="Pricing">
+          <FormCard>
+            <FormGrid cols={2} minColWidth={180}>
+              <RupeeField name="costPrice"    label="Cost price"    help="Your purchase price" />
+              <RupeeField name="sellingPrice" label="Selling price" required help="Retail / default price" />
+            </FormGrid>
+          </FormCard>
+        </FormSection>
 
-        {[
-          ["Cost Price", "costPrice"],
-          ["Selling Price", "sellingPrice"],
-        ].map(([label, name]) => (
-          <div key={name} style={{ marginBottom: 15 }}>
-            <label>{label}</label>
-            <input
-              name={name}
-              value={form[name]}
-              onChange={handleChange}
-              style={{ width: "100%", padding: 10, borderRadius: 6 }}
-            />
-          </div>
-        ))}
-
-        {/* UNIT */}
-        <div style={{ marginBottom: 15 }}>
-          <label>Unit</label>
-          <select
-            name="unit"
-            value={form.unit}
-            onChange={handleChange}
-            style={{ width: "100%", padding: 10 }}
-          >
-            <option value="pcs">Pcs</option>
-            <option value="box">Box</option>
-            <option value="pack">Doz</option>
-            <option value="pack">Pair</option>
-          </select>
-        </div>
-
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            width: "100%",
-            padding: 12,
-            background: loading ? "#aaa" : theme.primary,
-            color: "#fff",
-            border: "none",
-            borderRadius: 8,
-            cursor: "pointer"
-          }}
-        >
-          {loading ? "Saving..." : "Save Item"}
-        </button>
+        <FormActions saveLabel="Save item" loading={loading} />
       </form>
-    </div>
+    </PageLayout>
   );
 }

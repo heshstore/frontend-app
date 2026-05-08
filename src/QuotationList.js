@@ -4,29 +4,20 @@ import { apiFetch } from './utils/api';
 import { API_URL } from './config';
 import { theme, buttonStyle } from './theme';
 import DocActions from './components/DocActions';
+import StatusBadge, { PricingBadge } from './components/ui/StatusBadge';
 import { toast } from './utils/toast';
 import { useConfirm } from './components/ui/ConfirmModal';
 
-// Statuses that allow editing, cancelling, converting
-const EDITABLE_STATUSES  = ['DRAFT', 'SENT', 'APPROVED'];
+const EDITABLE_STATUSES    = ['DRAFT', 'SENT', 'APPROVED'];
 const CONVERTIBLE_STATUSES = ['DRAFT', 'SENT', 'APPROVED'];
 
-const STATUS_COLORS = {
+const STATUS_BORDER = {
   DRAFT:     '#6c757d',
   SENT:      '#0d6efd',
   APPROVED:  '#198754',
   REJECTED:  '#dc3545',
   CANCELLED: '#dc3545',
   CONVERTED: '#0066B3',
-};
-
-const STATUS_LABELS = {
-  DRAFT:     'Draft',
-  SENT:      'Sent',
-  APPROVED:  'Approved',
-  REJECTED:  'Rejected',
-  CANCELLED: 'Cancelled',
-  CONVERTED: 'Converted',
 };
 
 const btn = (extra = {}) => ({
@@ -168,7 +159,7 @@ export default function QuotationList() {
                 key={q.id}
                 style={{
                   border: `1px solid ${theme.border}`,
-                  borderLeft: `4px solid ${STATUS_COLORS[q.status] || '#6c757d'}`,
+                  borderLeft: `4px solid ${STATUS_BORDER[q.status] || '#6c757d'}`,
                   borderRadius: 8,
                   marginBottom: 12,
                   background: '#fff',
@@ -183,24 +174,8 @@ export default function QuotationList() {
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 600, fontSize: 15, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                       {q.quotation_no || `QUO-${q.id}`}
-                      <span style={{
-                        fontSize: 11,
-                        background: STATUS_COLORS[q.status] || '#6c757d',
-                        color: '#fff',
-                        borderRadius: 4,
-                        padding: '2px 8px',
-                      }}>
-                        {STATUS_LABELS[q.status] || q.status}
-                      </span>
-                      {q.is_wholesaler !== undefined && (
-                        <span style={{
-                          fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 10,
-                          background: q.is_wholesaler ? '#fef9c3' : '#dbeafe',
-                          color: q.is_wholesaler ? '#a16207' : '#1e40af',
-                        }}>
-                          {q.is_wholesaler ? 'WHOLESALER' : 'RETAILER'}
-                        </span>
-                      )}
+                      <StatusBadge status={q.status} />
+                      {q.is_wholesaler !== undefined && <PricingBadge isWholesaler={q.is_wholesaler} />}
                     </div>
                     <div style={{ fontSize: 13, color: theme.textMuted, marginTop: 3 }}>
                       {q.customer_name || '—'} · ₹{Number(q.total_amount || 0).toLocaleString('en-IN')}

@@ -1,6 +1,4 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
-import { theme } from "./theme";
 import { apiFetch } from "./utils/api";
 import { toast } from "./utils/toast";
 
@@ -332,7 +330,7 @@ function ProductCard({ item, tab, mainData, selectedItems, selectedVariants,
         setOpenSku(isOpen ? null : item.sku);
       }}
       style={{
-        padding: 12, borderRadius: 12, background: theme.card, marginBottom: 12,
+        padding: 12, borderRadius: 12, background: '#fff', marginBottom: 12,
         cursor: "pointer", transition: "all 0.2s",
         boxShadow: isOpen ? "0 4px 12px rgba(0,0,0,0.12)" : "0 1px 4px rgba(0,0,0,0.05)",
         borderLeft: tab === "ready" ? "4px solid #22c55e" : tab === "hidden" ? "4px solid #9ca3af" : "4px solid #ef4444",
@@ -503,7 +501,6 @@ function ProductCard({ item, tab, mainData, selectedItems, selectedVariants,
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function ShopifyItems() {
-  const navigate = useNavigate();
   const [tab, setTab] = useState("pending");
   const [allItems, setAllItems] = useState([]);
   const [stats, setStats] = useState({});
@@ -612,20 +609,12 @@ export default function ShopifyItems() {
   ];
 
   return (
-    <div style={{ background: theme.background, minHeight: "100vh" }}>
-
-      {/* Header */}
-      <div style={{ padding: "12px 14px", background: theme.card, borderBottom: "1px solid #e2e8f0" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <button onClick={() => navigate(-1)}>← Back</button>
-            <div>
-              <h2 style={{ margin: 0 }}>Shopify Catalog</h2>
-              <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>
-                Synced ecommerce products requiring configuration
-              </div>
-            </div>
-          </div>
+    <div>
+      {/* Page title row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1 }}>
+          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#111827' }}>Shopify catalog</h1>
+          <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>Synced products requiring configuration</div>
         </div>
       </div>
 
@@ -633,63 +622,63 @@ export default function ShopifyItems() {
       <StatsBanner stats={stats} onSync={handleSync} syncing={syncing} />
 
       {/* Tabs */}
-      <div style={{ display: "flex", gap: 4, padding: "10px 14px", background: theme.card, borderBottom: "1px solid #e2e8f0" }}>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
         {TABS.map(t => (
           <button key={t.key} onClick={() => { setTab(t.key); setOpenSku(null); }}
             style={{
-              padding: "6px 14px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 13,
-              background: tab === t.key ? "#0f172a" : "#e2e8f0",
-              color: tab === t.key ? "#fff" : "#374151",
-              fontWeight: tab === t.key ? 700 : 400,
+              padding: '7px 14px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 13,
+              background: tab === t.key ? '#0f172a' : '#e5e7eb',
+              color: tab === t.key ? '#fff' : '#374151',
+              fontWeight: tab === t.key ? 700 : 500,
             }}>
             {t.label}
             <span style={{
               marginLeft: 6, fontSize: 11,
-              color: tab === t.key ? "rgba(255,255,255,0.75)" : t.color,
+              color: tab === t.key ? 'rgba(255,255,255,0.7)' : t.color,
               fontWeight: 800,
             }}>({t.count})</span>
           </button>
         ))}
       </div>
 
-      {/* Tab description */}
-      {tab === "pending" && (
-        <div style={{ padding: "8px 14px", background: "#fffbeb", fontSize: 12, color: "#92400e", borderBottom: "1px solid #fde68a" }}>
-          These Shopify products need HSN Code, Cost Price and GST before they can appear in quotations/orders.
+      {/* Tab banner */}
+      {tab === 'pending' && (
+        <div style={{ padding: '8px 12px', background: '#fffbeb', borderRadius: 6, fontSize: 12, color: '#92400e', marginBottom: 12, border: '1px solid #fde68a' }}>
+          These products need HSN code, cost price and GST before they appear in quotations/orders.
         </div>
       )}
-      {tab === "ready" && (
-        <div style={{ padding: "8px 14px", background: "#f0fdf4", fontSize: 12, color: "#15803d", borderBottom: "1px solid #bbf7d0" }}>
-          These products are fully configured and available in quotation/order/invoice search.
+      {tab === 'ready' && (
+        <div style={{ padding: '8px 12px', background: '#f0fdf4', borderRadius: 6, fontSize: 12, color: '#15803d', marginBottom: 12, border: '1px solid #bbf7d0' }}>
+          Fully configured — available in quotation, order and invoice search.
         </div>
       )}
-      {tab === "hidden" && (
-        <div style={{ padding: "8px 14px", background: "#f1f5f9", fontSize: 12, color: "#475569", borderBottom: "1px solid #e2e8f0" }}>
-          Hidden items are excluded from sync and from all searches. Restore to bring them back.
+      {tab === 'hidden' && (
+        <div style={{ padding: '8px 12px', background: '#f1f5f9', borderRadius: 6, fontSize: 12, color: '#475569', marginBottom: 12, border: '1px solid #e2e8f0' }}>
+          Hidden items are excluded from all searches. Restore to bring them back.
         </div>
       )}
 
       {/* Search */}
-      <div style={{ padding: "10px 14px" }}>
+      <div style={{ marginBottom: 12 }}>
         <input
           type="text"
           placeholder="Search by name or SKU…"
           value={search}
           onChange={e => setSearch(e.target.value)}
           style={{
-            width: "100%", maxWidth: 600, padding: "10px 14px",
-            borderRadius: 10, border: "1px solid #ddd", fontSize: 14, background: "#f9f9f9",
+            width: '100%', maxWidth: 520, padding: '8px 12px',
+            borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 14, background: '#fff',
           }}
         />
       </div>
 
       {/* List */}
-      <div style={{ padding: "0 14px 20px" }}>
+      <div>
         {filtered.length === 0 ? (
-          <div style={{ textAlign: "center", color: "#94a3b8", marginTop: 40 }}>
-            {tab === "pending" ? "All Shopify products are configured." :
-             tab === "ready"   ? "No ready products yet. Configure items in the Pending tab." :
-             "No hidden items."}
+          <div style={{ textAlign: 'center', color: '#9ca3af', padding: '40px 0' }}>
+            {tab === 'pending' ? 'All Shopify products are configured.' :
+             tab === 'ready'   ? 'No ready products yet. Configure items in the Pending tab.' :
+             'No hidden items.'}
           </div>
         ) : (
           filtered.map((item, i) => (

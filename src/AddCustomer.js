@@ -1,15 +1,13 @@
 import React, { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import PageLayout from "./components/layout/PageLayout";
+import {
+  FormSection, FormCard, FormGrid, FormField, FormActions,
+  inputStyle, readonlyInputStyle, selectStyle, textareaStyle,
+} from "./components/ui/FormComponents";
 import { API_URL } from "./config";
 import { apiFetch } from "./utils/api";
 import { toast } from "./utils/toast";
-
-const theme = {
-  card: "#fff",
-  border: "#e5e5e5",
-  primary: "#0066B3",
-};
 
 /** ISO 3166-1 alpha-2 → ITU calling code */
 const ISO_TO_CALLING_CODE = {
@@ -44,183 +42,123 @@ const ISO_TO_CALLING_CODE = {
   VN:'+84',YE:'+967',ZM:'+260',ZW:'+263',
 };
 
+const CUSTOMER_TYPES = [
+  'Retail Shops', 'Chain Stores', 'Hospitals & Clinics',
+  'Wholesaler', 'Cr Lab', 'Grinders', 'Brands',
+];
+
 export default function AddCustomer() {
   const navigate = useNavigate();
 
   const [form, setForm] = useState({
-    companyName: "",
-    contactName: "",
-    countryCode1: "+91",
-    mobile1: "",
-    countryCode2: "+91",
-    mobile2: "",
-    email: "",
-    address: "",
-    city: "",
-    state: "",
-    country: "",
-    pincode: "",
-    gstNumber: "",
-    customerType: "",
-    tag: "",
+    companyName:   '',
+    contactName:   '',
+    countryCode1:  '+91',
+    mobile1:       '',
+    countryCode2:  '+91',
+    mobile2:       '',
+    email:         '',
+    address:       '',
+    pincode:       '',
+    gstNumber:     '',
+    customerType:  '',
+    tag:           '',
   });
 
-  const [city, setCity] = useState("");
-  const [state, setState] = useState("");
-  const [country, setCountry] = useState("India");
+  const [city,    setCity]    = useState('');
+  const [state,   setState]   = useState('');
+  const [country, setCountry] = useState('India');
 
-  const [cityResults, setCityResults] = useState([]);
+  const [cityResults,  setCityResults]  = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [loading,      setLoading]      = useState(false);
 
-  // Store selectedCity for save API strict mode patch
-  const selectedCityRef = useRef({ name: "", state: "", country: "" });
+  const selectedCityRef = useRef({ name: '', state: '', country: '' });
 
-  const toSentenceCase = (str) => {
-    if (!str) return "";
-    return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+  const toSentenceCase = (str) =>
+    str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : '';
+
+  const handleChange = (e) => {
+    let { name, value } = e.target;
+    if (['companyName', 'contactName', 'tag'].includes(name)) {
+      value = toSentenceCase(value);
+    }
+    setForm(prev => ({ ...prev, [name]: value }));
   };
 
   const handleMobileChange = (e) => {
-    let value = e.target.value.replace(/\D/g, "");
-    if (value.startsWith("0")) value = value.substring(1);
+    let value = e.target.value.replace(/\D/g, '');
+    if (value.startsWith('0')) value = value.substring(1);
     if (value.length > 10) value = value.slice(0, 10);
-
-    setForm((prev) => ({
-      ...prev,
-      [e.target.name]: value,
-    }));
+    setForm(prev => ({ ...prev, [e.target.name]: value }));
   };
 
-  const handleChange = (e) => {
-    let value = e.target.value;
-    if (["companyName", "contactName", "tag"].includes(e.target.name)) {
-      value = toSentenceCase(value);
-    }
-    setForm({ ...form, [e.target.name]: value });
-  };
-
-  /** Save a city to the local DB in the background (fire-and-forget). */
   const syncCityToDB = async (cityData) => {
     try {
       await fetch(`${API_URL}/cities/save`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(cityData),
       });
-    } catch {
-      // non-critical
-    }
+    } catch {}
   };
 
   const handleCitySelect = (place) => {
-    let cityName = "";
-    let stateName = "";
-    let countryName = "";
-    let countryISO = "";
-
     if (place.address_components) {
-      // Google Places result
-      place.address_components.forEach((component) => {
-        const types = component.types;
-        if (types.includes("locality")) cityName = component.long_name;
-        if (types.includes("administrative_area_level_1")) stateName = component.long_name;
-        if (types.includes("country")) {
-          countryName = component.long_name;
-          countryISO = component.short_name; // e.g. "IN", "US"
-        }
+      let cityName = '', stateName = '', countryName = '', countryISO = '';
+      place.address_components.forEach((c) => {
+        const t = c.types;
+        if (t.includes('locality'))                     cityName    = c.long_name;
+        if (t.includes('administrative_area_level_1'))  stateName   = c.long_name;
+        if (t.includes('country')) { countryName = c.long_name; countryISO = c.short_name; }
       });
-
-      const callingCode = ISO_TO_CALLING_CODE[countryISO] || "+91";
-
+      const callingCode = ISO_TO_CALLING_CODE[countryISO] || '+91';
       setCity(cityName);
       setState(stateName);
       setCountry(countryName);
-      setForm(prev => ({
-        ...prev,
-        countryCode1: callingCode,
-        countryCode2: callingCode,
-      }));
-
+      setForm(prev => ({ ...prev, countryCode1: callingCode, countryCode2: callingCode }));
       selectedCityRef.current = { name: cityName, state: stateName, country: countryName };
-
-      // Immediately persist to local DB so future searches find it
       syncCityToDB({ name: cityName, state: stateName, country: countryName, countryISO, countryCode: callingCode });
-
     } else {
-      // Local DB result
-      const callingCode = place.countryCode || ISO_TO_CALLING_CODE[place.countryISO] || "+91";
-
+      const callingCode = place.countryCode || ISO_TO_CALLING_CODE[place.countryISO] || '+91';
       setCity(place.name);
-      setState(place.state || "");
-      setCountry(place.country || "India");
-      setForm(prev => ({
-        ...prev,
-        countryCode1: callingCode,
-        countryCode2: callingCode,
-      }));
-
-      selectedCityRef.current = {
-        name: place.name,
-        state: place.state || "",
-        country: place.country || "India",
-      };
+      setState(place.state || '');
+      setCountry(place.country || 'India');
+      setForm(prev => ({ ...prev, countryCode1: callingCode, countryCode2: callingCode }));
+      selectedCityRef.current = { name: place.name, state: place.state || '', country: place.country || 'India' };
     }
   };
 
-  // --- The rest of the unchanged code below ---
-
   const handleCitySearch = async (value) => {
     setCity(value);
-
     if (!value) {
       setCityResults([]);
       setShowDropdown(false);
-      selectedCityRef.current = { name: "", state: "", country: "" };
+      selectedCityRef.current = { name: '', state: '', country: '' };
       return;
     }
-
     try {
-      const res = await fetch(
-        `${API_URL}/cities/search?q=${encodeURIComponent(value)}`
-      );
+      const res  = await fetch(`${API_URL}/cities/search?q=${encodeURIComponent(value)}`);
       const data = await res.json();
-
       if (data.length > 0) {
-        setCityResults(
-          data.map((c) => ({
-            id: c.id,
-            name: c.name,
-            state: c.state,
-            country: c.country,
-            countryISO: c.countryISO,
-            countryCode: c.countryCode,
-            label: `${c.name}, ${c.state}, ${c.country}`,
-            source: "saved",
-          }))
-        );
+        setCityResults(data.map(c => ({
+          id: c.id, name: c.name, state: c.state, country: c.country,
+          countryISO: c.countryISO, countryCode: c.countryCode,
+          label: `${c.name}, ${c.state}, ${c.country}`, source: 'saved',
+        })));
         setShowDropdown(true);
         return;
       }
-    } catch (err) {}
-
+    } catch {}
     if (window.google) {
-      const service = new window.google.maps.places.AutocompleteService();
-
-      service.getPlacePredictions(
-        {
-          input: value,
-          types: ["(cities)"],
-        },
+      new window.google.maps.places.AutocompleteService().getPlacePredictions(
+        { input: value, types: ['(cities)'] },
         (predictions) => {
           if (predictions) {
-            setCityResults(
-              predictions.map((p) => ({
-                place_id: p.place_id,
-                description: p.description,
-                label: p.description,
-                source: "google",
-              }))
-            );
+            setCityResults(predictions.map(p => ({
+              place_id: p.place_id, description: p.description,
+              label: p.description, source: 'google',
+            })));
             setShowDropdown(true);
           }
         }
@@ -230,430 +168,221 @@ export default function AddCustomer() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     if (!form.companyName || !form.mobile1 || !form.tag) {
-      toast.error("Company Name, Tag & Mobile required");
+      toast.error('Company name, tag and mobile are required');
       return;
     }
-
     if (form.mobile1.length !== 10) {
-      toast.error("Mobile must be 10 digits");
+      toast.error('Mobile must be 10 digits');
       return;
     }
-
-    const selectedCity =
-      selectedCityRef.current && selectedCityRef.current.name
-        ? selectedCityRef.current
-        : {
-            name: city,
-            state: state || "",
-            country: country || "India",
-          };
-
+    const selectedCity = selectedCityRef.current?.name
+      ? selectedCityRef.current
+      : { name: city, state: state || '', country: country || 'India' };
     if (!selectedCity.name) {
-      toast.error("Please select a city from dropdown");
+      toast.error('Please select a city from the dropdown');
       return;
     }
-
+    setLoading(true);
     try {
-      const res = await apiFetch(`/customers`, {
-        method: "POST",
+      const res = await apiFetch('/customers', {
+        method: 'POST',
         body: JSON.stringify({
           ...form,
           city,
           state,
           country,
           mobile1: form.countryCode1 + form.mobile1,
-          mobile2: form.mobile2 ? form.countryCode2 + form.mobile2 : "",
+          mobile2: form.mobile2 ? form.countryCode2 + form.mobile2 : '',
         }),
       });
-
       const data = await res.json();
-
-      if (!res.ok) {
-        toast.error(data.message || "Error saving customer");
-        return;
-      }
-
-      toast.success("Customer added successfully");
-      navigate("/dashboard");
+      if (!res.ok) { toast.error(data.message || 'Error saving customer'); return; }
+      toast.success('Customer added successfully');
+      navigate('/customers');
     } catch {
-      toast.error("Error saving customer");
+      toast.error('Error saving customer');
+    } finally {
+      setLoading(false);
     }
   };
 
-  // PRO INPUT STYLE
-  const proInputStyle = {
-    width: "100%",
-    padding: 12,
-    borderRadius: 10,
-    border: `1px solid ${theme.border}`,
-    marginTop: 6,
-    marginBottom: 14,
-    fontSize: 14,
-    background: "#fff",
-    boxSizing: "border-box",
-    position: "relative",
-    zIndex: 1,
-  };
-
-  const proLabelStyle = {
+  const codeStyle = {
+    ...inputStyle,
+    width: 72,
+    flexShrink: 0,
+    background: '#f9fafb',
+    color: '#6b7280',
+    textAlign: 'center',
     fontWeight: 600,
-    marginBottom: 4
   };
-
-  // Helper for dropdown: For local city, nicely formats fallback
-  function formatCustomer(c) {
-    if (c.label) return c.label;
-    if (c.name && c.state && c.country) return `${c.name}, ${c.state}, ${c.country}`;
-    if (c.description) return c.description;
-    return c.name || "";
-  }
 
   return (
-    <PageLayout title="Add Customer">
-      <div style={{ background: "#f4f6fb", minHeight: "100vh" }}>
-        <div style={container}>
-          <div
-            style={{
-              background: theme.card,
-              padding: 16,
-              borderRadius: 16,
-              border: `1px solid ${theme.border}`,
-              width: "100%",
-              maxWidth: 480,
-              overflow: "visible",
-              position: "relative",
-              zIndex: 1,
-            }}
-          >
-            <form onSubmit={handleSubmit}>
-              <div style={{ display: "flex", flexDirection: "column" }}>
-                {[
-                  { label: "Company Name *", name: "companyName" },
-                  { label: "Contact Person", name: "contactName" },
-                  { label: "Email", name: "email" },
-                  { label: "Tag *", name: "tag" },
-                ].map((f) => (
-                  <div key={f.name} style={{ marginBottom: 0 }}>
-                    <label style={proLabelStyle}>{f.label}</label>
-                    <input
-                      name={f.name}
-                      value={form[f.name]}
-                      onChange={handleChange}
-                      style={proInputStyle}
-                    />
-                  </div>
-                ))}
+    <PageLayout title="Add customer">
+      <form onSubmit={handleSubmit} style={{ maxWidth: 640 }}>
 
-                {/* CUSTOMER TYPE */}
-                <div style={{ marginBottom: 0 }}>
-                  <label style={proLabelStyle}>Customer Type</label>
-                  <select
-                    name="customerType"
-                    value={form.customerType}
-                    onChange={handleChange}
-                    style={proInputStyle}
-                  >
-                    <option value="">Select</option>
-                    <option>Retail Shops</option>
-                    <option>Chain Stores</option>
-                    <option>Hospitals & Clinics</option>
-                    <option>Wholesaler</option>
-                    <option>Cr Lab</option>
-                    <option>Grinders</option>
-                    <option>Brands</option>
-                  </select>
+        {/* ── Basic info ─────────────────────────────────────── */}
+        <FormSection title="Basic info">
+          <FormCard>
+            <FormGrid cols={2} minColWidth={200}>
+              <FormField label="Company name" required colSpan={2}>
+                <input name="companyName" value={form.companyName} onChange={handleChange}
+                  placeholder="e.g. Lens World Pvt Ltd" style={inputStyle} />
+              </FormField>
+              <FormField label="Contact person">
+                <input name="contactName" value={form.contactName} onChange={handleChange}
+                  placeholder="Primary contact name" style={inputStyle} />
+              </FormField>
+              <FormField label="Tag" required help="Short internal identifier">
+                <input name="tag" value={form.tag} onChange={handleChange}
+                  placeholder="e.g. Hospital, Retail" style={inputStyle} />
+              </FormField>
+              <FormField label="Customer type" colSpan={2}>
+                <select name="customerType" value={form.customerType} onChange={handleChange} style={selectStyle}>
+                  <option value="">Select type</option>
+                  {CUSTOMER_TYPES.map(t => <option key={t}>{t}</option>)}
+                </select>
+              </FormField>
+            </FormGrid>
+          </FormCard>
+        </FormSection>
+
+        {/* ── Contact ────────────────────────────────────────── */}
+        <FormSection title="Contact">
+          <FormCard>
+            <FormGrid cols={2} minColWidth={200}>
+              <FormField label="Mobile" required>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input value={form.countryCode1} readOnly title="Set from city" style={codeStyle} />
+                  <input name="mobile1" value={form.mobile1} onChange={handleMobileChange}
+                    placeholder="10-digit number" style={{ ...inputStyle, flex: 1 }} />
                 </div>
+              </FormField>
+              <FormField label="Mobile 2">
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input value={form.countryCode2} readOnly title="Set from city" style={codeStyle} />
+                  <input name="mobile2" value={form.mobile2} onChange={handleMobileChange}
+                    placeholder="Optional" style={{ ...inputStyle, flex: 1 }} />
+                </div>
+              </FormField>
+              <FormField label="Email" colSpan={2}>
+                <input name="email" type="email" value={form.email} onChange={handleChange}
+                  placeholder="contact@example.com" style={inputStyle} />
+              </FormField>
+            </FormGrid>
+          </FormCard>
+        </FormSection>
 
-                {/* GST */}
-                <div style={{ marginBottom: 0 }}>
-                  <label style={proLabelStyle}>Gst No</label>
+        {/* ── Location ───────────────────────────────────────── */}
+        <FormSection title="Location">
+          <FormCard>
+            <FormGrid cols={2} minColWidth={200}>
+
+              {/* City — with autocomplete */}
+              <FormField label="City" help="Type to search; select from dropdown">
+                <div style={{ position: 'relative' }}>
                   <input
-                    name="gstNumber"
-                    value={form.gstNumber}
-                    maxLength={15}
-                    onChange={(e) => {
-                      let value = e.target.value.toUpperCase();
-                      value = value.replace(/[^A-Z0-9]/g, "");
-
-                      setForm((prev) => ({
-                        ...prev,
-                        gstNumber: value,
-                      }));
-                    }}
-                    style={proInputStyle}
+                    value={city}
+                    onChange={(e) => handleCitySearch(e.target.value)}
+                    onFocus={() => setShowDropdown(true)}
+                    placeholder="Search city…"
+                    style={inputStyle}
                   />
+                  {showDropdown && cityResults.length > 0 && (
+                    <div style={{
+                      position: 'absolute', zIndex: 9999, top: 'calc(100% + 4px)',
+                      left: 0, right: 0, background: '#fff', border: '1px solid #e5e7eb',
+                      borderRadius: 8, boxShadow: '0 6px 20px rgba(0,0,0,0.12)',
+                      maxHeight: 200, overflowY: 'auto',
+                    }}>
+                      {cityResults.map((c) => (
+                        <div
+                          key={c.id || c.place_id}
+                          onMouseDown={async () => {
+                            if (c.source === 'google' && window.google) {
+                              new window.google.maps.places.PlacesService(
+                                document.createElement('div')
+                              ).getDetails({ placeId: c.place_id }, (place, status) => {
+                                if (status === window.google.maps.places.PlacesServiceStatus.OK && place?.address_components) {
+                                  handleCitySelect(place);
+                                  setShowDropdown(false);
+                                } else {
+                                  toast.error('Failed to load city details');
+                                }
+                              });
+                            } else {
+                              handleCitySelect(c);
+                              setShowDropdown(false);
+                            }
+                          }}
+                          style={{ padding: '9px 12px', cursor: 'pointer', borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13 }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = '#f9fafb'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; }}
+                        >
+                          <span>{c.label || c.description}</span>
+                          <span style={{
+                            fontSize: 10, padding: '1px 6px', borderRadius: 4, marginLeft: 8,
+                            background: c.source === 'saved' ? '#dcfce7' : '#dbeafe',
+                            color: c.source === 'saved' ? '#15803d' : '#1d4ed8',
+                          }}>
+                            {c.source === 'saved' ? 'Saved' : 'Google'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
+              </FormField>
 
-                {/* MOBILE */}
-                <div style={{ marginBottom: 0 }}>
-                  <label style={proLabelStyle}>Mobile *</label>
-                  <div style={{ display: "flex", gap: 10 }}>
-                    <input
-                      value={form.countryCode1}
-                      readOnly
-                      title="Auto-set from city selection"
-                      style={{
-                        width: "25%",
-                        padding: 12,
-                        borderRadius: 10,
-                        border: `1px solid ${theme.border}`,
-                        marginTop: 6,
-                        marginBottom: 14,
-                        fontSize: 14,
-                        background: "#eef4fb",
-                        color: theme.primary,
-                        fontWeight: 600,
-                        textAlign: "center",
-                      }}
-                    />
-                    <input
-                      name="mobile1"
-                      value={form.mobile1}
-                      onChange={handleMobileChange}
-                      style={{
-                        width: "75%",
-                        padding: 12,
-                        borderRadius: 10,
-                        border: `1px solid ${theme.border}`,
-                        marginTop: 6,
-                        marginBottom: 14,
-                        fontSize: 14,
-                        background: "#fff"
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div style={{ marginBottom: 0 }}>
-                  <label style={proLabelStyle}>Mobile 2</label>
-                  <div style={{ display: "flex", gap: 10 }}>
-                    <input
-                      value={form.countryCode2}
-                      readOnly
-                      title="Auto-set from city selection"
-                      style={{
-                        width: "25%",
-                        padding: 12,
-                        borderRadius: 10,
-                        border: `1px solid ${theme.border}`,
-                        marginTop: 6,
-                        marginBottom: 14,
-                        fontSize: 14,
-                        background: "#eef4fb",
-                        color: theme.primary,
-                        fontWeight: 600,
-                        textAlign: "center",
-                      }}
-                    />
-                    <input
-                      name="mobile2"
-                      value={form.mobile2}
-                      onChange={handleMobileChange}
-                      style={{
-                        width: "75%",
-                        padding: 12,
-                        borderRadius: 10,
-                        border: `1px solid ${theme.border}`,
-                        marginTop: 6,
-                        marginBottom: 14,
-                        fontSize: 14,
-                        background: "#fff"
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* ADDRESS */}
-                <div style={{ marginBottom: 0 }}>
-                  <label style={proLabelStyle}>Address</label>
-                  <textarea
-                    name="address"
-                    value={form.address}
-                    onChange={handleChange}
-                    style={{
-                      ...proInputStyle,
-                      height: 70,
-                      resize: "vertical"
-                    }}
-                  />
-                </div>
-
-                {/* PINCODE */}
-                <div style={{ marginBottom: 0 }}>
-                  <label style={proLabelStyle}>Pincode</label>
-                  <input
-                    name="pincode"
-                    value={form.pincode}
-                    onChange={(e) => {
-                      let value = e.target.value.replace(/\D/g, "");
-                      if (value.length > 6) value = value.slice(0, 6);
-
-                      setForm((prev) => ({
-                        ...prev,
-                        pincode: value,
-                      }));
-                    }}
-                    style={proInputStyle}
-                  />
-                </div>
-
-                {/* CITY */}
-                <div style={{ marginBottom: 0 }}>
-                  <label style={proLabelStyle}>City</label>
-                  <div
-                    style={{
-                      position: "relative",
-                      width: "100%",
-                    }}
-                  >
-                    <input
-                      value={city}
-                      onChange={(e) => handleCitySearch(e.target.value)}
-                      onFocus={() => setShowDropdown(true)}
-                      placeholder="Search city"
-                      style={{
-                        width: "100%",
-                        padding: 12,
-                        borderRadius: 12,
-                        border: `1px solid ${theme.border}`,
-                        boxSizing: "border-box",
-                      }}
-                    />
-                    {showDropdown && cityResults.length > 0 && (
-                      <div
-                        // STEP 2: Replace with strictly these styles
-                        style={{
-                          position: "absolute",
-                          zIndex: 99999,
-                          width: "100%",
-                          background: "#fff",
-                          border: "1px solid #ddd",
-                          borderRadius: 8,
-                          marginTop: 4,
-                          maxHeight: 200,
-                          overflowY: "auto",
-                          boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                          pointerEvents: "auto"
-                        }}
-                      >
-                        {/* STEP 3/4: Replace dropdown list rendering */}
-                        {cityResults.map((c) => (
-                          <div
-                            key={c.id || c.place_id}
-                            style={{
-                              padding: 10,
-                              cursor: "pointer",
-                              borderBottom: "1px solid #eee"
-                            }}
-                            onMouseDown={async () => {
-                              // Google Place: fetch details first
-                              if (c.source === "google" && window.google) {
-                                const service = new window.google.maps.places.PlacesService(
-                                  document.createElement("div")
-                                );
-                                // STEP 3: ADD LOADING LOCK (VERY IMPORTANT)
-                                // setShowDropdown(false);  // Remove from here and move to success block below
-                                service.getDetails(
-                                  { placeId: c.place_id },
-                                  (place, status) => {
-
-                                    if (
-                                      status === window.google.maps.places.PlacesServiceStatus.OK &&
-                                      place &&
-                                      place.address_components
-                                    ) {
-                                      handleCitySelect(place);
-                                      setShowDropdown(false); // ✅ MOVE HERE
-                                    } else {
-                                      toast.error("Failed to load city details. Try again.");
-                                    }
-
-                                  }
-                                );
-                              } else {
-                                handleCitySelect(c);
-                                setShowDropdown(false);
-                              }
-                            }}
-                          >
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                              <div>
-                                {c.label || c.description || formatCustomer(c)}
-                              </div>
-                              <div
-                                style={{
-                                  fontSize: 11,
-                                  padding: "2px 6px",
-                                  borderRadius: 6,
-                                  background: c.source === "saved" ? "#d1fae5" : "#dbeafe",
-                                  color: c.source === "saved" ? "#065f46" : "#1e40af",
-                                  marginLeft: 8
-                                }}
-                              >
-                                {c.source === "saved" ? "Saved" : "Google"}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* STATE - show only the state field (no button) */}
-                <div style={{ marginBottom: 6 }}>
-                  <label style={{ fontWeight: 600 }}>State</label>
-                  <input
-                    value={state}
-                    readOnly
-                    style={{
-                      ...proInputStyle,
-                      background: "#f3f4f6"
-                    }}
-                  />
-                </div>
-
-                {/* COUNTRY */}
-                <div style={{ marginBottom: 0 }}>
-                  <label style={proLabelStyle}>Country</label>
-                  <input
-                    value={country}
-                    readOnly
-                    style={{
-                      ...proInputStyle,
-                      background: "#f3f4f6"
-                    }}
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  style={{
-                    width: "100%",
-                    padding: 14,
-                    background: "#4facfe",
-                    color: "#fff",
-                    borderRadius: 12,
-                    border: "none",
-                    marginTop: 8,
-                    fontWeight: 600,
-                    fontSize: 16,
-                    letterSpacing: "1px",
-                    cursor: "pointer"
+              <FormField label="Pincode">
+                <input
+                  name="pincode"
+                  value={form.pincode}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, '').slice(0, 6);
+                    setForm(prev => ({ ...prev, pincode: val }));
                   }}
-                >
-                  Save Customer
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
+                  placeholder="6-digit code"
+                  style={inputStyle}
+                />
+              </FormField>
+
+              <FormField label="State" help="Auto-filled from city">
+                <input value={state} readOnly style={readonlyInputStyle} />
+              </FormField>
+              <FormField label="Country" help="Auto-filled from city">
+                <input value={country} readOnly style={readonlyInputStyle} />
+              </FormField>
+
+              <FormField label="Address" colSpan={2}>
+                <textarea name="address" value={form.address} onChange={handleChange}
+                  placeholder="Street address, building, area…" style={textareaStyle} />
+              </FormField>
+            </FormGrid>
+          </FormCard>
+        </FormSection>
+
+        {/* ── Business ───────────────────────────────────────── */}
+        <FormSection title="Business">
+          <FormCard>
+            <FormField label="GST number" help="15-character alphanumeric (auto-uppercased)">
+              <input
+                name="gstNumber"
+                value={form.gstNumber}
+                maxLength={15}
+                onChange={(e) => setForm(prev => ({
+                  ...prev,
+                  gstNumber: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''),
+                }))}
+                placeholder="e.g. 33AABCH5436K1ZM"
+                style={inputStyle}
+              />
+            </FormField>
+          </FormCard>
+        </FormSection>
+
+        <FormActions saveLabel="Save customer" loading={loading} />
+      </form>
     </PageLayout>
   );
 }
-
-/* STYLES */
-const container = { display: "flex", justifyContent: "center", padding: 20 };

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ORDER_STATUS } from "./constants/orderStatus";
 import DocActions from "./components/DocActions";
+import StatusBadge, { PricingBadge } from "./components/ui/StatusBadge";
 import { apiFetch } from "./utils/api";
 import { useNotifications } from "./context/NotificationContext";
 import { useRightPanel } from "./components/layout/RightPanel";
@@ -9,22 +10,13 @@ import OrderDetail from "./OrderDetail";
 import { toast } from "./utils/toast";
 import { useConfirm } from "./components/ui/ConfirmModal";
 
-const STATUS_COLORS = {
+const STATUS_BORDER = {
   PENDING_APPROVAL: '#f59e0b',
   APPROVED:         '#16a34a',
   IN_PRODUCTION:    '#6366f1',
   READY:            '#0891b2',
   DISPATCHED:       '#0066B3',
   DRAFT:            '#6c757d',
-};
-
-const STATUS_LABELS = {
-  PENDING_APPROVAL: 'Pending approval',
-  APPROVED:         'Approved',
-  IN_PRODUCTION:    'In production',
-  READY:            'Ready',
-  DISPATCHED:       'Dispatched',
-  DRAFT:            'Draft',
 };
 
 const btn = (extra = {}) => ({
@@ -149,7 +141,7 @@ export default function OrderList() {
           key={row.id}
           style={{
             border: '1px solid #e5e7eb',
-            borderLeft: `4px solid ${STATUS_COLORS[row.status] || '#6c757d'}`,
+            borderLeft: `4px solid ${STATUS_BORDER[row.status] || '#6c757d'}`,
             borderRadius: 8,
             marginBottom: 12,
             background: '#fff',
@@ -164,24 +156,8 @@ export default function OrderList() {
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 600, fontSize: 15, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 {row.order_number || `ORD-${String(row.id).padStart(5, '0')}`}
-                <span style={{
-                  fontSize: 11,
-                  background: STATUS_COLORS[row.status] || '#6c757d',
-                  color: '#fff',
-                  borderRadius: 4,
-                  padding: '2px 8px',
-                }}>
-                  {STATUS_LABELS[row.status] || row.status}
-                </span>
-                {row.is_wholesaler !== undefined && (
-                  <span style={{
-                    fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 10,
-                    background: row.is_wholesaler ? '#fef9c3' : '#dbeafe',
-                    color: row.is_wholesaler ? '#a16207' : '#1e40af',
-                  }}>
-                    {row.is_wholesaler ? 'Wholesaler' : 'Retailer'}
-                  </span>
-                )}
+                <StatusBadge status={row.status} />
+                {row.is_wholesaler !== undefined && <PricingBadge isWholesaler={row.is_wholesaler} />}
               </div>
               <div style={{ fontSize: 13, color: '#6b7280', marginTop: 3 }}>
                 {row.customer_name || '—'} · ₹{Number(row.total_amount || 0).toLocaleString('en-IN')}

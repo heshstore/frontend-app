@@ -1,42 +1,60 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PageLayout from "./components/layout/PageLayout";
 import { apiFetch } from "./utils/api";
+import { toast } from "./utils/toast";
+import { useConfirm } from "./components/ui/ConfirmModal";
+
+const btn = (extra = {}) => ({
+  padding: '5px 12px', fontSize: 12, fontWeight: 600, borderRadius: 5,
+  height: 28, display: 'inline-flex', alignItems: 'center', gap: 4,
+  cursor: 'pointer', border: 'none', ...extra,
+});
 
 export default function ItemList() {
-  const [items, setItems]   = useState([]);
-  const [search, setSearch] = useState("");
+  const [items,  setItems]  = useState([]);
+  const [search, setSearch] = useState('');
   const navigate = useNavigate();
+  const [confirm, confirmModal] = useConfirm();
 
-  const loadItems = async () => {
-    const res  = await apiFetch(`/service-items`);
+  const loadItems = useCallback(async () => {
+    const res  = await apiFetch('/service-items');
     const data = await res.json();
     setItems(Array.isArray(data) ? data : []);
-  };
+  }, []);
 
-  useEffect(() => { loadItems(); }, []);
+  useEffect(() => { loadItems(); }, [loadItems]);
 
-  const deleteItem = async (item) => {
-    await apiFetch(`/service-items/${item.id}`, { method: "DELETE" });
-    loadItems();
+  const handleDelete = async (item) => {
+    if (!await confirm(`Delete "${item.itemName}"?`, 'This cannot be undone.', { danger: true, confirmLabel: 'Delete' })) return;
+    try {
+      await apiFetch(`/service-items/${item.id}`, { method: 'DELETE' });
+      toast.success('Item deleted');
+      loadItems();
+    } catch {
+      toast.error('Delete failed');
+    }
   };
 
   const filtered = items.filter(item => {
     const q = search.toLowerCase();
     return !q ||
-      (item.itemName || "").toLowerCase().includes(q) ||
-      (item.sku || "").toLowerCase().includes(q);
+      (item.itemName || '').toLowerCase().includes(q) ||
+      (item.sku || '').toLowerCase().includes(q) ||
+      (item.hsnCode || '').includes(q);
   });
 
   return (
+    <>
+    {confirmModal}
     <PageLayout
-      title="Service Item Master"
+      title="Service item master"
       subtitle="Manual products, services, repair charges, labor items"
       onSearch={setSearch}
       actions={
         <button
-          onClick={() => navigate("/add-item")}
-          style={{ padding: '8px 16px', borderRadius: 6, border: 'none', background: '#2563eb', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+          onClick={() => navigate('/add-item')}
+          style={btn({ background: '#2563eb', color: '#fff', padding: '8px 16px', height: 36, fontSize: 13 })}
         >
           + Add item
         </button>
@@ -44,50 +62,61 @@ export default function ItemList() {
     >
       <div style={{ maxWidth: 700 }}>
         {filtered.length === 0 && (
-          <div style={{ textAlign: "center", color: "#94a3b8", marginTop: 40 }}>
-            No service items found.
+          <div style={{ padding: 32, textAlign: 'center', color: '#9ca3af' }}>
+            No items found.{' '}
+            <button onClick={() => navigate('/add-item')} style={{ color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
+              Add one
+            </button>
           </div>
         )}
 
         {filtered.map(item => (
           <div key={item.id} style={{
             background: '#fff',
-            padding: 14,
             borderRadius: 10,
-            marginBottom: 10,
             border: '1px solid #e5e7eb',
+            padding: '12px 16px',
+            marginBottom: 8,
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 12,
           }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <div>
-                <span style={{ fontWeight: 700, fontSize: 15, color: '#111827' }}>{item.itemName}</span>
-                <div style={{ fontSize: 12, color: "#64748b", marginTop: 3 }}>
-                  SKU: {item.sku || "—"}
-                  {item.hsnCode ? ` | HSN: ${item.hsnCode}` : ""}
-                  {` | GST: ${item.gst ?? 0}%`}
-                </div>
-                <div style={{ fontSize: 12, color: "#64748b" }}>
-                  Cost: ₹{item.costPrice ?? 0} | Selling: ₹{item.sellingPrice ?? 0}
-                  {item.unit ? ` / ${item.unit}` : ""}
-                </div>
+            {/* SKU badge */}
+            <div style={{
+              background: '#dbeafe', color: '#1d4ed8',
+              borderRadius: 6, padding: '4px 8px', fontSize: 11, fontWeight: 700,
+              flexShrink: 0, whiteSpace: 'nowrap', marginTop: 1,
+            }}>
+              {item.sku || '—'}
+            </div>
+
+            {/* Info */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 600, fontSize: 14, color: '#111827' }}>{item.itemName}</div>
+              <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                {item.hsnCode && <span>HSN: {item.hsnCode}</span>}
+                <span>GST: {item.gst ?? 0}%</span>
+                {item.unit && <span>Unit: {item.unit}</span>}
               </div>
-              <div style={{ display: "flex", gap: 6 }}>
-                <button
-                  onClick={() => navigate(`/edit-item/${item.id}`)}
-                  style={{ padding: '6px 12px', borderRadius: 5, border: '1px solid #bbf7d0', background: '#f0fdf4', color: '#15803d', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => deleteItem(item)}
-                  style={{ padding: '6px 12px', borderRadius: 5, border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
-                >
-                  Delete
-                </button>
+              <div style={{ fontSize: 12, color: '#374151', marginTop: 3, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                {item.costPrice > 0 && <span>Cost: <strong>₹{Number(item.costPrice).toLocaleString('en-IN')}</strong></span>}
+                <span>Selling: <strong style={{ color: '#15803d' }}>₹{Number(item.sellingPrice || 0).toLocaleString('en-IN')}</strong></span>
               </div>
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+              <button onClick={() => navigate(`/edit-item/${item.id}`)} style={btn({ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' })}>
+                Edit
+              </button>
+              <button onClick={() => handleDelete(item)} style={btn({ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' })}>
+                Delete
+              </button>
             </div>
           </div>
         ))}
       </div>
     </PageLayout>
+    </>
   );
 }

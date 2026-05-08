@@ -1,234 +1,210 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { theme } from "./theme";
 import PageLayout from "./components/layout/PageLayout";
+import {
+  FormSection, FormCard, FormGrid, FormField, FormActions,
+  inputStyle, selectStyle, textareaStyle,
+} from "./components/ui/FormComponents";
 import { apiFetch } from "./utils/api";
 import { toast } from "./utils/toast";
 
+const CUSTOMER_TYPES = ['Retailer', 'Wholesaler', 'Hospital', 'Chain Store', 'Retail Shops', 'Hospitals & Clinics', 'Cr Lab', 'Grinders', 'Brands'];
+
 export default function EditCustomer() {
-  const { id } = useParams();
+  const { id }   = useParams();
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
 
   const [form, setForm] = useState({
-    companyName: "",
-    contactName: "",
-    mobile1: "",
-    mobile2: "",
-    countryCode1: "+91",
-    countryCode2: "+91",
-    email: "",
-    address: "",
-    city: "",
-    state: "",
-    pincode: "",
-    gstNumber: "",
-    customerType: "",
-    tag: "",
-    creditLimit: "",
+    companyName:  '',
+    contactName:  '',
+    mobile1:      '',
+    mobile2:      '',
+    countryCode1: '+91',
+    countryCode2: '+91',
+    email:        '',
+    address:      '',
+    city:         '',
+    state:        '',
+    pincode:      '',
+    gstNumber:    '',
+    customerType: '',
+    tag:          '',
+    creditLimit:  '',
+    credit_days:  '',
   });
 
-  // ✅ LOAD CUSTOMER
   useEffect(() => {
     apiFetch(`/customers/${id}`)
       .then(res => res.json())
       .then(data => {
         setForm({
-          companyName: data.companyName || "",
-          contactName: data.contactName || "",
-          email: data.email || "",
-          address: data.address || "",
-          city: data.city || "",
-          state: data.state || "",
-          pincode: data.pincode || "",
-          gstNumber: data.gstNumber || "",
-          customerType: data.customerType || "",
-          tag: data.tag || "",
-          creditLimit: data.creditLimit ?? "",
-          mobile1: data.mobile1?.replace(/^\+?\d{0,3}(?=\d{10}$)/, "").slice(-10) || "",
-          mobile2: data.mobile2?.replace(/^\+?\d{0,3}(?=\d{10}$)/, "").slice(-10) || "",
-          countryCode1: data.mobile1 && data.mobile1.length > 10 ? data.mobile1.slice(0, data.mobile1.length - 10) : "+91",
-          countryCode2: data.mobile2 && data.mobile2.length > 10 ? data.mobile2.slice(0, data.mobile2.length - 10) : "+91",
+          companyName:  data.companyName  || '',
+          contactName:  data.contactName  || '',
+          email:        data.email        || '',
+          address:      data.address      || '',
+          city:         data.city         || '',
+          state:        data.state        || '',
+          pincode:      data.pincode      || '',
+          gstNumber:    data.gstNumber    || '',
+          customerType: data.customerType || '',
+          tag:          data.tag          || '',
+          creditLimit:  data.creditLimit  ?? '',
+          credit_days:  data.credit_days  ?? '',
+          mobile1: data.mobile1?.replace(/^\+?\d{0,3}(?=\d{10}$)/, '').slice(-10) || '',
+          mobile2: data.mobile2?.replace(/^\+?\d{0,3}(?=\d{10}$)/, '').slice(-10) || '',
+          countryCode1: data.mobile1 && data.mobile1.length > 10 ? data.mobile1.slice(0, data.mobile1.length - 10) : '+91',
+          countryCode2: data.mobile2 && data.mobile2.length > 10 ? data.mobile2.slice(0, data.mobile2.length - 10) : '+91',
         });
       })
-      .catch(err => console.error(err));
+      .catch(() => toast.error('Failed to load customer'));
   }, [id]);
 
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
+  const handleChange = (e) => setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
 
-  // ✅ FINAL SAFE SUBMIT
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    const payload = {
-      companyName: form.companyName,
-      contactName: form.contactName,
-      mobile1: form.countryCode1 + form.mobile1,
-      mobile2: form.mobile2
-        ? form.countryCode2 + form.mobile2
-        : "",
-      email: form.email,
-      address: form.address,
-      city: form.city,
-      state: form.state,
-      pincode: form.pincode,
-      gstNumber: form.gstNumber,
-      customerType: form.customerType,
-      tag: form.tag,
-      creditLimit: Number(form.creditLimit || 0),
-    };
-
+    setLoading(true);
     try {
       const res = await apiFetch(`/customers/${id}`, {
-        method: "PUT",
-        body: JSON.stringify(payload),
+        method: 'PUT',
+        body: JSON.stringify({
+          companyName:  form.companyName,
+          contactName:  form.contactName,
+          mobile1:      form.countryCode1 + form.mobile1,
+          mobile2:      form.mobile2 ? form.countryCode2 + form.mobile2 : '',
+          email:        form.email,
+          address:      form.address,
+          city:         form.city,
+          state:        form.state,
+          pincode:      form.pincode,
+          gstNumber:    form.gstNumber,
+          customerType: form.customerType,
+          tag:          form.tag,
+          creditLimit:  Number(form.creditLimit || 0),
+          credit_days:  Number(form.credit_days || 0),
+        }),
       });
-
       const data = await res.json();
-      console.log("RESPONSE:", data);
-
-      if (!res.ok) {
-        console.error(data);
-        toast.error("Update failed");
-        return;
-      }
-
-      toast.success("Customer updated successfully");
-      navigate("/customers");
-
-    } catch (err) {
-      console.error(err);
-      toast.error("Server error — please try again");
+      if (!res.ok) { toast.error(data.message || 'Update failed'); return; }
+      toast.success('Customer updated');
+      navigate('/customers');
+    } catch {
+      toast.error('Server error — please try again');
+    } finally {
+      setLoading(false);
     }
   };
 
+  const codeStyle = {
+    ...inputStyle,
+    width: 72,
+    flexShrink: 0,
+    background: '#f9fafb',
+    color: '#6b7280',
+    textAlign: 'center',
+    fontWeight: 600,
+  };
+
   return (
-    <PageLayout title="Edit Customer">
-      <div style={{ background: theme.background, minHeight: "100vh" }}>
-        {/* FORM */}
-        <form
-          onSubmit={handleSubmit}
-          style={{
-            maxWidth: 600,
-            margin: "20px auto",
-            background: theme.card,
-            padding: 20,
-            borderRadius: 12
-          }}
-        >
+    <PageLayout title="Edit customer">
+      <form onSubmit={handleSubmit} style={{ maxWidth: 640 }}>
 
-          {/* INPUT FIELDS */}
-          {[
-            ["Company Name", "companyName"],
-            ["Contact Person", "contactName"],
-            ["Email", "email"],
-            ["Address", "address"],
-            ["City", "city"],
-            ["State", "state"],
-            ["Pincode", "pincode"],
-            ["GST Number", "gstNumber"],
-            ["Tag", "tag"],
-          ].map(([label, name]) => (
-            <div key={name} style={{ marginBottom: 15 }}>
-              <label>{label}</label>
-              <input
-                name={name}
-                value={form[name] || ""}
-                onChange={handleChange}
-                style={{
-                  width: "100%",
-                  padding: 10,
-                  borderRadius: 6,
-                  border: `1px solid ${theme.border}`
-                }}
-              />
-            </div>
-          ))}
+        {/* ── Basic info ─────────────────────────────────────── */}
+        <FormSection title="Basic info">
+          <FormCard>
+            <FormGrid cols={2} minColWidth={200}>
+              <FormField label="Company name" required colSpan={2}>
+                <input name="companyName" value={form.companyName} onChange={handleChange} style={inputStyle} />
+              </FormField>
+              <FormField label="Contact person">
+                <input name="contactName" value={form.contactName} onChange={handleChange} style={inputStyle} />
+              </FormField>
+              <FormField label="Tag" required>
+                <input name="tag" value={form.tag} onChange={handleChange} style={inputStyle} />
+              </FormField>
+              <FormField label="Customer type" colSpan={2}>
+                <select name="customerType" value={form.customerType} onChange={handleChange} style={selectStyle}>
+                  <option value="">Select type</option>
+                  {CUSTOMER_TYPES.map(t => <option key={t}>{t}</option>)}
+                </select>
+              </FormField>
+            </FormGrid>
+          </FormCard>
+        </FormSection>
 
+        {/* ── Contact ────────────────────────────────────────── */}
+        <FormSection title="Contact">
+          <FormCard>
+            <FormGrid cols={2} minColWidth={200}>
+              <FormField label="Mobile" required>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input name="countryCode1" value={form.countryCode1} onChange={handleChange} style={codeStyle} />
+                  <input name="mobile1" value={form.mobile1} onChange={handleChange} maxLength={10} placeholder="10 digits" style={{ ...inputStyle, flex: 1 }} />
+                </div>
+              </FormField>
+              <FormField label="Mobile 2">
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input name="countryCode2" value={form.countryCode2} onChange={handleChange} style={codeStyle} />
+                  <input name="mobile2" value={form.mobile2} onChange={handleChange} maxLength={10} placeholder="Optional" style={{ ...inputStyle, flex: 1 }} />
+                </div>
+              </FormField>
+              <FormField label="Email" colSpan={2}>
+                <input name="email" type="email" value={form.email} onChange={handleChange} style={inputStyle} />
+              </FormField>
+            </FormGrid>
+          </FormCard>
+        </FormSection>
 
-          {/* MOBILE 1 */}
-          <div style={{ marginBottom: 15 }}>
-            <label>Mobile 1 *</label>
-            <div style={{ display: "flex", gap: 10 }}>
-              <input
-                name="countryCode1"
-                value={form.countryCode1}
-                onChange={handleChange}
-                style={{ width: 80 }}
-              />
-              <input
-                name="mobile1"
-                value={form.mobile1}
-                onChange={handleChange}
-                maxLength={10}
-                placeholder="10 digit number"
-                style={{ flex: 1 }}
-              />
-            </div>
-          </div>
+        {/* ── Location ───────────────────────────────────────── */}
+        <FormSection title="Location">
+          <FormCard>
+            <FormGrid cols={2} minColWidth={200}>
+              <FormField label="City">
+                <input name="city" value={form.city} onChange={handleChange} style={inputStyle} />
+              </FormField>
+              <FormField label="Pincode">
+                <input name="pincode" value={form.pincode} onChange={handleChange} style={inputStyle} />
+              </FormField>
+              <FormField label="State">
+                <input name="state" value={form.state} onChange={handleChange} style={inputStyle} />
+              </FormField>
+              <FormField label="Address" colSpan={2}>
+                <textarea name="address" value={form.address} onChange={handleChange} style={textareaStyle} />
+              </FormField>
+            </FormGrid>
+          </FormCard>
+        </FormSection>
 
-          {/* MOBILE 2 */}
-          <div style={{ marginBottom: 15 }}>
-            <label>Mobile 2</label>
-            <div style={{ display: "flex", gap: 10 }}>
-              <input
-                name="countryCode2"
-                value={form.countryCode2}
-                onChange={handleChange}
-                style={{ width: 80 }}
-              />
-              <input
-                name="mobile2"
-                value={form.mobile2}
-                onChange={handleChange}
-                maxLength={10}
-                placeholder="10 digit number"
-                style={{ flex: 1 }}
-              />
-            </div>
-          </div>
+        {/* ── Business ───────────────────────────────────────── */}
+        <FormSection title="Business">
+          <FormCard>
+            <FormGrid cols={2} minColWidth={200}>
+              <FormField label="GST number" colSpan={2}>
+                <input
+                  name="gstNumber"
+                  value={form.gstNumber}
+                  maxLength={15}
+                  onChange={(e) => setForm(prev => ({
+                    ...prev,
+                    gstNumber: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''),
+                  }))}
+                  placeholder="15-character GSTIN"
+                  style={inputStyle}
+                />
+              </FormField>
+              <FormField label="Credit limit (₹)" help="0 = no credit">
+                <input name="creditLimit" type="number" min="0" value={form.creditLimit} onChange={handleChange} style={inputStyle} />
+              </FormField>
+              <FormField label="Credit days" help="Payment due in N days">
+                <input name="credit_days" type="number" min="0" value={form.credit_days} onChange={handleChange} style={inputStyle} />
+              </FormField>
+            </FormGrid>
+          </FormCard>
+        </FormSection>
 
-          {/* CUSTOMER TYPE */}
-          <div style={{ marginBottom: 15 }}>
-            <label>Customer Type</label>
-            <select
-              name="customerType"
-              value={form.customerType}
-              onChange={handleChange}
-              style={{
-                width: "100%",
-                padding: 10,
-                borderRadius: 6,
-                border: `1px solid ${theme.border}`
-              }}
-            >
-              <option value="">Select</option>
-              <option>Retailer</option>
-              <option>Wholesaler</option>
-              <option>Hospital</option>
-              <option>Chain Store</option>
-            </select>
-          </div>
-
-          {/* SUBMIT */}
-          <button
-            type="submit"
-            style={{
-              width: "100%",
-              padding: 12,
-              background: theme.primary,
-              color: "#fff",
-              border: "none",
-              borderRadius: 8,
-              fontWeight: "bold",
-              cursor: "pointer"
-            }}
-          >
-            Update Customer
-          </button>
-        </form>
-      </div>
+        <FormActions saveLabel="Update customer" loading={loading} />
+      </form>
     </PageLayout>
   );
 }
