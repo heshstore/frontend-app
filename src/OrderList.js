@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { ORDER_STATUS } from "./constants/orderStatus";
 import DocActions from "./components/DocActions";
 import StatusBadge, { PricingBadge } from "./components/ui/StatusBadge";
+import EmptyState from "./components/ui/EmptyState";
+import { SkeletonList } from "./components/ui/SkeletonCard";
 import { apiFetch } from "./utils/api";
 import { useNotifications } from "./context/NotificationContext";
 import { useRightPanel } from "./components/layout/RightPanel";
@@ -18,6 +20,17 @@ const STATUS_BORDER = {
   DISPATCHED:       '#0066B3',
   DRAFT:            '#6c757d',
 };
+
+const STATUS_CHIPS = [
+  { value: '',                 label: 'All' },
+  { value: 'PENDING_APPROVAL', label: 'Pending approval' },
+  { value: 'APPROVED',         label: 'Approved' },
+  { value: 'IN_PRODUCTION',    label: 'In production' },
+  { value: 'READY',            label: 'Ready' },
+  { value: 'DISPATCHED',       label: 'Dispatched' },
+];
+
+const FILTER_KEY = 'saachu_order_filter';
 
 const btn = (extra = {}) => ({
   padding: '6px 13px',
@@ -35,8 +48,11 @@ const btn = (extra = {}) => ({
 
 export default function OrderList() {
   const [orders,   setOrders]   = useState([]);
+  const [loading,  setLoading]  = useState(false);
   const [search,   setSearch]   = useState("");
-  const [status,   setStatus]   = useState("");
+  const [status,   setStatus]   = useState(() => {
+    try { return localStorage.getItem(FILTER_KEY) || ''; } catch { return ''; }
+  });
   const [expanded, setExpanded] = useState(null);
   const navigate = useNavigate();
   const { dismissByEntity } = useNotifications();
@@ -44,6 +60,7 @@ export default function OrderList() {
   const [confirm, confirmModal] = useConfirm();
 
   const loadOrders = useCallback(async () => {
+    setLoading(true);
     try {
       const res  = await apiFetch(`/orders`);
       const data = await res.json();
@@ -55,10 +72,17 @@ export default function OrderList() {
       );
     } catch (err) {
       console.error("Failed to load orders:", err);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
   useEffect(() => { loadOrders(); }, [loadOrders]);
+
+  const setFilter = (val) => {
+    setStatus(val);
+    try { localStorage.setItem(FILTER_KEY, val); } catch {}
+  };
 
   const filtered = orders.filter((o) => {
     const text = search.toLowerCase();
@@ -100,7 +124,7 @@ export default function OrderList() {
     {confirmModal}
     <div>
       {/* Page title row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
         <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#111827', flex: 1 }}>Orders</h1>
         <button
           onClick={() => navigate('/order')}
@@ -110,33 +134,47 @@ export default function OrderList() {
         </button>
       </div>
 
-      {/* Search + filter */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+      {/* Search */}
+      <div style={{ marginBottom: 10 }}>
         <input
           placeholder="Search by ID / customer / mobile"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{ flex: 1, minWidth: 200, padding: '8px 12px', border: '1px solid #e5e7eb', borderRadius: 6, fontSize: 14 }}
+          style={{ width: '100%', padding: '8px 12px', border: '1px solid #e5e7eb', borderRadius: 6, fontSize: 14, boxSizing: 'border-box' }}
         />
-        <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          style={{ padding: '8px 12px', border: '1px solid #e5e7eb', borderRadius: 6, fontSize: 14 }}
-        >
-          <option value="">All statuses</option>
-          <option value="PENDING_APPROVAL">Pending approval</option>
-          <option value="APPROVED">Approved</option>
-          <option value="IN_PRODUCTION">In production</option>
-          <option value="READY">Ready</option>
-          <option value="DISPATCHED">Dispatched</option>
-        </select>
       </div>
 
-      {filtered.length === 0 && (
-        <div style={{ padding: 24, textAlign: 'center', color: '#6b7280' }}>No orders found.</div>
+      {/* Status filter chips */}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
+        {STATUS_CHIPS.map(chip => (
+          <button
+            key={chip.value}
+            onClick={() => setFilter(chip.value)}
+            style={{
+              padding: '5px 13px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+              cursor: 'pointer', border: 'none', transition: 'all 0.12s',
+              background: status === chip.value ? '#2563eb' : '#f3f4f6',
+              color: status === chip.value ? '#fff' : '#6b7280',
+            }}
+          >
+            {chip.label}
+          </button>
+        ))}
+      </div>
+
+      {loading && <SkeletonList count={5} />}
+
+      {!loading && filtered.length === 0 && (
+        <EmptyState
+          icon="📋"
+          title="No orders found"
+          subtitle={status ? `No ${status.toLowerCase().replace('_', ' ')} orders. Try a different filter.` : 'Create your first order to get started.'}
+          actionLabel="+ New order"
+          onAction={() => navigate('/order')}
+        />
       )}
 
-      {filtered.map((row) => (
+      {!loading && filtered.map((row) => (
         <div
           key={row.id}
           style={{
@@ -174,7 +212,7 @@ export default function OrderList() {
           {expanded === row.id && (
             <div style={{ borderTop: '1px solid #f3f4f6', padding: '12px 16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-                {/* Left: View · Edit · Send · Cancel */}
+                {/* Left */}
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   <button
                     onClick={() => openPanel(`Order #${row.order_number || row.id}`, <OrderDetail orderId={row.id} />)}
@@ -204,7 +242,7 @@ export default function OrderList() {
                   </button>
                 </div>
 
-                {/* Right: DocActions */}
+                {/* Right */}
                 <DocActions
                   type="order"
                   id={row.id}

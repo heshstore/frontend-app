@@ -415,6 +415,13 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
 
   const [loading, setLoading]       = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [isDesktop, setIsDesktop]   = useState(window.innerWidth >= 900);
+
+  useEffect(() => {
+    const h = () => setIsDesktop(window.innerWidth >= 900);
+    window.addEventListener('resize', h);
+    return () => window.removeEventListener('resize', h);
+  }, []);
 
   // Load master data
   useEffect(() => {
@@ -528,9 +535,72 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
     </PageLayout>
   );
 
+  const SummaryPanel = () => (
+    <div style={{ background: "#fff", borderRadius: 12, border: `1px solid ${theme.border}`, padding: 18, boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>
+        Live summary
+      </div>
+
+      {billTo && (
+        <div style={{ marginBottom: 14, paddingBottom: 12, borderBottom: `1px solid ${theme.border}` }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: theme.textMuted, marginBottom: 3 }}>Customer</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>{billTo.companyName}</div>
+          {billTo.city && <div style={{ fontSize: 12, color: theme.textMuted }}>{billTo.city}</div>}
+          {billTo.isWholesaler && (
+            <span style={{ fontSize: 10, fontWeight: 700, background: '#fef9c3', color: '#a16207', borderRadius: 8, padding: '1px 7px', marginTop: 4, display: 'inline-block' }}>
+              Wholesale pricing
+            </span>
+          )}
+        </div>
+      )}
+
+      {rows.filter(r => r.item_name || r.sku).length > 0 && (
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: theme.textMuted, marginBottom: 6 }}>Items ({rows.filter(r => r.item_name || r.sku).length})</div>
+          {rows.filter(r => r.item_name || r.sku).map((r, i) => {
+            const amt = calcAmount(r);
+            const gst = calcGst(r);
+            return (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4, color: '#374151' }}>
+                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: 8 }}>
+                  {r.item_name || r.sku} ×{r.qty}
+                </span>
+                <span style={{ fontWeight: 600, flexShrink: 0 }}>₹{(amt + gst).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6, color: theme.textMuted }}>
+          <span>Subtotal</span>
+          <span>₹{subTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+        </div>
+        {Object.keys(gstByRate).sort((a, b) => Number(a) - Number(b)).map(rate => (
+          <div key={rate} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 5, color: '#16a34a' }}>
+            <span>GST @{rate}%</span>
+            <span>+ ₹{gstByRate[rate].toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+          </div>
+        ))}
+        {extraCharges > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 5, color: theme.textMuted }}>
+            <span>Extra charges</span>
+            <span>₹{extraCharges.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+          </div>
+        )}
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 17, borderTop: `1px solid ${theme.border}`, paddingTop: 10, marginTop: 6 }}>
+          <span>Grand total</span>
+          <span style={{ color: theme.primary }}>₹{grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <PageLayout title={pageTitle}>
-      <form onSubmit={handleSubmit} style={{ maxWidth: 600, margin: "0 auto", paddingBottom: 100 }}>
+      <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+      <form onSubmit={handleSubmit} style={{ flex: 1, minWidth: 0, paddingBottom: 100 }}>
 
         {/* ── Customer ── */}
         {sectionDivider("Customer")}
@@ -650,9 +720,9 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
           </div>
         </div>
 
-        {/* ── Summary ── */}
-        {sectionDivider("Summary")}
-        <div style={{ background: theme.surface, borderRadius: 10, padding: 16, marginBottom: 16 }}>
+        {/* ── Summary (mobile only — desktop uses side panel) ── */}
+        {!isDesktop && sectionDivider("Summary")}
+        {!isDesktop && <div style={{ background: theme.surface, borderRadius: 10, padding: 16, marginBottom: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, fontSize: 14, color: theme.textMuted }}>
             <span>Sub Total (before GST)</span>
             <span>₹{subTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
@@ -690,7 +760,8 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
             <span>Grand Total</span>
             <span style={{ color: theme.primary }}>₹{grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
           </div>
-        </div>
+        </div>}
+
 
         {/* ── Submit ── */}
         <div style={{ position: "sticky", bottom: 0, background: "#fff", padding: "12px 0 4px", borderTop: `1px solid ${theme.border}`, marginTop: 8 }}>
@@ -701,6 +772,14 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
         </div>
 
       </form>
+
+      {/* Sticky summary panel — desktop only */}
+      {isDesktop && (
+        <div style={{ width: 268, flexShrink: 0, position: 'sticky', top: 20 }}>
+          <SummaryPanel />
+        </div>
+      )}
+      </div>
     </PageLayout>
   );
 }

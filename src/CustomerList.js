@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PageLayout from "./components/layout/PageLayout";
 import { PricingBadge } from "./components/ui/StatusBadge";
+import EmptyState from "./components/ui/EmptyState";
+import { SkeletonList } from "./components/ui/SkeletonCard";
 import { formatCustomer } from "./utils/formatCustomer";
 import { apiFetch } from "./utils/api";
 import { toast } from "./utils/toast";
@@ -15,6 +17,7 @@ const btn = (extra = {}) => ({
 
 export default function CustomerList() {
   const [customers, setCustomers] = useState([]);
+  const [loading,   setLoading]   = useState(false);
   const [search,    setSearch]    = useState('');
   const [expanded,  setExpanded]  = useState(null);
   const [page,      setPage]      = useState(1);
@@ -23,6 +26,7 @@ export default function CustomerList() {
   const [confirm, confirmModal] = useConfirm();
 
   const loadCustomers = useCallback(async (q = '') => {
+    setLoading(true);
     try {
       const path = q
         ? `/customers/search?q=${encodeURIComponent(q.toLowerCase())}`
@@ -30,7 +34,9 @@ export default function CustomerList() {
       const res  = await apiFetch(path);
       const data = await res.json();
       setCustomers(Array.isArray(data) ? data : []);
-    } catch {}
+    } catch {} finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { loadCustomers(); }, [loadCustomers]);
@@ -72,16 +78,19 @@ export default function CustomerList() {
     >
       <div style={{ maxWidth: 700 }}>
 
-        {paginated.length === 0 && (
-          <div style={{ padding: 32, textAlign: 'center', color: '#9ca3af' }}>
-            No customers found.{' '}
-            <button onClick={() => navigate('/add-customer')} style={{ color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
-              Add one
-            </button>
-          </div>
+        {loading && <SkeletonList count={6} />}
+
+        {!loading && paginated.length === 0 && (
+          <EmptyState
+            icon="👤"
+            title="No customers found"
+            subtitle={search ? `No customers match "${search}".` : 'Add your first customer to get started.'}
+            actionLabel="+ Add customer"
+            onAction={() => navigate('/add-customer')}
+          />
         )}
 
-        {paginated.map((c) => (
+        {!loading && paginated.map((c) => (
           <div
             key={c.id}
             style={{

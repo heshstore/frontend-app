@@ -4,6 +4,7 @@ import Sidebar from './Sidebar';
 import RightPanel, { RightPanelProvider } from './RightPanel';
 import MobileNav from './MobileNav';
 import UniversalSearch from '../UniversalSearch';
+import QuickActions from '../QuickActions';
 import { useNotifications } from '../../context/NotificationContext';
 
 const MOBILE_BP = 768;
@@ -48,6 +49,30 @@ function NotificationBell() {
   );
 }
 
+function QuickActionsButton() {
+  const [hov, setHov] = useState(false);
+  return (
+    <button
+      title="Quick actions (⌘K)"
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      onClick={() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }))}
+      style={{
+        background: hov ? '#f3f4f6' : 'none',
+        border: '1px solid #e5e7eb', borderRadius: 7,
+        padding: '4px 9px', cursor: 'pointer',
+        fontSize: 11, fontWeight: 600, color: '#6b7280',
+        display: 'flex', alignItems: 'center', gap: 5,
+        transition: 'background 0.12s',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      <span>⚡</span>
+      <kbd style={{ fontSize: 10, background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 4, padding: '1px 5px', fontFamily: 'monospace', color: '#9ca3af' }}>⌘K</kbd>
+    </button>
+  );
+}
+
 export default function Layout() {
   const { pathname }   = useLocation();
   const [isMobile,   setIsMobile]   = useState(window.innerWidth < MOBILE_BP);
@@ -71,6 +96,7 @@ export default function Layout() {
 
   return (
     <RightPanelProvider>
+      <QuickActions />
       <div style={{
         display: 'flex',
         height: '100vh',
@@ -140,6 +166,11 @@ export default function Layout() {
             <div style={{ flex: 1, maxWidth: 340, margin: '0 8px' }}>
               <UniversalSearch />
             </div>
+
+            {/* Quick actions button */}
+            {!isMobile && (
+              <QuickActionsButton />
+            )}
 
             {/* Notification bell */}
             <NotificationBell />

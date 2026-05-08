@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PageLayout from "./components/layout/PageLayout";
+import EmptyState from "./components/ui/EmptyState";
+import { SkeletonList } from "./components/ui/SkeletonCard";
 import { apiFetch } from "./utils/api";
 import { toast } from "./utils/toast";
 import { useConfirm } from "./components/ui/ConfirmModal";
@@ -12,15 +14,21 @@ const btn = (extra = {}) => ({
 });
 
 export default function ItemList() {
-  const [items,  setItems]  = useState([]);
-  const [search, setSearch] = useState('');
+  const [items,   setItems]   = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [search,  setSearch]  = useState('');
   const navigate = useNavigate();
   const [confirm, confirmModal] = useConfirm();
 
   const loadItems = useCallback(async () => {
-    const res  = await apiFetch('/service-items');
-    const data = await res.json();
-    setItems(Array.isArray(data) ? data : []);
+    setLoading(true);
+    try {
+      const res  = await apiFetch('/service-items');
+      const data = await res.json();
+      setItems(Array.isArray(data) ? data : []);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { loadItems(); }, [loadItems]);
@@ -61,16 +69,19 @@ export default function ItemList() {
       }
     >
       <div style={{ maxWidth: 700 }}>
-        {filtered.length === 0 && (
-          <div style={{ padding: 32, textAlign: 'center', color: '#9ca3af' }}>
-            No items found.{' '}
-            <button onClick={() => navigate('/add-item')} style={{ color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
-              Add one
-            </button>
-          </div>
+        {loading && <SkeletonList count={5} />}
+
+        {!loading && filtered.length === 0 && (
+          <EmptyState
+            icon="📦"
+            title="No service items found"
+            subtitle={search ? `No items match "${search}".` : 'Add service items, parts, and labor charges.'}
+            actionLabel="+ Add item"
+            onAction={() => navigate('/add-item')}
+          />
         )}
 
-        {filtered.map(item => (
+        {!loading && filtered.map(item => (
           <div key={item.id} style={{
             background: '#fff',
             borderRadius: 10,

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 
 const overlay = {
   position: 'fixed', inset: 0, zIndex: 10000,
@@ -16,6 +16,13 @@ const btnBase = { padding: '8px 18px', borderRadius: 8, fontSize: 13, fontWeight
 // ── ConfirmModal ─────────────────────────────────────────────────────────────
 
 function ConfirmModal({ open, title, message, confirmLabel = 'Confirm', danger = false, onConfirm, onCancel }) {
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => { if (e.key === 'Escape') onCancel(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [open, onCancel]);
+
   if (!open) return null;
   return (
     <div style={overlay} onClick={onCancel}>
