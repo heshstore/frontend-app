@@ -29,6 +29,8 @@ import LeadQueue from "./crm/LeadQueue";
 import FollowUpView from "./crm/FollowUpView";
 import AutomationSettings from "./crm/AutomationSettings";
 import WhatsAppQR from "./whatsapp/WhatsAppQR";
+import NotificationCenter from "./pages/notifications/NotificationCenter";
+import WhatsAppMonitor from "./pages/admin/WhatsAppMonitor";
 import MyJobs from "./pages/MyJobs";
 import ProductionQueue from "./pages/ProductionQueue";
 import JobDetail from "./pages/JobDetail";
@@ -43,6 +45,8 @@ import { NotificationProvider } from "./context/NotificationContext";
 import GlobalNotifications from "./components/GlobalNotifications";
 import NotificationPanel from "./components/NotificationPanel";
 import Layout from "./components/layout/Layout";
+import SlaDashboard from "./pages/sla/SlaDashboard";
+import ActivityCenter from "./pages/activity/ActivityCenter";
 
 const BYPASS_AUTH = true; // DEBUG: set to false once auth is confirmed working
 
@@ -142,6 +146,7 @@ function App() {
               <Route path="/crm/followups" element={<PrivateRoute><FollowUpView /></PrivateRoute>} />
               <Route path="/crm/automation-settings" element={<PrivateRoute><AutomationSettings /></PrivateRoute>} />
               <Route path="/whatsapp" element={<PrivateRoute><WhatsAppQR /></PrivateRoute>} />
+              <Route path="/admin/whatsapp" element={<PermissionRoute permission="whatsapp.manage"><WhatsAppMonitor /></PermissionRoute>} />
 
               {/* Production */}
               <Route path="/production/my-jobs" element={<PrivateRoute><MyJobs /></PrivateRoute>} />
@@ -153,9 +158,18 @@ function App() {
               <Route path="/dispatch/create" element={<PrivateRoute><DispatchForm /></PrivateRoute>} />
               <Route path="/dispatch/list" element={<PrivateRoute><DispatchList /></PrivateRoute>} />
 
+              {/* SLA */}
+              <Route path="/sla" element={<PrivateRoute><SlaDashboard /></PrivateRoute>} />
+
+              {/* Activity */}
+              <Route path="/activity" element={<PrivateRoute><ActivityCenter /></PrivateRoute>} />
+
               {/* Staff & Settings */}
               <Route path="/staff" element={<PermissionRoute permission="staff.view"><StaffManagement /></PermissionRoute>} />
               <Route path="/rbac" element={<PermissionRoute permission="rbac.manage"><RbacMatrix /></PermissionRoute>} />
+
+              {/* Notification Center */}
+              <Route path="/notifications" element={<PrivateRoute><NotificationCenter /></PrivateRoute>} />
 
               {/* Placeholder routes */}
               <Route path="/accounts" element={<PrivateRoute><Dashboard /></PrivateRoute>} />

@@ -3,15 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import { useNotifications } from '../context/NotificationContext';
 
 const PRIORITY_COLOR = {
-  HIGH:   { bg: '#fff1f0', border: '#dc3545', dot: '#dc3545' },
-  MEDIUM: { bg: '#fffbeb', border: '#f59e0b', dot: '#f59e0b' },
-  LOW:    { bg: '#f0fff4', border: '#28a745', dot: '#28a745' },
+  CRITICAL: { bg: '#fff1f2', border: '#dc2626', dot: '#dc2626' },
+  HIGH:     { bg: '#fff1f0', border: '#dc3545', dot: '#dc3545' },
+  MEDIUM:   { bg: '#fffbeb', border: '#f59e0b', dot: '#f59e0b' },
+  LOW:      { bg: '#f0fff4', border: '#28a745', dot: '#28a745' },
 };
 
 const ENTITY_ROUTE = {
   job:    (id) => `/production/jobs/${id}`,
   order:  (id) => `/orders/${id}`,
-  payment:(id) => `/orders/${id}`,
+  payment:(id) => `/accounts/history/${id}`,
   lead:   (id) => `/crm/leads/${id}`,
 };
 
@@ -22,7 +23,7 @@ const TYPE_ICON = {
   MOTIVATION: '🎉',
 };
 
-const RANK = { HIGH: 0, MEDIUM: 1, LOW: 2 };
+const RANK = { CRITICAL: -1, HIGH: 0, MEDIUM: 1, LOW: 2 };
 
 // Group notifications by entity_type:entity_id. Notifications with no entity are solo groups.
 function buildGroups(notifications) {
@@ -63,9 +64,11 @@ function NotifGroup({ group, onClose, onDismissGroup }) {
   const [expanded, setExpanded] = useState(false);
   const lead      = group[0];
   const colors    = PRIORITY_COLOR[lead.priority] ?? PRIORITY_COLOR.LOW;
-  const route     = lead.entity_type && lead.entity_id
-    ? ENTITY_ROUTE[lead.entity_type]?.(lead.entity_id)
-    : null;
+  // Prefer explicit action_url, fall back to entity-based route
+  const route     = lead.action_url
+    ?? (lead.entity_type && lead.entity_id
+      ? ENTITY_ROUTE[lead.entity_type]?.(lead.entity_id)
+      : null);
   const unread    = group.filter(n => !n.is_read).length;
   const hasMultiple = group.length > 1;
 
@@ -188,6 +191,7 @@ function NotifGroup({ group, onClose, onDismissGroup }) {
 }
 
 export default function NotificationPanel() {
+  const navigate = useNavigate();
   const {
     notifications, panelOpen, setPanel,
     markAllRead, markOneRead, unreadCount,
@@ -299,15 +303,24 @@ export default function NotificationPanel() {
           )}
         </div>
 
-        {/* Footer — noise hint */}
-        {notifications.filter(n => n.is_read).length > 5 && (
-          <div style={{
-            padding: '8px 14px', borderTop: '1px solid #eee',
-            fontSize: 11, color: '#aaa', textAlign: 'center',
-          }}>
-            Read notifications older than 1h are hidden
-          </div>
-        )}
+        {/* Footer */}
+        <div style={{
+          padding: '8px 14px', borderTop: '1px solid #eee',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <span style={{ fontSize: 11, color: '#aaa' }}>
+            {notifications.filter(n => n.is_read).length > 5 ? 'Read items older than 1h are hidden' : ''}
+          </span>
+          <button
+            onClick={() => { setPanel(false); navigate('/notifications'); }}
+            style={{
+              background: 'none', border: 'none', padding: 0,
+              fontSize: 12, color: '#2563eb', fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            View all →
+          </button>
+        </div>
       </div>
     </>
   );

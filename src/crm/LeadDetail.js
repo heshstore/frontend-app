@@ -5,6 +5,7 @@ import { apiFetch } from '../utils/api';
 import { theme } from '../theme';
 import ConvertToCustomerModal from './ConvertToCustomerModal';
 import LeadTimeline from './LeadTimeline';
+import ActivityTimeline from '../components/activity/ActivityTimeline';
 import { useCurrentUser } from '../utils/useCurrentUser';
 
 const URGENCY_BG = { HIGH: '#fff3f3', MEDIUM: '#fffbea', LOW: '#f8f9fa' };
@@ -440,6 +441,7 @@ export default function LeadDetail() {
         <button style={tabBtn('timeline')} onClick={() => setTab('timeline')}>Timeline</button>
         <button style={tabBtn('notes')} onClick={() => setTab('notes')}>Notes ({notes.length})</button>
         <button style={tabBtn('followups')} onClick={() => setTab('followups')}>Follow-ups ({followups.length})</button>
+        <button style={tabBtn('activity')} onClick={() => setTab('activity')}>Activity Log</button>
         {lead.whatsapp_chat_id && (
           <button style={tabBtn('chat')} onClick={() => setTab('chat')}>Chat</button>
         )}
@@ -449,6 +451,11 @@ export default function LeadDetail() {
         {/* Timeline tab */}
         {tab === 'timeline' && (
           <LeadTimeline lead={lead} notes={notes} followups={followups} chatMessages={chatMessages} />
+        )}
+
+        {/* Activity log tab */}
+        {tab === 'activity' && (
+          <ActivityTimeline entityType="lead" entityId={lead.id} maxHeight="500px" />
         )}
 
         {/* Notes tab */}

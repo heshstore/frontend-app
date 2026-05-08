@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { useNavigate, useLocation } from 'react-router-dom';
 import { apiFetch } from '../../utils/api';
 import { usePermission, hasAnyPermission } from '../../utils/usePermission';
+import { getUserCapabilities } from '../../config/roleCapabilities';
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
 
@@ -225,48 +226,51 @@ export default function Sidebar({ onClose }) {
     const next    = {};
     const amounts = {};
     const safe    = async (key, fn) => { try { const v = await fn(); next[key] = v; } catch {} };
+    // Read capabilities fresh each cycle so 60s refresh respects current perms
+    const caps = getUserCapabilities();
 
-    await Promise.allSettled([
-      safe('leads', async () => {
+    const tasks = [
+      caps.canViewCrm && safe('leads', async () => {
         const r = await apiFetch('/crm/leads?filter=hot&limit=1');
         if (!r.ok) return 0;
         const d = await r.json();
         return d.total ?? (Array.isArray(d) ? d.length : 0);
       }),
-      safe('quotations', async () => {
+      caps.canViewQuotations && safe('quotations', async () => {
         const r = await apiFetch('/quotations?limit=1');
         if (!r.ok) return 0;
         const d = await r.json();
         return d.total ?? (Array.isArray(d) ? d.length : 0);
       }),
-      safe('orders', async () => {
+      caps.canViewOrders && safe('orders', async () => {
         const r = await apiFetch('/orders?limit=1');
         if (!r.ok) return 0;
         const d = await r.json();
         return d.total ?? (Array.isArray(d) ? d.length : 0);
       }),
-      safe('production', async () => {
+      caps.canViewProduction && safe('production', async () => {
         const r = await apiFetch('/production/queue?limit=1');
         if (!r.ok) return 0;
         const d = await r.json();
         return d.total ?? (Array.isArray(d) ? d.length : 0);
       }),
-      safe('dispatch', async () => {
+      caps.canViewDispatch && safe('dispatch', async () => {
         const r = await apiFetch('/dispatch?limit=1');
         if (!r.ok) return 0;
         const d = await r.json();
         return d.total ?? (Array.isArray(d) ? d.length : 0);
       }),
-      safe('payments', async () => {
+      caps.canViewAccounts && safe('payments', async () => {
         const r = await apiFetch('/accounts/pending-summary');
         if (!r.ok) return 0;
         const d = await r.json();
         const amt = d.total_amount ?? d.amount ?? 0;
         amounts.payments = amt;
-        // badge shows 1 if any pending, to trigger priority color
         return amt > 0 ? 1 : 0;
       }),
-    ]);
+    ].filter(Boolean);
+
+    await Promise.allSettled(tasks);
 
     setCounts(prev => ({ ...prev, ...next }));
     if (Object.keys(amounts).length) setRawAmounts(prev => ({ ...prev, ...amounts }));
@@ -473,6 +477,8 @@ export default function Sidebar({ onClose }) {
                       <SideLabel>Settings</SideLabel>
                       <NavItem label="Staff"               href="/staff" icon="👤" />
                       <NavItem label="Roles & Permissions" href="/rbac"  icon="🔐" />
+                      <NavItem label="SLA Dashboard"       href="/sla"      icon="⏱️" />
+                      <NavItem label="Activity Center"     href="/activity" icon="📋" />
                     </>
                   )}
                 </div>

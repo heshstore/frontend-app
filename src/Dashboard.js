@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from './utils/api';
 import { useRightPanel } from './components/layout/RightPanel';
 import JobDetail from './pages/JobDetail';
+import { getUserCapabilities } from './config/roleCapabilities';
 
 // ── Palette ──────────────────────────────────────────────────────────────────
 
@@ -41,9 +42,8 @@ function fmtCurrency(val) {
 
 function fmtDue(iso) {
   if (!iso) return 'Overdue';
-  const d     = new Date(iso);
-  const now   = new Date();
-  const days  = Math.round((now - d) / 86_400_000);
+  const d    = new Date(iso);
+  const days = Math.round((Date.now() - d) / 86_400_000);
   if (days === 0) return 'Today';
   if (days === 1) return 'Yesterday';
   return `${days}d overdue`;
@@ -238,9 +238,9 @@ function StageCard({ label, count, backlog, pct, color, onClick }) {
 function DelayedRow({ job, onView }) {
   const [hov, setHov] = useState(false);
 
-  const dueLabel  = fmtDue(job.due_date);
-  const days      = job.due_date ? Math.round((Date.now() - new Date(job.due_date)) / 86_400_000) : 99;
-  const critical  = days >= 2;
+  const dueLabel = fmtDue(job.due_date);
+  const days     = job.due_date ? Math.round((Date.now() - new Date(job.due_date)) / 86_400_000) : 99;
+  const critical = days >= 2;
 
   const STAGE_COLOR = {
     DESIGNING: C.blue, PRINTING: C.orange, LASER: C.red, ASSEMBLY: C.purple,
@@ -294,46 +294,6 @@ function DelayedRow({ job, onView }) {
   );
 }
 
-// ── Performer row ─────────────────────────────────────────────────────────────
-
-function PerformerRow({ name, role, pct, rank }) {
-  const isTop = rank === 1;
-  const grad =
-    rank === 1 ? 'linear-gradient(135deg,#f59e0b,#fbbf24)'
-    : rank === 2 ? 'linear-gradient(135deg,#94a3b8,#cbd5e1)'
-    : 'linear-gradient(135deg,#cd7c3b,#e09a5a)';
-  const barColor = rank === 1 ? C.gold : rank === 2 ? '#94a3b8' : '#cd7c3b';
-
-  return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 10,
-      padding: '9px 10px', borderRadius: 10, marginBottom: 4,
-      background: isTop ? '#fffbeb' : 'transparent',
-      border: isTop ? '1px solid #fde68a' : '1px solid transparent',
-    }}>
-      <div style={{
-        width: 34, height: 34, borderRadius: 99, flexShrink: 0,
-        background: grad,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 13, fontWeight: 900, color: '#fff',
-        boxShadow: isTop ? '0 2px 8px rgba(245,158,11,0.4)' : 'none',
-      }}>
-        {name.charAt(0)}
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: isTop ? 800 : 600, color: C.text }}>
-          {name} {isTop && '🥇'}
-        </div>
-        <div style={{ fontSize: 11, color: C.muted }}>{role}</div>
-        <ProgressBar pct={pct} color={barColor} h={5} />
-      </div>
-      <div style={{ fontSize: 15, fontWeight: 900, color: isTop ? C.gold : C.text, flexShrink: 0 }}>
-        {pct}%
-      </div>
-    </div>
-  );
-}
-
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
@@ -341,52 +301,102 @@ export default function Dashboard() {
   const isMobile   = useIsMobile();
   const rightPanel = useRightPanel();
   const openPanel  = rightPanel?.openPanel;
+  const mountedRef = useRef(true);
 
-  // ── State ──────────────────────────────────────────────────────────────────
-  const [loading,        setLoading]        = useState(true);
-  const [summary,        setSummary]        = useState(null);
-  const [delayedJobs,    setDelayedJobs]    = useState([]);
-  const [hotLeadsCount,  setHotLeadsCount]  = useState(0);
-  const [pendingAmount,  setPendingAmount]  = useState(0);
+  const caps = useMemo(() => getUserCapabilities(), []);
+
+  // ── Per-widget loading states ──────────────────────────────────────────────
+  const [loadingSummary,  setLoadingSummary]  = useState(caps.canViewDashboardSummary);
+  const [loadingDelayed,  setLoadingDelayed]  = useState(caps.canViewDelayedJobs);
+  const [loadingLeads,    setLoadingLeads]    = useState(caps.canViewHotLeads);
+  const [loadingPayments, setLoadingPayments] = useState(caps.canViewPendingPayments);
+
+  const [summary,       setSummary]       = useState(null);
+  const [delayedJobs,   setDelayedJobs]   = useState([]);
+  const [hotLeadsCount, setHotLeadsCount] = useState(0);
+  const [pendingAmount, setPendingAmount] = useState(0);
 
   const [syncing,   setSyncing]   = useState(false);
   const [progress,  setProgress]  = useState(0);
   const [syncPhase, setSyncPhase] = useState('idle');
 
-  // ── Fetch ──────────────────────────────────────────────────────────────────
+  // ── Fetch — only APIs the current user is permitted to call ────────────────
 
   const fetchDashboard = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [summaryRes, delayedRes, leadsRes, paymentRes] = await Promise.all([
-        apiFetch('/dashboard/summary'),
-        apiFetch('/production/delayed?limit=5'),
-        apiFetch('/crm/leads?filter=hot&limit=1'),
-        apiFetch('/accounts/pending-summary'),
-      ]);
+    const t0 = Date.now();
+    const ok = () => mountedRef.current;
+    // Re-read capabilities fresh so the 60s refresh interval uses current perms
+    const c = getUserCapabilities();
 
-      if (summaryRes.ok)  setSummary(await summaryRes.json());
-      if (delayedRes.ok) {
-        const data = await delayedRes.json();
-        const arr  = Array.isArray(data) ? data : (data.jobs ?? []);
-        setDelayedJobs(arr.slice(0, 5));
-      }
-      if (leadsRes.ok) {
-        const data = await leadsRes.json();
-        setHotLeadsCount(data.total ?? (Array.isArray(data) ? data.length : 0));
-      }
-      if (paymentRes.ok) {
-        const data = await paymentRes.json();
-        setPendingAmount(data.total_amount ?? data.amount ?? 0);
-      }
-    } catch (e) {
-      console.error('Dashboard fetch error', e);
-    } finally {
-      setLoading(false);
+    if (c.canViewDashboardSummary) setLoadingSummary(true);
+    if (c.canViewDelayedJobs)      setLoadingDelayed(true);
+    if (c.canViewHotLeads)         setLoadingLeads(true);
+    if (c.canViewPendingPayments)  setLoadingPayments(true);
+
+    const tasks = [];
+
+    if (c.canViewDashboardSummary) {
+      tasks.push(
+        apiFetch('/dashboard/summary')
+          .then(r => r.ok ? r.json() : null)
+          .then(d => { if (d && ok()) setSummary(d); })
+          .catch(() => {})
+          .finally(() => { if (ok()) setLoadingSummary(false); })
+      );
     }
-  }, []);
 
-  useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
+    if (c.canViewDelayedJobs) {
+      tasks.push(
+        apiFetch('/production/delayed?limit=5')
+          .then(r => r.ok ? r.json() : null)
+          .then(d => {
+            if (!d || !ok()) return;
+            const arr = Array.isArray(d) ? d : (d.jobs ?? []);
+            setDelayedJobs(arr.slice(0, 5));
+          })
+          .catch(() => {})
+          .finally(() => { if (ok()) setLoadingDelayed(false); })
+      );
+    }
+
+    if (c.canViewHotLeads) {
+      tasks.push(
+        apiFetch('/crm/leads?filter=hot&limit=1')
+          .then(r => r.ok ? r.json() : null)
+          .then(d => {
+            if (!d || !ok()) return;
+            setHotLeadsCount(d.total ?? (Array.isArray(d) ? d.length : 0));
+          })
+          .catch(() => {})
+          .finally(() => { if (ok()) setLoadingLeads(false); })
+      );
+    }
+
+    if (c.canViewPendingPayments) {
+      tasks.push(
+        apiFetch('/accounts/pending-summary')
+          .then(r => r.ok ? r.json() : null)
+          .then(d => {
+            if (!d || !ok()) return;
+            setPendingAmount(d.total_amount ?? d.amount ?? 0);
+          })
+          .catch(() => {})
+          .finally(() => { if (ok()) setLoadingPayments(false); })
+      );
+    }
+
+    await Promise.allSettled(tasks);
+
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[DASHBOARD] ${tasks.length} widget${tasks.length !== 1 ? 's' : ''} loaded in ${Date.now() - t0}ms`);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    mountedRef.current = true;
+    fetchDashboard();
+    return () => { mountedRef.current = false; };
+  }, [fetchDashboard]);
 
   // ── Shopify sync ───────────────────────────────────────────────────────────
 
@@ -420,13 +430,61 @@ export default function Dashboard() {
 
   // ── Derived values ─────────────────────────────────────────────────────────
 
-  const totalOrders    = summary?.total_orders     ?? '—';
-  const todaySales     = fmtCurrency(summary?.today_sales);
-  const pendingAmtFmt  = fmtCurrency(pendingAmount || summary?.pending_amount);
-  const delayedCount   = summary?.delayed_jobs ?? delayedJobs.length;
+  const totalOrders   = summary?.total_orders ?? '—';
+  const todaySales    = fmtCurrency(summary?.today_sales);
+  const pendingAmtFmt = fmtCurrency(pendingAmount || summary?.pending_amount);
+  const delayedCount  = summary?.delayed_jobs ?? delayedJobs.length;
 
-  const col4  = isMobile ? '1fr' : 'repeat(4, 1fr)';
-  const colBt = isMobile ? '1fr' : '1fr 280px';
+  // ── Role-aware widget configs ──────────────────────────────────────────────
+
+  const priorityCards = [
+    caps.canViewDelayedJobs && {
+      key: 'delayed',
+      icon: '⚠️', label: 'Delayed Jobs',
+      value: delayedCount, sub: 'Jobs stuck in production',
+      btnLabel: 'View Jobs',
+      bgFrom: '#dc2626', bgTo: '#ef4444',
+      loading: loadingSummary || loadingDelayed,
+      onClick: () => navigate('/production/queue'),
+    },
+    caps.canViewHotLeads && {
+      key: 'leads',
+      icon: '🔥', label: 'HOT Leads',
+      value: hotLeadsCount, sub: 'Leads need follow-up today',
+      btnLabel: 'View Leads',
+      bgFrom: '#ea580c', bgTo: '#f97316',
+      loading: loadingLeads,
+      onClick: () => navigate('/crm/leads?filter=hot'),
+    },
+    caps.canViewPendingPayments && {
+      key: 'payments',
+      icon: '💰', label: 'Pending Payments',
+      value: pendingAmtFmt, sub: 'Outstanding from customers',
+      btnLabel: 'View Accounts',
+      bgFrom: '#d97706', bgTo: '#f59e0b',
+      loading: loadingPayments,
+      onClick: () => navigate('/accounts/outstanding'),
+    },
+  ].filter(Boolean);
+
+  const quickActions = [
+    caps.canViewCrm        && { key: 'leads', icon: '📞', label: 'Call HOT Leads',  color: C.red,    bg: '#fff5f5', href: '/crm/queue'       },
+    caps.canViewProduction  && { key: 'jobs',  icon: '✅', label: 'Complete Jobs',   color: C.green,  bg: '#f0fdf4', href: '/production/queue' },
+    caps.canViewQuotations  && { key: 'quot',  icon: '📝', label: 'Send Quotation',  color: C.blue,   bg: '#eff6ff', href: '/quotation'        },
+    caps.canViewOrders      && { key: 'order', icon: '📦', label: 'Add Order',       color: C.purple, bg: '#f5f3ff', href: '/order'            },
+  ].filter(Boolean);
+
+  const summaryCards = [
+    caps.canViewOrders          && { key: 'orders',  icon: '📦', title: 'Total Orders',    value: totalOrders,                      color: C.blue,   loading: loadingSummary  },
+    caps.canViewPendingPayments && { key: 'pending', icon: '💰', title: 'Pending Amount',  value: pendingAmtFmt,                    color: C.red,    loading: loadingPayments },
+    caps.canViewOrders          && { key: 'sales',   icon: '📈', title: "Today's Sales",   value: todaySales,                       color: C.green,  loading: loadingSummary  },
+    caps.canViewProduction      && { key: 'prod',    icon: '⚙️', title: 'Production Jobs', value: summary?.production_jobs ?? '—', color: C.orange, loading: loadingSummary  },
+  ].filter(Boolean);
+
+  // ── Layout helpers ─────────────────────────────────────────────────────────
+
+  const colSummary = isMobile ? '1fr 1fr' : `repeat(${Math.max(summaryCards.length, 1)}, 1fr)`;
+  const colBt      = isMobile ? '1fr' : (caps.canViewDelayedJobs ? '1fr 280px' : '280px');
 
   return (
     <div style={{ fontFamily: "'Inter','Segoe UI',Arial,sans-serif", background: C.bg, minHeight: '100%', paddingBottom: 32 }}>
@@ -452,89 +510,88 @@ export default function Dashboard() {
           </button>
         </div>
 
-        {/* ── 🔥 Priority Actions ── */}
-        <SectionLabel>🔥 Priority Actions</SectionLabel>
-        <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexDirection: isMobile ? 'column' : 'row' }}>
-          <PriorityCard
-            icon="⚠️" label="Delayed Jobs"
-            value={delayedCount} sub="Jobs stuck in production"
-            btnLabel="View Jobs"
-            bgFrom="#dc2626" bgTo="#ef4444"
-            loading={loading}
-            onClick={() => navigate('/production/queue')}
-          />
-          <PriorityCard
-            icon="🔥" label="HOT Leads"
-            value={hotLeadsCount} sub="Leads need follow-up today"
-            btnLabel="View Leads"
-            bgFrom="#ea580c" bgTo="#f97316"
-            loading={loading}
-            onClick={() => navigate('/crm/leads?filter=hot')}
-          />
-          <PriorityCard
-            icon="💰" label="Pending Payments"
-            value={pendingAmtFmt} sub="Outstanding from customers"
-            btnLabel="View Accounts"
-            bgFrom="#d97706" bgTo="#f59e0b"
-            loading={loading}
-            onClick={() => navigate('/accounts/outstanding')}
-          />
-        </div>
+        {/* ── Priority Actions — only visible cards for this role ── */}
+        {priorityCards.length > 0 && (
+          <>
+            <SectionLabel>🔥 Priority Actions</SectionLabel>
+            <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexDirection: isMobile ? 'column' : 'row' }}>
+              {priorityCards.map(card => (
+                <PriorityCard key={card.key} {...card} />
+              ))}
+            </div>
+          </>
+        )}
 
-        {/* ── Quick Actions ── */}
-        <SectionLabel>⚡ Quick Actions</SectionLabel>
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 10, marginBottom: 20 }}>
-          <QuickBtn icon="📞" label="Call HOT Leads"    color={C.red}    bg="#fff5f5" onClick={() => navigate('/crm/queue')}       />
-          <QuickBtn icon="✅" label="Complete Jobs"      color={C.green}  bg="#f0fdf4" onClick={() => navigate('/production/queue')} />
-          <QuickBtn icon="📝" label="Send Quotation"     color={C.blue}   bg="#eff6ff" onClick={() => navigate('/quotation')}       />
-          <QuickBtn icon="📦" label="Add Order"          color={C.purple} bg="#f5f3ff" onClick={() => navigate('/order')}           />
-        </div>
+        {/* ── Quick Actions — only actions this role can perform ── */}
+        {quickActions.length > 0 && (
+          <>
+            <SectionLabel>⚡ Quick Actions</SectionLabel>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : `repeat(${quickActions.length}, 1fr)`, gap: 10, marginBottom: 20 }}>
+              {quickActions.map(a => (
+                <QuickBtn key={a.key} icon={a.icon} label={a.label} color={a.color} bg={a.bg} onClick={() => navigate(a.href)} />
+              ))}
+            </div>
+          </>
+        )}
 
-        {/* ── Summary ── */}
-        <SectionLabel>📊 Overview</SectionLabel>
-        <div style={{ display: 'grid', gridTemplateColumns: col4, gap: 10, marginBottom: 20 }}>
-          <SummaryCard icon="📦" title="Total Orders"    value={totalOrders}                        color={C.blue}   loading={loading} />
-          <SummaryCard icon="💰" title="Pending Amount"  value={pendingAmtFmt}                      color={C.red}    loading={loading} />
-          <SummaryCard icon="📈" title="Today's Sales"   value={todaySales}                         color={C.green}  loading={loading} />
-          <SummaryCard icon="⚙️" title="Production Jobs" value={summary?.production_jobs ?? '—'}    color={C.orange} loading={loading} />
-        </div>
+        {/* ── Overview — only cards for visible data ── */}
+        {summaryCards.length > 0 && (
+          <>
+            <SectionLabel>📊 Overview</SectionLabel>
+            <div style={{ display: 'grid', gridTemplateColumns: colSummary, gap: 10, marginBottom: 20 }}>
+              {summaryCards.map(card => (
+                <SummaryCard key={card.key} {...card} />
+              ))}
+            </div>
+          </>
+        )}
 
-        {/* ── Production Stages ── */}
-        <SectionLabel>⚙️ Production Stages</SectionLabel>
-        <div style={{ display: 'grid', gridTemplateColumns: col4, gap: 10, marginBottom: 20 }}>
-          <StageCard label="Designing" count={summary?.stage_designing} backlog={0} pct={60} color={C.blue}   onClick={() => navigate('/production/queue')} />
-          <StageCard label="Printing"  count={summary?.stage_printing}  backlog={2} pct={45} color={C.orange} onClick={() => navigate('/production/queue')} />
-          <StageCard label="Laser"     count={summary?.stage_laser}     backlog={1} pct={30} color={C.red}    onClick={() => navigate('/production/queue')} />
-          <StageCard label="Assembly"  count={summary?.stage_assembly}  backlog={0} pct={75} color={C.purple} onClick={() => navigate('/production/queue')} />
-        </div>
+        {/* ── Production Stages — production role only ── */}
+        {caps.canViewProduction && (
+          <>
+            <SectionLabel>⚙️ Production Stages</SectionLabel>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 10, marginBottom: 20 }}>
+              <StageCard label="Designing" count={summary?.stage_designing} backlog={0} pct={60} color={C.blue}   onClick={() => navigate('/production/queue')} />
+              <StageCard label="Printing"  count={summary?.stage_printing}  backlog={2} pct={45} color={C.orange} onClick={() => navigate('/production/queue')} />
+              <StageCard label="Laser"     count={summary?.stage_laser}     backlog={1} pct={30} color={C.red}    onClick={() => navigate('/production/queue')} />
+              <StageCard label="Assembly"  count={summary?.stage_assembly}  backlog={0} pct={75} color={C.purple} onClick={() => navigate('/production/queue')} />
+            </div>
+          </>
+        )}
 
         {/* ── Bottom row ── */}
         <div style={{ display: 'grid', gridTemplateColumns: colBt, gap: 12, marginBottom: 20 }}>
 
-          {/* Delayed jobs */}
-          <Card style={{ padding: '16px 18px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <SectionLabel>⚠ Needs Attention</SectionLabel>
-              <button
-                onClick={() => navigate('/production/queue')}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: C.blue, fontWeight: 700, padding: 0 }}
-              >
-                View All →
-              </button>
-            </div>
-
-            {delayedJobs.length === 0 && (
-              <div style={{ textAlign: 'center', padding: '24px 0', color: C.green, fontSize: 13, fontWeight: 600 }}>
-                ✅ No delayed jobs right now
+          {/* Delayed jobs list — production role only */}
+          {caps.canViewDelayedJobs && (
+            <Card style={{ padding: '16px 18px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <SectionLabel>⚠ Needs Attention</SectionLabel>
+                <button
+                  onClick={() => navigate('/production/queue')}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: C.blue, fontWeight: 700, padding: 0 }}
+                >
+                  View All →
+                </button>
               </div>
-            )}
 
-            {delayedJobs.map(j => (
-              <DelayedRow key={j.id} job={j} onView={handleDelayedJobClick} />
-            ))}
-          </Card>
+              {loadingDelayed ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {[1, 2, 3].map(i => <Skeleton key={i} h={52} r={9} />)}
+                </div>
+              ) : delayedJobs.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '24px 0', color: C.green, fontSize: 13, fontWeight: 600 }}>
+                  ✅ No delayed jobs right now
+                </div>
+              ) : (
+                delayedJobs.map(j => (
+                  <DelayedRow key={j.id} job={j} onView={handleDelayedJobClick} />
+                ))
+              )}
+            </Card>
+          )}
 
-          {/* Top performers */}
+          {/* Top Performers — visible to all */}
           <Card style={{ padding: '16px 18px' }}>
             <SectionLabel>🏆 Top Performers</SectionLabel>
             <div style={{ textAlign: 'center', padding: '20px 0', color: C.faint, fontSize: 12 }}>
@@ -555,47 +612,49 @@ export default function Dashboard() {
 
         </div>
 
-        {/* ── Shopify sync ── */}
-        <Card style={{ padding: '12px 18px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>🛍 Shopify Items</div>
-              <div style={{ fontSize: 12, color: C.muted }}>Sync product catalogue from Shopify</div>
-            </div>
-            <button
-              onClick={syncing ? undefined : handleSync}
-              disabled={syncing}
-              style={{
-                padding: '10px 18px', borderRadius: 8, border: 'none',
-                background: syncing ? '#f3f4f6' : C.green,
-                color: syncing ? C.muted : '#fff',
-                fontSize: 13, fontWeight: 600,
-                cursor: syncing ? 'default' : 'pointer',
-                minWidth: 120, minHeight: 44, transition: 'background 0.15s',
-              }}
-            >
-              {syncing ? `⏳ ${progress}%` : '↻ Sync Now'}
-            </button>
-          </div>
-          {syncing && (
-            <div style={{ marginTop: 10 }}>
-              <div style={{ height: 5, background: '#f1f5f9', borderRadius: 99, overflow: 'hidden', position: 'relative' }}>
-                {syncPhase === 'fetching' ? (
-                  <div style={{
-                    position: 'absolute', height: '100%', width: '40%',
-                    background: C.green, borderRadius: 99,
-                    animation: 'dash 1.4s ease-in-out infinite',
-                  }} />
-                ) : (
-                  <div style={{ height: '100%', width: `${progress}%`, background: C.green, borderRadius: 99, transition: 'width 0.4s' }} />
-                )}
+        {/* ── Shopify sync — item managers only ── */}
+        {caps.canSyncShopify && (
+          <Card style={{ padding: '12px 18px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>🛍 Shopify Items</div>
+                <div style={{ fontSize: 12, color: C.muted }}>Sync product catalogue from Shopify</div>
               </div>
-              <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>
-                {syncPhase === 'fetching' ? 'Fetching from Shopify…' : `Saving items… ${progress}%`}
-              </div>
+              <button
+                onClick={syncing ? undefined : handleSync}
+                disabled={syncing}
+                style={{
+                  padding: '10px 18px', borderRadius: 8, border: 'none',
+                  background: syncing ? '#f3f4f6' : C.green,
+                  color: syncing ? C.muted : '#fff',
+                  fontSize: 13, fontWeight: 600,
+                  cursor: syncing ? 'default' : 'pointer',
+                  minWidth: 120, minHeight: 44, transition: 'background 0.15s',
+                }}
+              >
+                {syncing ? `⏳ ${progress}%` : '↻ Sync Now'}
+              </button>
             </div>
-          )}
-        </Card>
+            {syncing && (
+              <div style={{ marginTop: 10 }}>
+                <div style={{ height: 5, background: '#f1f5f9', borderRadius: 99, overflow: 'hidden', position: 'relative' }}>
+                  {syncPhase === 'fetching' ? (
+                    <div style={{
+                      position: 'absolute', height: '100%', width: '40%',
+                      background: C.green, borderRadius: 99,
+                      animation: 'dash 1.4s ease-in-out infinite',
+                    }} />
+                  ) : (
+                    <div style={{ height: '100%', width: `${progress}%`, background: C.green, borderRadius: 99, transition: 'width 0.4s' }} />
+                  )}
+                </div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>
+                  {syncPhase === 'fetching' ? 'Fetching from Shopify…' : `Saving items… ${progress}%`}
+                </div>
+              </div>
+            )}
+          </Card>
+        )}
 
       </div>
 

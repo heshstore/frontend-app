@@ -4,10 +4,11 @@ import { apiFetch } from '../utils/api';
 const NotificationContext = createContext(null);
 
 const initialState = {
-  notifications: [],
-  unreadCount:   0,
-  nextAction:    null,
-  panelOpen:     false,
+  notifications:  [],
+  unreadCount:    0,
+  categoryCounts: {},   // { CRM: 3, PRODUCTION: 5, ... }
+  nextAction:     null,
+  panelOpen:      false,
 };
 
 function reducer(state, action) {
@@ -15,12 +16,11 @@ function reducer(state, action) {
     case 'ADD':
       return {
         ...state,
-        notifications: [action.payload, ...state.notifications].slice(0, 20),
+        notifications: [action.payload, ...state.notifications].slice(0, 50),
         unreadCount:   state.unreadCount + 1,
       };
     case 'SET_ALL': {
-      // Merge fetched with any real-time ones already in state, deduplicate by id
-      const seen = new Set();
+      const seen   = new Set();
       const merged = [...state.notifications, ...action.payload].filter(n => {
         if (seen.has(n.id)) return false;
         seen.add(n.id);
@@ -29,14 +29,19 @@ function reducer(state, action) {
       return { ...state, notifications: merged };
     }
     case 'SET_COUNT':
-      return { ...state, unreadCount: action.payload };
+      return {
+        ...state,
+        unreadCount:    action.payload.count ?? action.payload,
+        categoryCounts: action.payload.byCategory ?? state.categoryCounts,
+      };
     case 'SET_NEXT_ACTION':
       return { ...state, nextAction: action.payload };
     case 'MARK_ALL_READ':
       return {
         ...state,
-        notifications: state.notifications.map(n => ({ ...n, is_read: true })),
-        unreadCount:   0,
+        notifications:  state.notifications.map(n => ({ ...n, is_read: true })),
+        unreadCount:    0,
+        categoryCounts: {},
       };
     case 'MARK_ONE_READ':
       return {
@@ -46,6 +51,14 @@ function reducer(state, action) {
         ),
         unreadCount: Math.max(0, state.unreadCount - 1),
       };
+    case 'HIDE': {
+      const hidden = state.notifications.find(n => n.id === action.id);
+      return {
+        ...state,
+        notifications: state.notifications.filter(n => n.id !== action.id),
+        unreadCount: hidden && !hidden.is_read ? Math.max(0, state.unreadCount - 1) : state.unreadCount,
+      };
+    }
     case 'DISMISS_BY_ENTITY':
       return {
         ...state,
@@ -72,7 +85,8 @@ export function NotificationProvider({ children }) {
       const res = await apiFetch('/notifications');
       if (!res?.ok) return;
       const data = await res.json();
-      dispatch({ type: 'SET_ALL', payload: data });
+      // Center response is { items, total, page }; panel is array
+      dispatch({ type: 'SET_ALL', payload: Array.isArray(data) ? data : (data.items ?? []) });
     } catch {}
   }, []);
 
@@ -80,8 +94,9 @@ export function NotificationProvider({ children }) {
     try {
       const res = await apiFetch('/notifications/count');
       if (!res?.ok) return;
-      const { count } = await res.json();
-      dispatch({ type: 'SET_COUNT', payload: count });
+      const data = await res.json();
+      // data = { count: N, byCategory: {...} }
+      dispatch({ type: 'SET_COUNT', payload: data });
     } catch {}
   }, []);
 
@@ -108,6 +123,14 @@ export function NotificationProvider({ children }) {
     } catch {}
   }, []);
 
+  const hideNotification = useCallback(async (notifId) => {
+    // Optimistic: remove from local state immediately
+    dispatch({ type: 'HIDE', id: notifId });
+    try {
+      await apiFetch(`/notifications/${notifId}`, { method: 'DELETE' });
+    } catch {}
+  }, []);
+
   const dismissByEntity = useCallback((entityType, entityId) => {
     dispatch({ type: 'DISMISS_BY_ENTITY', entityType, entityId });
   }, []);
@@ -126,6 +149,7 @@ export function NotificationProvider({ children }) {
         fetchNextAction,
         markAllRead,
         markOneRead,
+        hideNotification,
         dismissByEntity,
         setPanel,
       }}
