@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ORDER_STATUS } from "./constants/orderStatus";
 import DocActions from "./components/DocActions";
@@ -9,49 +9,75 @@ import OrderDetail from "./OrderDetail";
 import { toast } from "./utils/toast";
 import { useConfirm } from "./components/ui/ConfirmModal";
 
+const STATUS_COLORS = {
+  PENDING_APPROVAL: '#f59e0b',
+  APPROVED:         '#16a34a',
+  IN_PRODUCTION:    '#6366f1',
+  READY:            '#0891b2',
+  DISPATCHED:       '#0066B3',
+  DRAFT:            '#6c757d',
+};
+
+const STATUS_LABELS = {
+  PENDING_APPROVAL: 'Pending approval',
+  APPROVED:         'Approved',
+  IN_PRODUCTION:    'In production',
+  READY:            'Ready',
+  DISPATCHED:       'Dispatched',
+  DRAFT:            'Draft',
+};
+
+const btn = (extra = {}) => ({
+  padding: '6px 13px',
+  fontSize: 12,
+  fontWeight: 600,
+  borderRadius: 5,
+  height: 32,
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 4,
+  cursor: 'pointer',
+  border: 'none',
+  ...extra,
+});
+
 export default function OrderList() {
-  const [orders, setOrders] = useState([]);
-  const [search, setSearch] = useState("");
+  const [orders,   setOrders]   = useState([]);
+  const [search,   setSearch]   = useState("");
+  const [status,   setStatus]   = useState("");
+  const [expanded, setExpanded] = useState(null);
   const navigate = useNavigate();
   const { dismissByEntity } = useNotifications();
   const { openPanel } = useRightPanel();
   const [confirm, confirmModal] = useConfirm();
 
-  // 1. ADD SCREEN WIDTH DETECTION
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-
-  useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
-
-  const loadOrders = async () => {
+  const loadOrders = useCallback(async () => {
     try {
-      const res = await apiFetch(`/orders`);
+      const res  = await apiFetch(`/orders`);
       const data = await res.json();
-      // Show all non-cancelled, non-draft orders
-      setOrders((Array.isArray(data) ? data : []).filter(o =>
-        o.status !== ORDER_STATUS.CANCELLED &&
-        o.status !== ORDER_STATUS.DRAFT
-      ));
+      setOrders(
+        (Array.isArray(data) ? data : []).filter(o =>
+          o.status !== ORDER_STATUS.CANCELLED &&
+          o.status !== ORDER_STATUS.DRAFT
+        )
+      );
     } catch (err) {
       console.error("Failed to load orders:", err);
     }
-  };
-
-  useEffect(() => {
-    loadOrders();
   }, []);
 
-  const filteredOrders = orders.filter((o) =>
-    (o.customer_name || "").toLowerCase().includes(search.toLowerCase()) ||
-    (o.mobile || "").includes(search) ||
-    String(o.id).includes(search)
-  );
+  useEffect(() => { loadOrders(); }, [loadOrders]);
+
+  const filtered = orders.filter((o) => {
+    const text = search.toLowerCase();
+    const matchText =
+      (o.customer_name || "").toLowerCase().includes(text) ||
+      (o.mobile || "").includes(text) ||
+      String(o.id).includes(text) ||
+      (o.order_number || "").toLowerCase().includes(text);
+    const matchStatus = !status || o.status === status;
+    return matchText && matchStatus;
+  });
 
   const handleSendForApproval = async (row) => {
     try {
@@ -64,8 +90,8 @@ export default function OrderList() {
     }
   };
 
-  const handleCancelOrder = async (row) => {
-    if (!await confirm('Cancel this order?', '', { danger: true, confirmLabel: 'Cancel Order' })) return;
+  const handleCancel = async (row) => {
+    if (!await confirm('Cancel this order?', 'This cannot be undone.', { danger: true, confirmLabel: 'Cancel order' })) return;
     try {
       const res = await apiFetch(`/orders/${row.id}/cancel`, { method: 'PATCH' });
       if (!res.ok) throw new Error();
@@ -80,202 +106,143 @@ export default function OrderList() {
   return (
     <>
     {confirmModal}
-    <div style={{ fontFamily: "'Inter','Segoe UI',Arial,sans-serif", background: '#f8fafc', minHeight: '100vh' }}>
-
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', padding: '16px 20px 0' }}>
-        <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 600 }}>Orders</h2>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button
-            onClick={() => navigate('/order')}
-            style={{ padding: '8px 12px', borderRadius: '10px', border: 'none', background: '#2563eb', color: '#fff', cursor: 'pointer', fontSize: '13px' }}
-          >
-            + New Order
-          </button>
-        </div>
+    <div>
+      {/* Page title row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+        <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#111827', flex: 1 }}>Orders</h1>
+        <button
+          onClick={() => navigate('/order')}
+          style={btn({ background: '#2563eb', color: '#fff', padding: '8px 16px', height: 36, fontSize: 13 })}
+        >
+          + New order
+        </button>
       </div>
 
-      {/* Search bar */}
-      <div style={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        padding: "16px 20px 0",
-        flexWrap: "wrap",
-        gap: 10
-      }}>
+      {/* Search + filter */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
         <input
-          placeholder="Search by ID / Customer / Mobile"
+          placeholder="Search by ID / customer / mobile"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{
-            padding: "10px",
-            width: "360px",
-            maxWidth: "100%",
-            border: "1px solid #e2e8f0",
-            borderRadius: "8px",
-            fontSize: 13,
-          }}
+          style={{ flex: 1, minWidth: 200, padding: '8px 12px', border: '1px solid #e5e7eb', borderRadius: 6, fontSize: 14 }}
         />
+        <select
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+          style={{ padding: '8px 12px', border: '1px solid #e5e7eb', borderRadius: 6, fontSize: 14 }}
+        >
+          <option value="">All statuses</option>
+          <option value="PENDING_APPROVAL">Pending approval</option>
+          <option value="APPROVED">Approved</option>
+          <option value="IN_PRODUCTION">In production</option>
+          <option value="READY">Ready</option>
+          <option value="DISPATCHED">Dispatched</option>
+        </select>
       </div>
 
-      {/* 5. MAKE TABLE RESPONSIVE */}
-      <div style={{ overflowX: "auto" }}>
-        {isMobile ? (
-          filteredOrders.map((row) => (
-            <div key={row.id} style={{
-              border: "1px solid #ddd",
-              borderRadius: "8px",
-              padding: "12px",
-              marginBottom: "12px",
-              background: "#fff"
-            }}>
-              <div><b>ID:</b> {row.id}</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <b>{row.customer_name}</b>
+      {filtered.length === 0 && (
+        <div style={{ padding: 24, textAlign: 'center', color: '#6b7280' }}>No orders found.</div>
+      )}
+
+      {filtered.map((row) => (
+        <div
+          key={row.id}
+          style={{
+            border: '1px solid #e5e7eb',
+            borderLeft: `4px solid ${STATUS_COLORS[row.status] || '#6c757d'}`,
+            borderRadius: 8,
+            marginBottom: 12,
+            background: '#fff',
+            overflow: 'hidden',
+          }}
+        >
+          {/* Card header */}
+          <div
+            onClick={() => setExpanded(expanded === row.id ? null : row.id)}
+            style={{ padding: '12px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}
+          >
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 600, fontSize: 15, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                {row.order_number || `ORD-${String(row.id).padStart(5, '0')}`}
                 <span style={{
-                  fontSize: 10, fontWeight: 700, padding: "1px 7px", borderRadius: 8,
-                  background: row.is_wholesaler ? "#fef9c3" : "#dbeafe",
-                  color: row.is_wholesaler ? "#a16207" : "#1e40af",
+                  fontSize: 11,
+                  background: STATUS_COLORS[row.status] || '#6c757d',
+                  color: '#fff',
+                  borderRadius: 4,
+                  padding: '2px 8px',
                 }}>
-                  {row.is_wholesaler ? "WHOLESALER" : "RETAILER"}
+                  {STATUS_LABELS[row.status] || row.status}
                 </span>
-              </div>
-              <div style={{ fontSize: "12px", color: "#666" }}>
-                {row.mobile || ""}
-              </div>
-              <div><b>Amount:</b> ₹ {Number(row.total_amount || 0).toLocaleString()}</div>
-              <div><b>Status:</b> {row.status}</div>
-              <div style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: "6px",
-                marginTop: "10px"
-              }}>
-                {/* KEEP SAME BUTTONS */}
-                <button onClick={() => openPanel(`Order #${row.order_number || row.id}`, <OrderDetail orderId={row.id} />)}>View</button>
-                <button onClick={() => navigate(`/edit-order/${row.id}`)}>Edit</button>
-                      {row.status === ORDER_STATUS.DRAFT && (
-                  <button onClick={() => handleSendForApproval(row)}>
-                    Send
-                  </button>
+                {row.is_wholesaler !== undefined && (
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 10,
+                    background: row.is_wholesaler ? '#fef9c3' : '#dbeafe',
+                    color: row.is_wholesaler ? '#a16207' : '#1e40af',
+                  }}>
+                    {row.is_wholesaler ? 'Wholesaler' : 'Retailer'}
+                  </span>
                 )}
-                <button onClick={() => handleCancelOrder(row)}>
-                  Cancel
-                </button>
               </div>
-              <div style={{ marginTop: 8 }}>
+              <div style={{ fontSize: 13, color: '#6b7280', marginTop: 3 }}>
+                {row.customer_name || '—'} · ₹{Number(row.total_amount || 0).toLocaleString('en-IN')}
+              </div>
+              <div style={{ fontSize: 12, color: '#9ca3af' }}>
+                {row.created_at ? new Date(row.created_at).toLocaleDateString('en-IN') : ''}
+                {row.mobile ? ` · ${row.mobile}` : ''}
+              </div>
+            </div>
+            <span style={{ fontSize: 18, color: '#9ca3af' }}>{expanded === row.id ? '▲' : '▼'}</span>
+          </div>
+
+          {/* Expanded */}
+          {expanded === row.id && (
+            <div style={{ borderTop: '1px solid #f3f4f6', padding: '12px 16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                {/* Left: View · Edit · Send · Cancel */}
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <button
+                    onClick={() => openPanel(`Order #${row.order_number || row.id}`, <OrderDetail orderId={row.id} />)}
+                    style={btn({ background: '#f8fafc', color: '#374151', border: '1px solid #e2e8f0' })}
+                  >
+                    👁 View
+                  </button>
+                  <button
+                    onClick={() => navigate(`/edit-order/${row.id}`)}
+                    style={btn({ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' })}
+                  >
+                    ✏ Edit
+                  </button>
+                  {row.status === ORDER_STATUS.DRAFT && (
+                    <button
+                      onClick={() => handleSendForApproval(row)}
+                      style={btn({ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' })}
+                    >
+                      ↑ Send for approval
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleCancel(row)}
+                    style={btn({ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' })}
+                  >
+                    ✕ Cancel
+                  </button>
+                </div>
+
+                {/* Right: DocActions */}
                 <DocActions
                   type="order"
                   id={row.id}
                   docNo={row.order_number}
+                  docDate={row.created_at}
                   amount={row.total_amount}
                   customerMobile={row.mobile}
+                  customerName={row.customer_name}
                 />
               </div>
             </div>
-          ))
-        ) : (
-          <table
-            border="1"
-            cellPadding="10"
-            style={{
-              marginTop: 20,
-              width: "100%",
-              overflowX: "auto"
-            }}
-          >
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Date</th>
-                <th>Customer</th>
-                <th>Order Value</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {filteredOrders.map((row) => (
-                <tr key={row.id}>
-                  <td>{row.id}</td>
-                  <td>
-                    {row.created_at
-                      ? new Date(row.created_at).toLocaleDateString()
-                      : "-"}
-                  </td>
-                  <td>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                      <span>{row.customer_name}</span>
-                      <span style={{
-                        fontSize: 10, fontWeight: 700, padding: "1px 7px", borderRadius: 8,
-                        background: row.is_wholesaler ? "#fef9c3" : "#dbeafe",
-                        color: row.is_wholesaler ? "#a16207" : "#1e40af",
-                      }}>
-                        {row.is_wholesaler ? "WHOLESALER" : "RETAILER"}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: "12px", color: "#666" }}>
-                      {row.city || ""} {row.mobile ? `| ${row.mobile}` : ""}
-                    </div>
-                  </td>
-                  {/* 3. ADD TOTAL BELOW ORDER VALUE */}
-                  <td>
-                    <div>₹ {Number(row.total_amount || 0).toLocaleString()}</div>
-                    <div style={{ fontSize: "12px", color: "#666" }}>
-                      Total: ₹ {Number(row.total_amount || 0).toLocaleString()}
-                    </div>
-                  </td>
-                  <td>{row.status}</td>
-                  {/* 4. MOBILE FRIENDLY ACTION BUTTONS */}
-                  <td>
-                    <div style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: "6px",
-                      justifyContent: "center"
-                    }}>
-                      {/* KEEP EXISTING BUTTONS HERE */}
-                      <button
-                        onClick={() => openPanel(`Order #${row.order_number || row.id}`, <OrderDetail orderId={row.id} />)}
-                      >
-                        View
-                      </button>
-
-                      {/* EDIT BUTTON */}
-                      <button onClick={() => navigate(`/edit-order/${row.id}`)}>
-                        Edit
-                      </button>
-
-                      {/* SEND FOR APPROVAL BUTTON (ONLY for status = order) */}
-                      {row.status === ORDER_STATUS.DRAFT && (
-                        <button onClick={() => handleSendForApproval(row)}>
-                          Send for Approval
-                        </button>
-                      )}
-
-                      <button onClick={() => handleCancelOrder(row)}>
-                        Cancel
-                      </button>
-                      {/* PAY BUTTON REMOVED PER INSTRUCTIONS */}
-                    </div>
-                    <div style={{ marginTop: 6 }}>
-                      <DocActions
-                        type="order"
-                        id={row.id}
-                        docNo={row.order_number}
-                        amount={row.total_amount}
-                        customerMobile={row.mobile}
-                      />
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+          )}
+        </div>
+      ))}
     </div>
     </>
   );

@@ -3,6 +3,7 @@ import { useLocation, Outlet, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import RightPanel, { RightPanelProvider } from './RightPanel';
 import MobileNav from './MobileNav';
+import UniversalSearch from '../UniversalSearch';
 import { useNotifications } from '../../context/NotificationContext';
 
 const MOBILE_BP = 768;
@@ -135,8 +136,10 @@ export default function Layout() {
               </button>
             )}
 
-            {/* Spacer */}
-            <div style={{ flex: 1 }} />
+            {/* Universal search */}
+            <div style={{ flex: 1, maxWidth: 340, margin: '0 8px' }}>
+              <UniversalSearch />
+            </div>
 
             {/* Notification bell */}
             <NotificationBell />

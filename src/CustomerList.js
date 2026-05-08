@@ -79,17 +79,8 @@ export default function CustomerList() {
       subtitle={`${customers.length} Customers`}
       onSearch={setSearch}
     >
-      <div style={{ background: theme.background, minHeight: "100vh" }}>
-        <div style={{
-          maxWidth: 700,
-          margin: "20px auto",
-          padding: "0 10px"
-        }}>
-          {/* LIST */}
+      <div style={{ maxWidth: 700, margin: "0 auto" }}>
           {paginated.map((customer) => {
-            // STEP 1: ADD DEBUG LOG
-            console.log("CUSTOMER DATA:", customer);
-
             return (
               <div
                 key={customer.id}
@@ -126,7 +117,7 @@ export default function CustomerList() {
                         background: customer.isWholesaler ? "#fef9c3" : "#dbeafe",
                         color: customer.isWholesaler ? "#a16207" : "#1e40af",
                       }}>
-                        {customer.isWholesaler ? "WHOLESALER" : "RETAILER"}
+                        {customer.isWholesaler ? "Wholesaler" : "Retailer"}
                       </span>
                     </div>
 
@@ -181,7 +172,7 @@ export default function CustomerList() {
                           background: customer.isWholesaler ? "#fef9c3" : "#dbeafe",
                           color: customer.isWholesaler ? "#a16207" : "#1e40af",
                         }}>
-                          {customer.isWholesaler ? "WHOLESALER" : "RETAILER"}
+                          {customer.isWholesaler ? "Wholesaler" : "Retailer"}
                         </span>
                       </div>
 
@@ -274,7 +265,6 @@ export default function CustomerList() {
               Next
             </button>
           </div>
-        </div>
       </div>
     </PageLayout>
     </>

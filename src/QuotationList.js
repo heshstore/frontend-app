@@ -96,7 +96,7 @@ export default function QuotationList() {
   };
 
   const handleConvert = async (id) => {
-    if (!await confirm('Convert to Order?', 'A new order will be created from this quotation. The quotation status will change to Converted.', { confirmLabel: 'Convert to Order' })) return;
+    if (!await confirm('Convert to order?', 'A new order will be created from this quotation. The quotation status will change to Converted.', { confirmLabel: 'Convert to order' })) return;
     try {
       const res  = await apiFetch(`/quotations/${id}/convert-to-order`, { method: 'POST' });
       const data = await res.json();
@@ -114,23 +114,17 @@ export default function QuotationList() {
   return (
     <>
       {confirmModal}
-      <div style={{ fontFamily: theme.fontFamily, background: theme.background, minHeight: '100vh', padding: '0 0 40px' }}>
+      <div>
 
-        {/* Header */}
-        <div style={{
-          background: theme.primary, color: '#fff', padding: '12px 16px',
-          display: 'flex', alignItems: 'center', gap: 12, position: 'sticky', top: 0, zIndex: 100,
-        }}>
-          <button onClick={() => navigate(-1)} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.5)', color: '#fff', borderRadius: 4, padding: '4px 10px', cursor: 'pointer' }}>
-            ← Back
-          </button>
-          <h2 style={{ margin: 0, flex: 1, fontSize: 18 }}>Quotations</h2>
-          <button onClick={() => navigate('/quotation')} style={{ ...buttonStyle, background: '#fff', color: theme.primary, fontWeight: 600 }}>
-            + New
+        {/* Page title row */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#111827', flex: 1 }}>Quotations</h1>
+          <button onClick={() => navigate('/quotation')} style={{ ...buttonStyle, padding: '8px 16px', borderRadius: 6, fontSize: 13, height: 36 }}>
+            + New quotation
           </button>
         </div>
 
-        <div style={{ maxWidth: 960, margin: '0 auto', padding: 16 }}>
+        <div>
 
           {/* Search + Filter */}
           <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -145,7 +139,7 @@ export default function QuotationList() {
               onChange={(e) => setStatusFilter(e.target.value)}
               style={{ padding: '8px 12px', border: `1px solid ${theme.border}`, borderRadius: 4, fontSize: 14 }}
             >
-              <option value="">All Statuses</option>
+              <option value="">All statuses</option>
               <option value="DRAFT">Draft</option>
               <option value="SENT">Sent</option>
               <option value="APPROVED">Approved</option>

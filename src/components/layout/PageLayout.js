@@ -1,75 +1,69 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { theme } from '../../theme';
-import UniversalSearch from '../UniversalSearch';
 
-export default function PageLayout({ title, children, hideBack = false, hideSearch = false }) {
+export default function PageLayout({
+  title,
+  subtitle,
+  children,
+  onBack,
+  hideBack = false,
+  actions,
+  onSearch,
+}) {
   const navigate = useNavigate();
 
   return (
-    <div
-      style={{
-        fontFamily: theme.fontFamily,
-        background: theme.background,
-        minHeight: '100vh',
-        padding: '0 0 40px',
-      }}
-    >
-      {/* Header bar */}
-      <div
-        style={{
-          background: theme.primary,
-          color: '#fff',
-          padding: '10px 16px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          position: 'sticky',
-          top: 0,
-          zIndex: 100,
-        }}
-      >
+    <div>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        marginBottom: 20,
+        flexWrap: 'wrap',
+      }}>
         {!hideBack && (
           <button
-            onClick={() => navigate(-1)}
+            onClick={onBack || (() => navigate(-1))}
             style={{
               background: 'transparent',
-              border: '1px solid rgba(255,255,255,0.5)',
-              color: '#fff',
-              borderRadius: theme.borderRadiusSm,
-              padding: '4px 10px',
+              border: '1px solid #d1d5db',
+              borderRadius: 6,
+              padding: '6px 12px',
               cursor: 'pointer',
-              fontSize: '14px',
-              whiteSpace: 'nowrap',
+              fontSize: 13,
+              color: '#374151',
+              fontWeight: 500,
               flexShrink: 0,
             }}
           >
             ← Back
           </button>
         )}
-        <h2
-          style={{
-            margin: 0,
-            fontSize: '17px',
-            fontWeight: 600,
-            whiteSpace: 'nowrap',
-            flexShrink: 0,
-          }}
-        >
-          {title}
-        </h2>
-        {!hideSearch && <UniversalSearch />}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#111827', lineHeight: 1.2 }}>
+            {title}
+          </h1>
+          {subtitle && (
+            <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{subtitle}</div>
+          )}
+        </div>
+        {onSearch && (
+          <input
+            placeholder="Search..."
+            onChange={(e) => onSearch(e.target.value)}
+            style={{
+              padding: '7px 12px',
+              border: '1px solid #e5e7eb',
+              borderRadius: 6,
+              fontSize: 13,
+              width: 220,
+              outline: 'none',
+            }}
+          />
+        )}
+        {actions}
       </div>
-
-      <div
-        style={{
-          maxWidth: 960,
-          margin: '0 auto',
-          padding: '16px',
-        }}
-      >
-        {children}
-      </div>
+      {children}
     </div>
   );
 }

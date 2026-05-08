@@ -146,7 +146,7 @@ export default function UniversalSearch({ placeholder = 'Search customers, items
   };
 
   return (
-    <div style={{ position: 'relative', flex: 1, maxWidth: 400 }}>
+    <div style={{ position: 'relative', flex: 1 }}>
       {/* Input */}
       <div style={{ position: 'relative' }}>
         <span
@@ -156,7 +156,7 @@ export default function UniversalSearch({ placeholder = 'Search customers, items
             top: '50%',
             transform: 'translateY(-50%)',
             fontSize: 14,
-            color: 'rgba(255,255,255,0.7)',
+            color: '#9ca3af',
             pointerEvents: 'none',
           }}
         >
@@ -174,10 +174,10 @@ export default function UniversalSearch({ placeholder = 'Search customers, items
             width: '100%',
             padding: '7px 10px 7px 32px',
             borderRadius: 6,
-            border: '1px solid rgba(255,255,255,0.35)',
-            background: 'rgba(255,255,255,0.15)',
-            color: '#fff',
-            fontSize: 14,
+            border: '1px solid #e5e7eb',
+            background: '#f9fafb',
+            color: '#111827',
+            fontSize: 13,
             outline: 'none',
             boxSizing: 'border-box',
           }}
@@ -190,7 +190,7 @@ export default function UniversalSearch({ placeholder = 'Search customers, items
               top: '50%',
               transform: 'translateY(-50%)',
               fontSize: 12,
-              color: 'rgba(255,255,255,0.7)',
+              color: '#9ca3af',
             }}
           >
             …
@@ -206,7 +206,7 @@ export default function UniversalSearch({ placeholder = 'Search customers, items
               transform: 'translateY(-50%)',
               background: 'transparent',
               border: 'none',
-              color: 'rgba(255,255,255,0.7)',
+              color: '#9ca3af',
               cursor: 'pointer',
               fontSize: 16,
               lineHeight: 1,

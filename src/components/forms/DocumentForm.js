@@ -137,7 +137,7 @@ function CustomerSearchField({ label, value, onSelect, onClear, placeholder }) {
             background: value.isWholesaler ? "#fef9c3" : "#dbeafe",
             color: value.isWholesaler ? "#a16207" : "#1e40af",
           }}>
-            {value.isWholesaler ? "WHOLESALER" : "RETAILER"}
+            {value.isWholesaler ? "Wholesaler" : "Retailer"}
           </span>
           <button type="button" onClick={() => { setSearch(""); onClear(); }}
             style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 12, padding: 0 }}>
@@ -161,7 +161,7 @@ function CustomerSearchField({ label, value, onSelect, onClear, placeholder }) {
                       background: c.isWholesaler ? "#fef9c3" : "#dbeafe",
                       color: c.isWholesaler ? "#a16207" : "#1e40af",
                     }}>
-                      {c.isWholesaler ? "WHOLESALER" : "RETAILER"}
+                      {c.isWholesaler ? "Wholesaler" : "Retailer"}
                     </span>
                   </div>
                   <div style={{ color: theme.textMuted, fontSize: 11 }}>

@@ -587,7 +587,7 @@ export default function SetCreditLimit() {
                     fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 10,
                     background: "#fef9c3", color: "#a16207", flexShrink: 0,
                   }}>
-                    WHOLESALER
+                    Wholesaler
                   </span>
                 </div>
               ))}

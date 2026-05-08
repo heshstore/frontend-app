@@ -122,7 +122,7 @@ const grandTotal =
               background: invoice.is_wholesaler ? "#fef9c3" : "#dbeafe",
               color: invoice.is_wholesaler ? "#a16207" : "#1e40af",
             }}>
-              {invoice.is_wholesaler ? "WHOLESALER" : "RETAILER"}
+              {invoice.is_wholesaler ? "Wholesaler" : "Retailer"}
             </span>
           )}<br/>
           {invoice.address}<br/>
