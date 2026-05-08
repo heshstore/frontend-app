@@ -494,6 +494,11 @@ export default function Sidebar({ onClose }) {
           >
             Logout
           </button>
+          {process.env.REACT_APP_VERSION && (
+            <div style={{ marginTop: 6, textAlign: 'center', fontSize: 9, color: 'rgba(255,255,255,0.25)', letterSpacing: '0.04em' }}>
+              {process.env.REACT_APP_VERSION}
+            </div>
+          )}
         </div>
 
       </div>

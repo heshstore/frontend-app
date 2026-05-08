@@ -145,6 +145,11 @@ export default function Login() {
           </button>
         </form>
       </div>
+      {process.env.REACT_APP_VERSION && (
+        <div style={{ marginTop: 16, color: '#aaa', fontSize: 11, textAlign: 'center', letterSpacing: '0.03em' }}>
+          {process.env.REACT_APP_VERSION}
+        </div>
+      )}
     </div>
   );
 }
