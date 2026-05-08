@@ -144,12 +144,12 @@ export default function Login() {
             {loading ? "Signing in..." : "Sign In"}
           </button>
         </form>
+        {process.env.REACT_APP_VERSION && (
+          <div style={{ marginTop: 16, color: '#aaa', fontSize: 12, textAlign: 'center', letterSpacing: '0.03em' }}>
+            {process.env.REACT_APP_VERSION}
+          </div>
+        )}
       </div>
-      {process.env.REACT_APP_VERSION && (
-        <div style={{ marginTop: 16, color: '#aaa', fontSize: 11, textAlign: 'center', letterSpacing: '0.03em' }}>
-          {process.env.REACT_APP_VERSION}
-        </div>
-      )}
     </div>
   );
 }
