@@ -23,7 +23,6 @@ import RbacMatrix from "./RbacMatrix";
 import LeadList from "./crm/LeadList";
 import LeadForm from "./crm/LeadForm";
 import LeadDetail from "./crm/LeadDetail";
-import TelecallerDashboard from "./crm/TelecallerDashboard";
 import CrmAnalytics from "./crm/CrmAnalytics";
 import LeadQueue from "./crm/LeadQueue";
 import FollowUpView from "./crm/FollowUpView";
@@ -47,6 +46,7 @@ import NotificationPanel from "./components/NotificationPanel";
 import Layout from "./components/layout/Layout";
 import SlaDashboard from "./pages/sla/SlaDashboard";
 import ActivityCenter from "./pages/activity/ActivityCenter";
+import KpiDashboard from "./pages/kpi/KpiDashboard";
 
 const BYPASS_AUTH = true; // DEBUG: set to false once auth is confirmed working
 
@@ -163,6 +163,9 @@ function App() {
 
               {/* Activity */}
               <Route path="/activity" element={<PrivateRoute><ActivityCenter /></PrivateRoute>} />
+
+              {/* KPI */}
+              <Route path="/kpi" element={<PrivateRoute><KpiDashboard /></PrivateRoute>} />
 
               {/* Staff & Settings */}
               <Route path="/staff" element={<PermissionRoute permission="staff.view"><StaffManagement /></PermissionRoute>} />

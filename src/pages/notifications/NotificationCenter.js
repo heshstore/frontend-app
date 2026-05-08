@@ -1,12 +1,10 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../utils/api';
 import { useNotifications } from '../../context/NotificationContext';
 import PageLayout from '../../components/layout/PageLayout';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-
-const PAGE_SIZE = 20;
 
 const CATEGORIES = [
   { key: '',           label: 'All',        icon: '🔔' },
@@ -66,7 +64,6 @@ function resolveActionUrl(notif) {
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function FilterBar({ category, setCategory, priority, setPriority, unreadOnly, setUnreadOnly, categoryCounts }) {
-  const [isMobile] = useState(window.innerWidth < 640);
   return (
     <div style={{
       position: 'sticky', top: 0, zIndex: 20,

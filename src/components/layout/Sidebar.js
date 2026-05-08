@@ -479,6 +479,7 @@ export default function Sidebar({ onClose }) {
                       <NavItem label="Roles & Permissions" href="/rbac"  icon="🔐" />
                       <NavItem label="SLA Dashboard"       href="/sla"      icon="⏱️" />
                       <NavItem label="Activity Center"     href="/activity" icon="📋" />
+                      <NavItem label="KPI Dashboard"       href="/kpi"      icon="📊" />
                     </>
                   )}
                 </div>
