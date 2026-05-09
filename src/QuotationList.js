@@ -129,6 +129,10 @@ export default function QuotationList() {
         const msg = data?.message || 'Conversion failed';
         if (msg.toLowerCase().includes('already converted')) {
           toast.error('This quotation was already converted to an order');
+        } else if (msg.toLowerCase().includes('mobile') || msg.toLowerCase().includes('phone')) {
+          toast.error('Customer mobile number is missing — update the customer record first');
+        } else if (msg.toLowerCase().includes('item')) {
+          toast.error('Quotation has no items — add items before converting');
         } else {
           toast.error(msg);
         }
@@ -194,10 +198,12 @@ export default function QuotationList() {
         )}
 
         {!loading && filtered.map((q) => {
-          const isEditable    = EDITABLE_STATUSES.includes(q.status);
-          const isConvertible = CONVERTIBLE_STATUSES.includes(q.status);
-          const isCancellable = isEditable;
-          const isReadOnly    = !isEditable;
+          const isEditable        = EDITABLE_STATUSES.includes(q.status);
+          const isConvertible     = CONVERTIBLE_STATUSES.includes(q.status);
+          const isCancellable     = isEditable;
+          const isReadOnly        = !isEditable;
+          const hasPhone          = !!(q.customer_phone || q.customer_mobile);
+          const convertBlocked    = isConvertible && !hasPhone; // phone missing — warn user
 
           return (
             <div
@@ -321,18 +327,31 @@ export default function QuotationList() {
                       />
 
                       {isConvertible && (
-                        <button
-                          onClick={() => handleConvert(q.id)}
-                          disabled={converting === q.id}
-                          style={btn({
-                            background: converting === q.id ? '#6b9dc2' : '#0066B3',
-                            color: '#fff',
-                            cursor: converting === q.id ? 'not-allowed' : 'pointer',
-                            opacity: converting === q.id ? 0.8 : 1,
-                          })}
-                        >
-                          {converting === q.id ? '⏳ Converting…' : '🔄 Convert to order'}
-                        </button>
+                        <div style={{ position: 'relative', display: 'inline-block' }}>
+                          <button
+                            onClick={() => {
+                              if (convertBlocked) {
+                                toast.error('Customer mobile number missing — update the customer record first');
+                                return;
+                              }
+                              handleConvert(q.id);
+                            }}
+                            disabled={converting === q.id}
+                            title={convertBlocked ? 'Customer mobile number required to convert' : 'Convert this quotation to an order'}
+                            style={btn({
+                              background: converting === q.id ? '#6b9dc2' : convertBlocked ? '#9ca3af' : '#0066B3',
+                              color: '#fff',
+                              cursor: converting === q.id ? 'not-allowed' : convertBlocked ? 'not-allowed' : 'pointer',
+                              opacity: converting === q.id ? 0.8 : 1,
+                            })}
+                          >
+                            {converting === q.id
+                              ? '⏳ Converting…'
+                              : convertBlocked
+                                ? '⚠️ No mobile'
+                                : '🔄 Convert to order'}
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
