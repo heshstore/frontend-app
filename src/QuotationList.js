@@ -52,6 +52,7 @@ export default function QuotationList() {
   const navigate = useNavigate();
   const [quotations, setQuotations] = useState([]);
   const [loading, setLoading]       = useState(false);
+  const [converting, setConverting] = useState(null); // quotation id being converted
   const [search, setSearch]         = useState('');
   const [statusFilter, setStatusFilter] = useState(() => {
     try { return localStorage.getItem(FILTER_KEY) || ''; } catch { return ''; }
@@ -107,19 +108,36 @@ export default function QuotationList() {
   };
 
   const handleConvert = async (id) => {
-    if (!await confirm('Convert to order?', 'A new order will be created from this quotation. The quotation status will change to Converted.', { confirmLabel: 'Convert to order' })) return;
+    if (!await confirm(
+      'Convert to order?',
+      'A new order will be created from this quotation. The quotation status will change to Converted.',
+      { confirmLabel: 'Convert to order' },
+    )) return;
+
+    setConverting(id);
     try {
       const res  = await apiFetch(`/quotations/${id}/convert-to-order`, { method: 'POST' });
       const data = await res.json();
       if (res.ok) {
-        const orderNo = data.order_id ? `ORD-${String(data.order_id).padStart(5, '0')}` : '';
-        toast.success(`Order ${orderNo} created`);
+        const orderId = data.order_id;
+        const orderNo = data.order_no || (orderId ? `ORD-${String(orderId).padStart(4, '0')}` : '');
+        toast.success(`Order ${orderNo} created successfully`);
         loadQuotations();
-        navigate('/orders');
+        if (orderId) navigate(`/orders/${orderId}`);
+        else navigate('/orders');
       } else {
-        toast.error(data?.message || 'Conversion failed');
+        const msg = data?.message || 'Conversion failed';
+        if (msg.toLowerCase().includes('already converted')) {
+          toast.error('This quotation was already converted to an order');
+        } else {
+          toast.error(msg);
+        }
       }
-    } catch { toast.error('Conversion failed'); }
+    } catch (err) {
+      toast.error('Conversion failed — please try again');
+    } finally {
+      setConverting(null);
+    }
   };
 
   return (
@@ -210,8 +228,13 @@ export default function QuotationList() {
                   <div style={{ fontSize: 12, color: theme.textMuted }}>
                     {q.created_at ? new Date(q.created_at).toLocaleDateString('en-IN') : ''}
                     {q.valid_till ? ` · Valid till ${new Date(q.valid_till).toLocaleDateString('en-IN')}` : ''}
-                    {q.status === 'CONVERTED' && q.order_id
-                      ? <span style={{ marginLeft: 8, color: '#0066B3', fontWeight: 600 }}>→ Order #{q.order_id}</span>
+                    {q.status === 'CONVERTED' && q.converted_order_id
+                      ? <span
+                          onClick={(e) => { e.stopPropagation(); navigate(`/orders/${q.converted_order_id}`); }}
+                          style={{ marginLeft: 8, color: '#0066B3', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}
+                        >
+                          → Order #{q.converted_order_id}
+                        </span>
                       : null}
                   </div>
                 </div>
@@ -300,9 +323,15 @@ export default function QuotationList() {
                       {isConvertible && (
                         <button
                           onClick={() => handleConvert(q.id)}
-                          style={btn({ background: '#0066B3', color: '#fff' })}
+                          disabled={converting === q.id}
+                          style={btn({
+                            background: converting === q.id ? '#6b9dc2' : '#0066B3',
+                            color: '#fff',
+                            cursor: converting === q.id ? 'not-allowed' : 'pointer',
+                            opacity: converting === q.id ? 0.8 : 1,
+                          })}
                         >
-                          🔄 Convert to order
+                          {converting === q.id ? '⏳ Converting…' : '🔄 Convert to order'}
                         </button>
                       )}
                     </div>
