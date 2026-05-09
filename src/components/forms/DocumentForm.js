@@ -474,8 +474,8 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
   const grandTotal = subTotal + totalGst + extraCharges;
 
   // Submit — build standard payload and delegate to caller.
-  // submitStatus: 'SENT' (default, confirm) or 'DRAFT' (save without items).
-  const handleSubmit = async (e, submitStatus = 'SENT') => {
+  // submitStatus: 'GENERATED' (default, confirm) or 'DRAFT' (save without items).
+  const handleSubmit = async (e, submitStatus = 'GENERATED') => {
     e.preventDefault();
     if (submitting) return;
     if (!billTo) { toast.error("Please select a Bill To customer"); return; }

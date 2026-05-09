@@ -5,7 +5,8 @@ import React from 'react';
 const STATUS_MAP = {
   /* Quotation */
   DRAFT:            { label: 'Draft',            bg: '#f3f4f6', color: '#6b7280' },
-  SENT:             { label: 'Sent',             bg: '#dbeafe', color: '#1d4ed8' },
+  GENERATED:        { label: 'Generated',        bg: '#dbeafe', color: '#1d4ed8' },
+  SENT:             { label: 'Generated',        bg: '#dbeafe', color: '#1d4ed8' }, // legacy alias
   APPROVED:         { label: 'Approved',         bg: '#dcfce7', color: '#15803d' },
   REJECTED:         { label: 'Rejected',         bg: '#fee2e2', color: '#dc2626' },
   CANCELLED:        { label: 'Cancelled',        bg: '#fee2e2', color: '#dc2626' },

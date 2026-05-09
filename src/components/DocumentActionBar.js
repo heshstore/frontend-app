@@ -10,7 +10,7 @@
  *   docNo          string
  *   docDate        string   (ISO)
  *   amount         number
- *   status         string   ('DRAFT' | 'SENT' | … )
+ *   status         string   ('DRAFT' | 'GENERATED' | … )
  *   customerMobile string
  *   customerName   string
  *   customerEmail  string

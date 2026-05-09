@@ -10,12 +10,13 @@ import { SkeletonList } from './components/ui/SkeletonCard';
 import { toast } from './utils/toast';
 import { useConfirm } from './components/ui/ConfirmModal';
 
-const EDITABLE_STATUSES    = ['DRAFT', 'SENT', 'APPROVED'];
-const CONVERTIBLE_STATUSES = ['SENT', 'APPROVED']; // DRAFT must be confirmed first
+const EDITABLE_STATUSES    = ['DRAFT', 'GENERATED', 'APPROVED'];
+const CONVERTIBLE_STATUSES = ['GENERATED', 'APPROVED']; // DRAFT must be confirmed first
 
 const STATUS_BORDER = {
   DRAFT:     '#9ca3af',
-  SENT:      '#0d6efd',
+  GENERATED: '#0d6efd',
+  SENT:      '#0d6efd', // legacy alias
   APPROVED:  '#198754',
   REJECTED:  '#dc3545',
   CANCELLED: '#dc3545',
@@ -23,12 +24,12 @@ const STATUS_BORDER = {
 };
 
 const STATUS_CHIPS = [
-  { value: '',          label: 'All' },
-  { value: 'DRAFT',     label: 'Draft' },
-  { value: 'SENT',      label: 'Sent' },
-  { value: 'APPROVED',  label: 'Approved' },
-  { value: 'CONVERTED', label: 'Converted' },
-  { value: 'CANCELLED', label: 'Cancelled' },
+  { value: '',           label: 'All' },
+  { value: 'DRAFT',      label: 'Draft' },
+  { value: 'GENERATED',  label: 'Generated' },
+  { value: 'APPROVED',   label: 'Approved' },
+  { value: 'CONVERTED',  label: 'Converted' },
+  { value: 'CANCELLED',  label: 'Cancelled' },
 ];
 
 const FILTER_KEY = 'saachu_quot_filter';
@@ -94,11 +95,11 @@ export default function QuotationList() {
   });
 
   const handleConfirm = async (id) => {
-    if (!await confirm('Confirm this quotation?', 'The quotation will be marked as Sent/Confirmed and can then be converted to an order.', { confirmLabel: 'Confirm quotation' })) return;
+    if (!await confirm('Generate this quotation?', 'The quotation will be marked as Generated and can then be converted to an order.', { confirmLabel: 'Generate quotation' })) return;
     try {
       const res = await apiFetch(`/quotations/${id}/send`, { method: 'PATCH' });
       if (res.ok) {
-        toast.success('Quotation confirmed');
+        toast.success('Quotation generated');
         loadQuotations();
       } else {
         const err = await res.json().catch(() => ({}));
@@ -318,7 +319,7 @@ export default function QuotationList() {
                           onClick={() => handleConfirm(q.id)}
                           style={btn({ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' })}
                         >
-                          ✓ Confirm
+                          ✓ Generate
                         </button>
                       )}
 

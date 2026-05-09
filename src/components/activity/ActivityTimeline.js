@@ -24,7 +24,8 @@ const ACTION_ICON = {
   FOLLOWUP_COMPLETED:   '✅',
   NOTE_ADDED:           '📝',
   QUOTATION_CREATED:    '📄',
-  QUOTATION_SENT:       '📨',
+  QUOTATION_GENERATED:  '📨',
+  QUOTATION_SENT:       '📨', // legacy alias
   QUOTATION_APPROVED:   '✅',
   QUOTATION_REJECTED:   '❌',
   ORDER_CREATED:        '📦',

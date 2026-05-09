@@ -94,7 +94,7 @@ export default function QuotationForm() {
         }).catch(() => {});
       }
       const isDraft = payload?.status === 'DRAFT';
-      const verb = isNew ? (isDraft ? "saved as draft" : "created") : (isDraft ? "saved as draft" : "updated");
+      const verb = isNew ? (isDraft ? "saved as draft" : "generated") : (isDraft ? "saved as draft" : "updated");
       return { ok: true, message: `Quotation ${verb} ✅`, redirect: "/quotations" };
     }
     const err = await res.json().catch(() => ({}));
