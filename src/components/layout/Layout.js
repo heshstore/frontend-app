@@ -1,53 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation, Outlet, useNavigate } from 'react-router-dom';
+import { useLocation, Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import RightPanel, { RightPanelProvider } from './RightPanel';
 import MobileNav from './MobileNav';
 import UniversalSearch from '../UniversalSearch';
 import QuickActions from '../QuickActions';
-import { useNotifications } from '../../context/NotificationContext';
+import NotificationBell from '../NotificationBell';
+import NotificationPanel from '../NotificationPanel';
 
 const MOBILE_BP = 768;
-
-function NotificationBell() {
-  const navigate     = useNavigate();
-  const { unreadCount } = useNotifications();
-  const [hov, setHov] = useState(false);
-
-  return (
-    <button
-      onClick={() => navigate('/notifications')}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      title="Notification Center"
-      style={{
-        position: 'relative',
-        background: hov ? '#f3f4f6' : 'none',
-        border: 'none', borderRadius: 8,
-        padding: '6px 8px', cursor: 'pointer',
-        fontSize: 20, lineHeight: 1,
-        transition: 'background 0.12s',
-        minWidth: 40, minHeight: 40,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}
-    >
-      🔔
-      {unreadCount > 0 && (
-        <span style={{
-          position: 'absolute', top: 3, right: 3,
-          background: '#dc2626', color: '#fff',
-          fontSize: 9, fontWeight: 900,
-          minWidth: 16, height: 16, borderRadius: '50%',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          padding: '0 3px',
-          boxShadow: '0 1px 3px rgba(220,38,38,0.4)',
-        }}>
-          {unreadCount > 99 ? '99+' : unreadCount}
-        </span>
-      )}
-    </button>
-  );
-}
 
 function QuickActionsButton() {
   const [hov, setHov] = useState(false);
@@ -97,6 +58,7 @@ export default function Layout() {
   return (
     <RightPanelProvider>
       <QuickActions />
+      <NotificationPanel />
       <div style={{
         display: 'flex',
         height: '100vh',

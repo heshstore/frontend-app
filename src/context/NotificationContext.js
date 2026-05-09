@@ -1,12 +1,14 @@
-import React, { createContext, useContext, useReducer, useCallback } from 'react';
+import React, { createContext, useContext, useReducer, useCallback, useEffect, useRef } from 'react';
+import { io } from 'socket.io-client';
 import { apiFetch } from '../utils/api';
+import { API_URL } from '../config';
 
 const NotificationContext = createContext(null);
 
 const initialState = {
   notifications:  [],
   unreadCount:    0,
-  categoryCounts: {},   // { CRM: 3, PRODUCTION: 5, ... }
+  categoryCounts: {},
   nextAction:     null,
   panelOpen:      false,
 };
@@ -14,6 +16,8 @@ const initialState = {
 function reducer(state, action) {
   switch (action.type) {
     case 'ADD':
+      // Dedup: skip if we already have this notification
+      if (state.notifications.some(n => n.id === action.payload.id)) return state;
       return {
         ...state,
         notifications: [action.payload, ...state.notifications].slice(0, 50),
@@ -21,7 +25,7 @@ function reducer(state, action) {
       };
     case 'SET_ALL': {
       const seen   = new Set();
-      const merged = [...state.notifications, ...action.payload].filter(n => {
+      const merged = [...action.payload, ...state.notifications].filter(n => {
         if (seen.has(n.id)) return false;
         seen.add(n.id);
         return true;
@@ -75,6 +79,7 @@ function reducer(state, action) {
 
 export function NotificationProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState);
+  const socketRef = useRef(null);
 
   const addNotification = useCallback((notif) => {
     dispatch({ type: 'ADD', payload: notif });
@@ -85,7 +90,6 @@ export function NotificationProvider({ children }) {
       const res = await apiFetch('/notifications');
       if (!res?.ok) return;
       const data = await res.json();
-      // Center response is { items, total, page }; panel is array
       dispatch({ type: 'SET_ALL', payload: Array.isArray(data) ? data : (data.items ?? []) });
     } catch {}
   }, []);
@@ -95,7 +99,6 @@ export function NotificationProvider({ children }) {
       const res = await apiFetch('/notifications/count');
       if (!res?.ok) return;
       const data = await res.json();
-      // data = { count: N, byCategory: {...} }
       dispatch({ type: 'SET_COUNT', payload: data });
     } catch {}
   }, []);
@@ -124,7 +127,6 @@ export function NotificationProvider({ children }) {
   }, []);
 
   const hideNotification = useCallback(async (notifId) => {
-    // Optimistic: remove from local state immediately
     dispatch({ type: 'HIDE', id: notifId });
     try {
       await apiFetch(`/notifications/${notifId}`, { method: 'DELETE' });
@@ -138,6 +140,44 @@ export function NotificationProvider({ children }) {
   const setPanel = useCallback((open) => {
     dispatch({ type: 'SET_PANEL', payload: open });
   }, []);
+
+  // Auto-fetch on mount + poll count every 30s
+  useEffect(() => {
+    fetchNotifications();
+    fetchUnreadCount();
+    const interval = setInterval(fetchUnreadCount, 30_000);
+    return () => clearInterval(interval);
+  }, [fetchNotifications, fetchUnreadCount]);
+
+  // WebSocket: real-time notification push
+  useEffect(() => {
+    let user = {};
+    try { user = JSON.parse(localStorage.getItem('user') || '{}'); } catch {}
+    if (!user?.id) return;
+
+    const socketUrl = API_URL || window.location.origin.replace(':3000', ':4000');
+    const socket = io(socketUrl, {
+      query: { userId: user.id },
+      transports: ['websocket'],
+      reconnectionAttempts: 5,
+      reconnectionDelay: 2000,
+    });
+    socketRef.current = socket;
+
+    socket.on('notification.new', (notif) => {
+      addNotification(notif);
+    });
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [addNotification]);
+
+  // Re-fetch when panel opens (ensures freshness)
+  useEffect(() => {
+    if (state.panelOpen) fetchNotifications();
+  }, [state.panelOpen, fetchNotifications]);
 
   return (
     <NotificationContext.Provider
