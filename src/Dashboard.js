@@ -5,6 +5,10 @@ import { toast } from './utils/toast';
 import { useRightPanel } from './components/layout/RightPanel';
 import JobDetail from './pages/JobDetail';
 import { getUserCapabilities } from './config/roleCapabilities';
+import KpiCard from './components/dashboard/KpiCard';
+import KpiGrid from './components/dashboard/KpiGrid';
+import StatusWidget from './components/dashboard/StatusWidget';
+import ActivityTimeline from './components/dashboard/ActivityTimeline';
 
 // ── Palette ──────────────────────────────────────────────────────────────────
 
@@ -317,6 +321,9 @@ export default function Dashboard() {
   const [hotLeadsCount, setHotLeadsCount] = useState(0);
   const [pendingAmount, setPendingAmount] = useState(0);
 
+  const [kpis,        setKpis]        = useState(null);
+  const [kpisLoading, setKpisLoading] = useState(caps.canViewDashboardSummary);
+
   const [syncing,   setSyncing]   = useState(false);
   const [progress,  setProgress]  = useState(0);
   const [syncPhase, setSyncPhase] = useState('idle');
@@ -337,6 +344,14 @@ export default function Dashboard() {
     const tasks = [];
 
     if (c.canViewDashboardSummary) {
+      setKpisLoading(true);
+      tasks.push(
+        apiFetch('/analytics/kpis')
+          .then(r => r.ok ? r.json() : null)
+          .then(d => { if (d && ok()) setKpis(d); })
+          .catch(() => {})
+          .finally(() => { if (ok()) setKpisLoading(false); })
+      );
       tasks.push(
         apiFetch('/dashboard/summary')
           .then(r => r.ok ? r.json() : null)
@@ -557,6 +572,63 @@ export default function Dashboard() {
           </>
         )}
 
+        {/* ── KPI Banner — role-aware live metrics ── */}
+        {caps.canViewDashboardSummary && (
+          <>
+            <SectionLabel>📊 Today's KPIs</SectionLabel>
+            <KpiGrid minCardWidth={148} gap={10} style={{ marginBottom: 20 }}>
+              {caps.canViewQuotations && (
+                <KpiCard icon="📄" title="Quotations today" value={kpis?.quotations_today ?? '—'} color="#0891b2" path="/quotations" loading={kpisLoading} />
+              )}
+              {caps.canViewOrders && (
+                <KpiCard icon="📋" title="Orders today" value={kpis?.orders_today ?? '—'} color="#2563eb" path="/orders" loading={kpisLoading} />
+              )}
+              {caps.canViewOrders && (
+                <KpiCard icon="⏳" title="Pending approvals" value={kpis?.pending_approvals ?? '—'} color="#f59e0b" path="/pending-approval" loading={kpisLoading} alert={(kpis?.pending_approvals ?? 0) > 0} />
+              )}
+              {caps.canViewDispatch && (
+                <KpiCard icon="🚚" title="Pending dispatch" value={kpis?.pending_dispatch ?? '—'} color="#7c3aed" path="/dispatch" loading={kpisLoading} />
+              )}
+              {caps.canViewAccounts && (
+                <KpiCard icon="💵" title="Collections today" value={kpis?.collections_today != null ? `₹${Number(kpis.collections_today).toLocaleString('en-IN')}` : '—'} color="#16a34a" path="/accounts/outstanding" loading={kpisLoading} />
+              )}
+              {caps.canViewAccounts && (
+                <KpiCard icon="🔴" title="Overdue payments" value={kpis?.overdue_payments ?? '—'} color="#dc2626" path="/accounts/outstanding" loading={kpisLoading} trendInverse alert={(kpis?.overdue_payments ?? 0) > 0} />
+              )}
+              {caps.canViewProduction && (
+                <KpiCard icon="⚙️" title="Production pending" value={kpis?.production_pending ?? '—'} color="#ea580c" path="/production/queue" loading={kpisLoading} />
+              )}
+              {caps.canViewCrm && (
+                <KpiCard icon="🎯" title="Active leads" value={kpis?.active_leads ?? '—'} color="#6366f1" path="/crm/leads" loading={kpisLoading} />
+              )}
+            </KpiGrid>
+
+            {/* System health strip */}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
+              <StatusWidget
+                label="WhatsApp"
+                status={
+                  !kpis ? 'unknown' :
+                  kpis.whatsapp_status === 'AUTHENTICATED' || kpis.whatsapp_status === 'CONNECTED' ? 'ok' :
+                  kpis.whatsapp_status === 'NO_SESSION' ? 'warning' : 'error'
+                }
+                detail={kpis?.whatsapp_status ?? '—'}
+                pulse
+              />
+              <StatusWidget
+                label="Shopify sync"
+                status={
+                  kpis?.shopify_sync_minutes == null ? 'unknown' :
+                  kpis.shopify_sync_minutes < 120 ? 'ok' :
+                  kpis.shopify_sync_minutes < 720 ? 'warning' : 'error'
+                }
+                detail={kpis?.shopify_sync_minutes != null ? `${kpis.shopify_sync_minutes}m ago` : 'Never synced'}
+              />
+              <StatusWidget label="Database" status="ok" detail="Connected" />
+            </div>
+          </>
+        )}
+
         {/* ── Production Stages — production role only ── */}
         {caps.canViewProduction && (
           <>
@@ -666,6 +738,12 @@ export default function Dashboard() {
             )}
           </Card>
         )}
+
+        {/* ── Activity Timeline ── */}
+        <Card style={{ padding: '16px 18px', marginTop: 4 }}>
+          <SectionLabel>📋 Recent Activity</SectionLabel>
+          <ActivityTimeline limit={8} showTitle={false} />
+        </Card>
 
       </div>
 
