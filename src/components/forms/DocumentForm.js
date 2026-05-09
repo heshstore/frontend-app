@@ -401,7 +401,7 @@ function ItemRow({ row, index, items, canRemove, onChange, onRemove, isWholesale
 }
 
 // ── DocumentForm ──────────────────────────────────────────────────────────────
-export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, submitLabel, updateLabel }) {
+export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, submitLabel, updateLabel, allowDraft }) {
   const navigate = useNavigate();
 
   const [billTo, setBillTo]                 = useState(null);
@@ -473,13 +473,18 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
     .reduce((s, k) => s + Number(form[k] || 0), 0);
   const grandTotal = subTotal + totalGst + extraCharges;
 
-  // Submit — build standard payload and delegate to caller
-  const handleSubmit = async (e) => {
+  // Submit — build standard payload and delegate to caller.
+  // submitStatus: 'SENT' (default, confirm) or 'DRAFT' (save without items).
+  const handleSubmit = async (e, submitStatus = 'SENT') => {
     e.preventDefault();
     if (submitting) return;
     if (!billTo) { toast.error("Please select a Bill To customer"); return; }
+
     const validRows = rows.filter(r => r.item_name || r.sku);
-    if (validRows.length === 0) { toast.error("Please add at least one item"); return; }
+    if (submitStatus !== 'DRAFT' && validRows.length === 0) {
+      toast.error("Please add at least one item before submitting");
+      return;
+    }
 
     setSubmitting(true);
     const payload = {
@@ -488,6 +493,7 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
       bill_to_id:    billTo.id,
       ship_to_id:    shipSameAsBill ? billTo.id : (shipTo?.id || billTo.id),
       is_wholesaler: !!billTo.isWholesaler,
+      status:            submitStatus,
       salesman_id:       form.salesman_id || null,
       validity_days:     Number(form.validity_days) || 15,
       delivery_by:       form.delivery_by,
@@ -764,10 +770,23 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
 
 
         {/* ── Submit ── */}
-        <div style={{ position: "sticky", bottom: 0, background: "#fff", padding: "12px 0 4px", borderTop: `1px solid ${theme.border}`, marginTop: 8 }}>
-          <button type="submit" disabled={submitting}
-            style={{ width: "100%", padding: "14px", borderRadius: 10, background: submitting ? "#93c5fd" : theme.primary, color: "#fff", border: "none", cursor: submitting ? "not-allowed" : "pointer", fontWeight: 700, fontSize: 16, letterSpacing: "0.02em" }}>
-            {submitting ? "Saving…" : editId ? (updateLabel || "Update ✓") : (submitLabel || "Save ✓")}
+        <div style={{ position: "sticky", bottom: 0, background: "#fff", padding: "12px 0 4px", borderTop: `1px solid ${theme.border}`, marginTop: 8, display: "flex", gap: 8 }}>
+          {allowDraft && (
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={(e) => handleSubmit(e, 'DRAFT')}
+              style={{ flex: 1, padding: "14px", borderRadius: 10, background: submitting ? "#f3f4f6" : "#f8fafc", color: "#374151", border: "1.5px solid #d1d5db", cursor: submitting ? "not-allowed" : "pointer", fontWeight: 600, fontSize: 15 }}
+            >
+              {submitting ? "Saving…" : "Save as Draft"}
+            </button>
+          )}
+          <button
+            type="submit"
+            disabled={submitting}
+            style={{ flex: allowDraft ? 2 : 1, padding: "14px", borderRadius: 10, background: submitting ? "#93c5fd" : theme.primary, color: "#fff", border: "none", cursor: submitting ? "not-allowed" : "pointer", fontWeight: 700, fontSize: 16, letterSpacing: "0.02em" }}
+          >
+            {submitting ? "Saving…" : editId ? (updateLabel || "Update ✓") : (submitLabel || "Submit ✓")}
           </button>
         </div>
 

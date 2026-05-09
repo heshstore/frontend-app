@@ -65,23 +65,23 @@ export default function DocActions({
 
   /* ── WhatsApp ──────────────────────────────────────────────────────── */
   const handleWhatsApp = () => {
-    const name    = customerName || 'there';
-    const refNo   = docNo || `#${id}`;
-    const dateStr = fmtDate(docDate);
-    const amtStr  = amount ? fmtAmt(amount) : '';
+    const docLabel = type === 'invoice' ? 'Invoice' : type === 'order' ? 'Order' : 'Quotation';
+    const name     = customerName || 'there';
+    const refNo    = docNo || `#${id}`;
+    const dateStr  = fmtDate(docDate);
+    const amtStr   = amount ? fmtAmt(amount) : '';
 
     const lines = [
       `Hello ${name},`,
       ``,
-      `Please find your quotation.`,
+      `Here is your ${docLabel} from *${company.name}*.`,
       ``,
-      `Quotation No: ${refNo}`,
-      dateStr ? `Date: ${dateStr}`    : null,
-      amtStr  ? `Amount: ${amtStr}`  : null,
-      publicPdfUrl ? `\nDownload PDF:\n${publicPdfUrl}` : null,
+      `*${docLabel} No:* ${refNo}`,
+      dateStr ? `*Date:* ${dateStr}` : null,
+      amtStr  ? `*Amount:* ${amtStr}` : null,
+      publicPdfUrl ? `\n*View PDF:* ${publicPdfUrl}` : null,
       ``,
-      `Regards,`,
-      company.name,
+      `_${company.name}_`,
     ].filter((l) => l !== null);
 
     const msg     = lines.join('\n');

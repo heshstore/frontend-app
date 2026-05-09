@@ -93,7 +93,9 @@ export default function QuotationForm() {
           body: JSON.stringify({ status: "QUOTATION", quotation_id: saved.id }),
         }).catch(() => {});
       }
-      return { ok: true, message: isNew ? "Quotation created ✅" : "Quotation updated ✅", redirect: "/quotations" };
+      const isDraft = payload?.status === 'DRAFT';
+      const verb = isNew ? (isDraft ? "saved as draft" : "created") : (isDraft ? "saved as draft" : "updated");
+      return { ok: true, message: `Quotation ${verb} ✅`, redirect: "/quotations" };
     }
     const err = await res.json().catch(() => ({}));
     return { ok: false, message: err.message || "Failed to save quotation" };
@@ -105,8 +107,9 @@ export default function QuotationForm() {
       editId={effectiveEditId}
       loadData={loadData}
       onSubmit={onSubmit}
-      submitLabel="Create Quotation ✓"
+      submitLabel="Confirm Quotation ✓"
       updateLabel="Update Quotation ✓"
+      allowDraft
     />
   );
 }

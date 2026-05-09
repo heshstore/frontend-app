@@ -9,6 +9,7 @@ import { apiFetch } from "./utils/api";
 import { useNotifications } from "./context/NotificationContext";
 import { useRightPanel } from "./components/layout/RightPanel";
 import OrderDetail from "./OrderDetail";
+import ApprovalModal from "./components/ui/ApprovalModal";
 import { toast } from "./utils/toast";
 import { useConfirm } from "./components/ui/ConfirmModal";
 
@@ -53,7 +54,8 @@ export default function OrderList() {
   const [status,   setStatus]   = useState(() => {
     try { return localStorage.getItem(FILTER_KEY) || ''; } catch { return ''; }
   });
-  const [expanded, setExpanded] = useState(null);
+  const [expanded,       setExpanded]       = useState(null);
+  const [approvalOrder,  setApprovalOrder]  = useState(null); // order awaiting approval modal
   const navigate = useNavigate();
   const { dismissByEntity } = useNotifications();
   const { openPanel } = useRightPanel();
@@ -95,14 +97,29 @@ export default function OrderList() {
     return matchText && matchStatus;
   });
 
-  const handleSendForApproval = async (row) => {
+  const handleApprovalConfirm = async ({ advance_amount, process_without_advance, remarks }) => {
+    if (!approvalOrder) return;
+    const parts = [];
+    if (advance_amount > 0) parts.push(`Advance received: ₹${advance_amount.toLocaleString('en-IN')}`);
+    if (process_without_advance) parts.push('Process without advance — approved by management');
+    if (remarks) parts.push(remarks);
+    const finalRemarks = parts.join(' | ') || null;
+
     try {
-      const res = await apiFetch(`/orders/${row.id}/send-for-approval`, { method: "PATCH" });
-      if (!res.ok) throw new Error();
-      toast.success('Sent for approval');
-      navigate('/pending-approval');
+      const res = await apiFetch(`/orders/${approvalOrder.id}/approve`, {
+        method: 'PATCH',
+        body: JSON.stringify({ remarks: finalRemarks }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.message || 'Approval failed');
+        return;
+      }
+      toast.success('Order approved — sent to production');
+      setApprovalOrder(null);
+      loadOrders();
     } catch {
-      toast.error('Failed to send for approval');
+      toast.error('Approval failed — please try again');
     }
   };
 
@@ -122,6 +139,13 @@ export default function OrderList() {
   return (
     <>
     {confirmModal}
+    {approvalOrder && (
+      <ApprovalModal
+        order={approvalOrder}
+        onConfirm={handleApprovalConfirm}
+        onClose={() => setApprovalOrder(null)}
+      />
+    )}
     <div>
       {/* Page title row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -226,12 +250,12 @@ export default function OrderList() {
                   >
                     ✏ Edit
                   </button>
-                  {row.status === ORDER_STATUS.DRAFT && (
+                  {row.status === ORDER_STATUS.PENDING_APPROVAL && (
                     <button
-                      onClick={() => handleSendForApproval(row)}
+                      onClick={() => setApprovalOrder(row)}
                       style={btn({ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' })}
                     >
-                      ↑ Send for approval
+                      ✓ Approve
                     </button>
                   )}
                   <button

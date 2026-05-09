@@ -11,10 +11,10 @@ import { toast } from './utils/toast';
 import { useConfirm } from './components/ui/ConfirmModal';
 
 const EDITABLE_STATUSES    = ['DRAFT', 'SENT', 'APPROVED'];
-const CONVERTIBLE_STATUSES = ['DRAFT', 'SENT', 'APPROVED'];
+const CONVERTIBLE_STATUSES = ['SENT', 'APPROVED']; // DRAFT must be confirmed first
 
 const STATUS_BORDER = {
-  DRAFT:     '#6c757d',
+  DRAFT:     '#9ca3af',
   SENT:      '#0d6efd',
   APPROVED:  '#198754',
   REJECTED:  '#dc3545',
@@ -93,6 +93,20 @@ export default function QuotationList() {
     );
   });
 
+  const handleConfirm = async (id) => {
+    if (!await confirm('Confirm this quotation?', 'The quotation will be marked as Sent/Confirmed and can then be converted to an order.', { confirmLabel: 'Confirm quotation' })) return;
+    try {
+      const res = await apiFetch(`/quotations/${id}/send`, { method: 'PATCH' });
+      if (res.ok) {
+        toast.success('Quotation confirmed');
+        loadQuotations();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.message || 'Confirm failed');
+      }
+    } catch { toast.error('Confirm failed'); }
+  };
+
   const handleCancel = async (id) => {
     if (!await confirm('Cancel this quotation?', 'This cannot be undone. The quotation will remain in history as Cancelled.', { danger: true, confirmLabel: 'Yes, cancel' })) return;
     try {
@@ -127,12 +141,15 @@ export default function QuotationList() {
         else navigate('/orders');
       } else {
         const msg = data?.message || 'Conversion failed';
-        if (msg.toLowerCase().includes('already converted')) {
+        const lc  = msg.toLowerCase();
+        if (lc.includes('already converted')) {
           toast.error('This quotation was already converted to an order');
-        } else if (msg.toLowerCase().includes('mobile') || msg.toLowerCase().includes('phone')) {
+        } else if (lc.includes('mobile') || lc.includes('phone')) {
           toast.error('Customer mobile number is missing — update the customer record first');
-        } else if (msg.toLowerCase().includes('item')) {
-          toast.error('Quotation has no items — add items before converting');
+        } else if (lc.includes('at least one item') || lc.includes('no items') || lc.includes('add at least')) {
+          toast.error('Quotation has no items — confirm the quotation with items before converting');
+        } else if (lc.includes('order already') || lc.includes('already created')) {
+          toast.error('An order already exists for this quotation');
         } else {
           toast.error(msg);
         }
@@ -293,6 +310,15 @@ export default function QuotationList() {
                           style={btn({ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' })}
                         >
                           ✏ Edit
+                        </button>
+                      )}
+
+                      {q.status === 'DRAFT' && (
+                        <button
+                          onClick={() => handleConfirm(q.id)}
+                          style={btn({ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' })}
+                        >
+                          ✓ Confirm
                         </button>
                       )}
 
