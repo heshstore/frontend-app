@@ -173,7 +173,7 @@ export default function NotificationPanel() {
   const navigate = useNavigate();
   const {
     notifications, panelOpen, setPanel,
-    markAllRead, markOneRead, hideNotification,
+    markAllRead, hideNotification,
     unreadCount, categoryCounts,
   } = useNotifications();
 
