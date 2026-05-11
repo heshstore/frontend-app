@@ -50,7 +50,16 @@ export default function DocActions({
   const handleDownloadPdf = async () => {
     try {
       const res = await apiFetch(`/${type}s/${id}/pdf`);
-      if (!res.ok) { toast.error('PDF generation failed'); return; }
+      if (!res.ok) {
+        const ct  = res.headers.get('content-type') || '';
+        let msg   = `PDF generation failed (${res.status})`;
+        if (ct.includes('application/json')) {
+          const body = await res.json().catch(() => ({}));
+          msg = body?.message || msg;
+        }
+        toast.error(msg);
+        return;
+      }
       const blob = await res.blob();
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement('a');

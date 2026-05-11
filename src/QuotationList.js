@@ -10,15 +10,12 @@ import { SkeletonList } from './components/ui/SkeletonCard';
 import { toast } from './utils/toast';
 import { useConfirm } from './components/ui/ConfirmModal';
 
-const EDITABLE_STATUSES    = ['DRAFT', 'GENERATED', 'APPROVED'];
-const CONVERTIBLE_STATUSES = ['GENERATED', 'APPROVED']; // DRAFT must be confirmed first
+const EDITABLE_STATUSES    = ['DRAFT', 'GENERATED'];
+const CONVERTIBLE_STATUSES = ['GENERATED'];
 
 const STATUS_BORDER = {
   DRAFT:     '#9ca3af',
   GENERATED: '#0d6efd',
-  SENT:      '#0d6efd', // legacy alias
-  APPROVED:  '#198754',
-  REJECTED:  '#dc3545',
   CANCELLED: '#dc3545',
   CONVERTED: '#0066B3',
 };
@@ -27,10 +24,11 @@ const STATUS_CHIPS = [
   { value: '',           label: 'All' },
   { value: 'DRAFT',      label: 'Draft' },
   { value: 'GENERATED',  label: 'Generated' },
-  { value: 'APPROVED',   label: 'Approved' },
   { value: 'CONVERTED',  label: 'Converted' },
   { value: 'CANCELLED',  label: 'Cancelled' },
 ];
+
+const VALID_FILTER_VALUES = new Set(['', 'DRAFT', 'GENERATED', 'CONVERTED', 'CANCELLED']);
 
 const FILTER_KEY = 'saachu_quot_filter';
 
@@ -56,7 +54,10 @@ export default function QuotationList() {
   const [converting, setConverting] = useState(null); // quotation id being converted
   const [search, setSearch]         = useState('');
   const [statusFilter, setStatusFilter] = useState(() => {
-    try { return localStorage.getItem(FILTER_KEY) || ''; } catch { return ''; }
+    try {
+      const stored = localStorage.getItem(FILTER_KEY) || '';
+      return VALID_FILTER_VALUES.has(stored) ? stored : '';
+    } catch { return ''; }
   });
   const [expanded, setExpanded] = useState(null);
   const [confirm, confirmModal] = useConfirm();

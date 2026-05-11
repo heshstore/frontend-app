@@ -25,9 +25,6 @@ const ACTION_ICON = {
   NOTE_ADDED:           '📝',
   QUOTATION_CREATED:    '📄',
   QUOTATION_GENERATED:  '📨',
-  QUOTATION_SENT:       '📨', // legacy alias
-  QUOTATION_APPROVED:   '✅',
-  QUOTATION_REJECTED:   '❌',
   ORDER_CREATED:        '📦',
   JOB_ASSIGNED:         '🔧',
   JOB_COMPLETED:        '✅',

@@ -5,8 +5,8 @@ import { API_URL } from './config';
 import QuotationTemplate from './QuotationTemplate';
 import DocumentActionBar from './components/DocumentActionBar';
 
-const EDITABLE_STATUSES    = ['DRAFT', 'GENERATED', 'APPROVED'];
-const CONVERTIBLE_STATUSES = ['GENERATED', 'APPROVED'];
+const EDITABLE_STATUSES    = ['DRAFT', 'GENERATED'];
+const CONVERTIBLE_STATUSES = ['GENERATED'];
 
 export default function QuotationView() {
   const { id }  = useParams();
