@@ -32,7 +32,7 @@ const ENTITY_ROUTES = {
   lead:      (id) => `/crm/leads/${id}`,
   quotation: (id) => `/quotations`,
   order:     (id) => `/orders/${id}`,
-  job:       (id) => `/production/jobs/${id}`,
+  job:       () => '/production/execution',
   dispatch:  (_)  => `/dispatch`,
 };
 

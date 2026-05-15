@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useReducer, useCallback, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
-import { apiFetch } from '../utils/api';
+import { apiFetch, getToken } from '../utils/api';
 import { API_URL } from '../config';
+import { useAuth } from './AuthContext';
 
 const NotificationContext = createContext(null);
 
@@ -16,7 +17,6 @@ const initialState = {
 function reducer(state, action) {
   switch (action.type) {
     case 'ADD':
-      // Dedup: skip if we already have this notification
       if (state.notifications.some(n => n.id === action.payload.id)) return state;
       return {
         ...state,
@@ -78,14 +78,23 @@ function reducer(state, action) {
 }
 
 export function NotificationProvider({ children }) {
+  const { currentUser } = useAuth();
   const [state, dispatch] = useReducer(reducer, initialState);
   const socketRef = useRef(null);
+  const pollRef   = useRef(null);
+
+  // Single source of truth: both React state (currentUser) AND token must exist.
+  // currentUser drives re-renders; getToken() confirms the token is actually set.
+  const isAuthenticated = !!currentUser && !!getToken();
+
+  /* ── Action creators ───────────────────────────────────────────────────────── */
 
   const addNotification = useCallback((notif) => {
     dispatch({ type: 'ADD', payload: notif });
   }, []);
 
   const fetchNotifications = useCallback(async () => {
+    if (!getToken()) return;
     try {
       const res = await apiFetch('/notifications');
       if (!res?.ok) return;
@@ -95,6 +104,7 @@ export function NotificationProvider({ children }) {
   }, []);
 
   const fetchUnreadCount = useCallback(async () => {
+    if (!getToken()) return;
     try {
       const res = await apiFetch('/notifications/count');
       if (!res?.ok) return;
@@ -104,6 +114,7 @@ export function NotificationProvider({ children }) {
   }, []);
 
   const fetchNextAction = useCallback(async () => {
+    if (!getToken()) return;
     try {
       const res = await apiFetch('/notifications/next-action');
       if (!res?.ok) return;
@@ -141,43 +152,62 @@ export function NotificationProvider({ children }) {
     dispatch({ type: 'SET_PANEL', payload: open });
   }, []);
 
-  // Auto-fetch on mount + poll count every 30s
+  /* ── Polling lifecycle ─────────────────────────────────────────────────────── */
+  // Starts ONLY when authenticated. Stops on logout or unmount.
+  // pollRef guards against duplicate intervals (React StrictMode double-invoke).
   useEffect(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+
+    if (!isAuthenticated) {
+      console.log('[Notifications] Polling stopped on logout');
+      return;
+    }
+
+    console.log('[Notifications] Authenticated — starting polling');
     fetchNotifications();
     fetchUnreadCount();
-    const interval = setInterval(fetchUnreadCount, 30_000);
-    return () => clearInterval(interval);
-  }, [fetchNotifications, fetchUnreadCount]);
+    pollRef.current = setInterval(fetchUnreadCount, 30_000);
 
-  // WebSocket: real-time notification push
+    return () => {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    };
+  // fetchNotifications/fetchUnreadCount have stable identities (empty useCallback deps)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
+
+  /* ── WebSocket lifecycle ───────────────────────────────────────────────────── */
+  // Connects ONLY when authenticated. Disconnects on logout, token expiry, or unmount.
   useEffect(() => {
-    let user = {};
-    try { user = JSON.parse(localStorage.getItem('user') || '{}'); } catch {}
-    if (!user?.id) return;
+    if (!isAuthenticated || !currentUser?.id) return;
 
     const socketUrl = API_URL || window.location.origin.replace(':3000', ':4000');
-    const socket = io(socketUrl, {
-      query: { userId: user.id },
-      transports: ['websocket'],
+    const socket    = io(socketUrl, {
+      query:                { userId: currentUser.id },
+      transports:           ['websocket'],
       reconnectionAttempts: 5,
-      reconnectionDelay: 2000,
+      reconnectionDelay:    2000,
     });
     socketRef.current = socket;
 
-    socket.on('notification.new', (notif) => {
-      addNotification(notif);
-    });
+    socket.on('notification.new', addNotification);
 
     return () => {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [addNotification]);
+  // addNotification has a stable identity — intentionally excluded from deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, currentUser?.id]);
 
-  // Re-fetch when panel opens (ensures freshness)
+  /* ── Re-fetch when panel opens ─────────────────────────────────────────────── */
   useEffect(() => {
-    if (state.panelOpen) fetchNotifications();
-  }, [state.panelOpen, fetchNotifications]);
+    if (state.panelOpen && isAuthenticated) fetchNotifications();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.panelOpen, isAuthenticated]);
 
   return (
     <NotificationContext.Provider

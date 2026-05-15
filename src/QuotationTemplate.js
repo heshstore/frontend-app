@@ -9,52 +9,7 @@
  */
 import React from 'react';
 import { company, bank, hasBankDetails } from './config/company';
-
-/* ── Formatters ─────────────────────────────────────────────────────────── */
-const inr = (n) =>
-  `₹${Number(n || 0).toLocaleString('en-IN', {
-    minimumFractionDigits:  2,
-    maximumFractionDigits: 2,
-  })}`;
-
-const fmtDate = (d) => {
-  if (!d) return '—';
-  return new Date(d).toLocaleDateString('en-IN', {
-    day: '2-digit', month: 'short', year: 'numeric',
-  });
-};
-
-/* ── Amount in words (Indian format) ───────────────────────────────────── */
-const _ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
-  'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen',
-  'Seventeen', 'Eighteen', 'Nineteen'];
-const _tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
-
-function _u100(n) {
-  return n < 20 ? _ones[n] : _tens[Math.floor(n / 10)] + (n % 10 ? ' ' + _ones[n % 10] : '');
-}
-function _u1000(n) {
-  if (n < 100) return _u100(n);
-  return _ones[Math.floor(n / 100)] + ' Hundred' + (n % 100 ? ' ' + _u100(n % 100) : '');
-}
-
-function amountInWords(amount) {
-  const n     = Math.floor(Math.abs(amount));
-  const paise = Math.round((Math.abs(amount) - n) * 100);
-  if (n === 0 && paise === 0) return 'Zero Rupees Only';
-  const cr  = Math.floor(n / 10000000);
-  const lk  = Math.floor((n % 10000000) / 100000);
-  const th  = Math.floor((n % 100000) / 1000);
-  const rem = n % 1000;
-  let w = '';
-  if (cr)  w += _u1000(cr) + ' Crore ';
-  if (lk)  w += _u100(lk)  + ' Lakh ';
-  if (th)  w += _u100(th)  + ' Thousand ';
-  if (rem) w += _u1000(rem);
-  w = w.trim() + ' Rupees';
-  if (paise > 0) w += ' and ' + _u100(paise) + ' Paise';
-  return w + ' Only';
-}
+import { inr, fmtDate, amountInWords } from './utils/docFormatters';
 
 /* ── Print + screen styles ──────────────────────────────────────────────── */
 const CSS = `

@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useNotifications } from '../../context/NotificationContext';
 
 const TABS = [
-  { icon: '🔧', label: 'My Jobs',  href: '/production/my-jobs' },
+  { icon: '🏭', label: 'Work Orders', href: '/production/execution' },
   { icon: '📦', label: 'Orders',   href: '/orders'             },
   { icon: '👥', label: 'Leads',    href: '/crm/leads'          },
   { icon: '🔔', label: 'Alerts',   href: '/notifications'      },

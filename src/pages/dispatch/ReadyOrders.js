@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../utils/api';
+import { toast } from '../../utils/toast';
 
 const btn = (bg, color = '#fff') => ({
   background: bg, color, border: 'none', borderRadius: 8,
@@ -42,6 +43,7 @@ export default function ReadyOrders() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
         <button onClick={() => navigate(-1)} style={btn('#f1f5f9', '#374151')}>← Back</button>
         <h3 style={{ margin: 0, flex: 1, fontSize: 17 }}>Ready for Dispatch</h3>
+        <button type="button" onClick={() => navigate('/dispatch/orders')} style={btn('#e0e7ff', '#3730a3')}>Dispatch orders</button>
         <button onClick={load} style={btn('#f1f5f9', '#374151')}>↻</button>
       </div>
 
@@ -79,7 +81,7 @@ export default function ReadyOrders() {
               background: '#fef9c3', color: '#a16207',
               fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99,
             }}>
-              READY FOR DISPATCH
+              {(order.status || 'READY').replace(/_/g, ' ')}
             </span>
           </div>
 
@@ -98,10 +100,31 @@ export default function ReadyOrders() {
           </div>
 
           <button
-            onClick={() => navigate('/dispatch/create', { state: { order } })}
-            style={{ ...btn('#16a34a'), width: '100%', fontSize: 15 }}
+            type="button"
+            onClick={async () => {
+              try {
+                const res = await apiFetch('/dispatch/orders', {
+                  method: 'POST',
+                  body: JSON.stringify({ orderId: order.id }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.message || 'Could not create dispatch');
+                toast.success('Dispatch draft created');
+                navigate(`/dispatch/orders/${data.id}`);
+              } catch (e) {
+                toast.error(e.message);
+              }
+            }}
+            style={{ ...btn('#005fb8'), width: '100%', fontSize: 15, marginBottom: 8 }}
           >
-            + Create Dispatch
+            + New dispatch order (pick / pack)
+          </button>
+
+          <button
+            onClick={() => navigate('/dispatch/create', { state: { order } })}
+            style={{ ...btn('#f1f5f9', '#374151'), width: '100%', fontSize: 13 }}
+          >
+            Legacy single-step dispatch →
           </button>
         </div>
       ))}
@@ -109,10 +132,10 @@ export default function ReadyOrders() {
       {/* Quick nav to dispatch list */}
       {!loading && (
         <button
-          onClick={() => navigate('/dispatch/list')}
+          onClick={() => navigate('/dispatch/orders')}
           style={{ ...btn('#6b7280'), width: '100%', marginTop: 8 }}
         >
-          View All Dispatches →
+          All dispatch orders →
         </button>
       )}
     </div>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../utils/api';
 
@@ -77,8 +77,11 @@ export default function BusinessSummary() {
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const loadInFlight                = useRef(false);
 
   const load = useCallback(async () => {
+    if (loadInFlight.current) return;
+    loadInFlight.current = true;
     try {
       const [summaryRes, staleRes] = await Promise.all([
         apiFetch('/dashboard/summary'),
@@ -93,6 +96,7 @@ export default function BusinessSummary() {
       setError(true);
     } finally {
       setLoading(false);
+      loadInFlight.current = false;
     }
   }, []);
 
@@ -154,7 +158,7 @@ export default function BusinessSummary() {
       {/* ── Stale orders alert ── */}
       {staleOrders.length > 0 && (
         <div
-          onClick={() => navigate('/production/queue')}
+          onClick={() => navigate('/production/execution')}
           style={{
             background: '#fff7ed', border: '1px solid #fb923c',
             borderLeft: '4px solid #ea580c', borderRadius: 10,
@@ -178,7 +182,7 @@ export default function BusinessSummary() {
             label="In Production"
             value={orders.in_production}
             accent="#3b82f6"
-            onClick={() => navigate('/production/queue')}
+            onClick={() => navigate('/production/execution')}
           />
           <MetricCard
             label="Ready to Dispatch"
@@ -231,7 +235,7 @@ export default function BusinessSummary() {
             label="Active Jobs"
             value={production.active_jobs}
             accent="#f59e0b"
-            onClick={() => navigate('/production/queue')}
+            onClick={() => navigate('/production/execution')}
           />
           <MetricCard
             label="Done Today"

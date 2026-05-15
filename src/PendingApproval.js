@@ -1,233 +1,296 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { ORDER_STATUS } from "./constants/orderStatus";
 import { apiFetch } from "./utils/api";
 import { usePermission } from "./utils/usePermission";
 import { toast } from "./utils/toast";
-import { usePromptModal } from "./components/ui/ConfirmModal";
+import { useConfirm, usePromptModal } from "./components/ui/ConfirmModal";
+import StatusBadge from "./components/ui/StatusBadge";
+import { SkeletonList } from "./components/ui/SkeletonCard";
+import EmptyState from "./components/ui/EmptyState";
+import { useRightPanel } from "./components/layout/RightPanel";
+import OrderDetail from "./OrderDetail";
+
+const btn = (extra = {}) => ({
+  padding: '6px 13px',
+  fontSize: 12,
+  fontWeight: 600,
+  borderRadius: 5,
+  height: 32,
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 4,
+  cursor: 'pointer',
+  border: 'none',
+  ...extra,
+});
 
 export default function PendingApproval() {
-  const [prompt, promptModal] = usePromptModal();
-  const [orders, setOrders] = useState([]);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-  const navigate = useNavigate();
-  const [search, setSearch] = useState("");
+  const [orders,   setOrders]   = useState([]);
+  const [loading,  setLoading]  = useState(false);
+  const [search,   setSearch]   = useState("");
+  const [expanded, setExpanded] = useState(null);
+
+  const [pendingIds, setPendingIds] = useState(new Set());
+
   const canApprove = usePermission('order.approve');
-  const canReject = usePermission('order.reject');
-
-  useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
+  const canReject  = usePermission('order.reject');
+  const { openPanel } = useRightPanel();
+  const [confirm, confirmModal]   = useConfirm();
+  const [prompt,  promptModal]    = usePromptModal();
 
   const loadOrders = async () => {
+    setLoading(true);
     try {
-      const res = await apiFetch(`/orders`);
-      const data = await res.json();
-      const pending = (Array.isArray(data) ? data : []).filter(
-        (o) => o.status === ORDER_STATUS.PENDING_APPROVAL
-      );
-      setOrders(pending);
+      // Filter server-side for speed; the paginated wrapper is unwrapped below.
+      const res  = await apiFetch('/orders?status=PENDING_APPROVAL&limit=200');
+      const json = await res.json();
+      setOrders(Array.isArray(json) ? json : (json?.data ?? []));
     } catch (err) {
-      console.error("Error loading orders", err);
+      console.error("Error loading pending orders", err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  useEffect(() => {
-    loadOrders();
-  }, []);
+  useEffect(() => { loadOrders(); }, []);
 
-  const approveOrder = async (id) => {
+  const approveOrder = async (row) => {
+    if (pendingIds.has(row.id)) return;
+
+    // Guard: stale data — order may have been actioned in another tab/session
+    if (row.status !== 'PENDING_APPROVAL') {
+      toast.warn('Order status has changed. Refreshing…');
+      await loadOrders();
+      return;
+    }
+
+    const label = row.order_no || row.order_number || `#${row.id}`;
+    if (!await confirm(
+      'Approve this order?',
+      `${label} will be sent to production.`,
+      { confirmLabel: 'Approve' },
+    )) return;
+
+    setPendingIds(s => new Set(s).add(row.id));
     try {
-      const res = await apiFetch(`/orders/${id}/approve`, { method: "PATCH" });
-      if (!res.ok) throw new Error();
-      toast.success('Order approved');
-      loadOrders();
+      const res = await apiFetch(`/orders/${row.id}/approve`, {
+        method: 'PATCH',
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        // Backend rejected because order was already actioned elsewhere — refresh list
+        if (res.status === 400 && body?.message?.includes('Invalid transition')) {
+          toast.warn('Order was already processed. Refreshing list…');
+          setOrders(prev => prev.filter(o => o.id !== row.id));
+        } else {
+          toast.error(body.message || 'Approval failed');
+        }
+        return;
+      }
+      toast.success('Order approved — sent to production');
+      // Optimistically remove the row so it disappears immediately even if
+      // the subsequent reload is slow or fails due to a transient network error
+      setOrders(prev => prev.filter(o => o.id !== row.id));
+      setExpanded(null);
+      // Reload in background to sync any other status changes
+      loadOrders().catch(() => {});
     } catch {
-      toast.error('Approve failed');
+      toast.error('Approval failed');
+    } finally {
+      setPendingIds(s => { const n = new Set(s); n.delete(row.id); return n; });
     }
   };
 
-  const rejectOrder = async (id) => {
-    const reason = await prompt('Enter rejection reason', '', 'Reason for rejection…');
-    if (!reason) return;
+  const rejectOrder = async (row) => {
+    if (pendingIds.has(row.id)) return;
+    const label = row.order_no || row.order_number || `#${row.id}`;
+    const remarks = await prompt(
+      'Rejection Reason',
+      `Provide a reason for rejecting ${label}. The salesperson will see this.`,
+      'Enter rejection reason…',
+    );
+    if (!remarks) return;
 
+    setPendingIds(s => new Set(s).add(row.id));
     try {
-      const res = await apiFetch(`/orders/${id}/reject`, {
-        method: "PATCH",
-        body: JSON.stringify({ reason }),
+      const res = await apiFetch(`/orders/${row.id}/reject`, {
+        method: 'PATCH',
+        body: JSON.stringify({ remarks }),
       });
       if (!res.ok) throw new Error();
       toast.success('Order rejected');
-      loadOrders();
+      setExpanded(null);
+      await loadOrders();
     } catch {
       toast.error('Reject failed');
+    } finally {
+      setPendingIds(s => { const n = new Set(s); n.delete(row.id); return n; });
     }
   };
 
-  const filteredOrders = orders.filter((o) => {
+  const filtered = orders.filter((o) => {
     const text = search.toLowerCase();
     return (
-      o.id?.toString().includes(text) ||
-      o.customer_name?.toLowerCase().includes(text) ||
-      o.mobile?.includes(text)
+      (o.order_no    || o.order_number || '').toLowerCase().includes(text) ||
+      String(o.id).includes(text) ||
+      (o.customer_name || '').toLowerCase().includes(text) ||
+      (o.mobile || o.customer_phone || '').includes(text)
     );
   });
 
   return (
     <>
-    {promptModal}
-    <div style={{ padding: 20 }}>
-      <h2>Order Pending Approval</h2>
-      <div style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        marginBottom: "20px",
-        flexWrap: "wrap",
-        gap: "10px"
-      }}>
+      {confirmModal}
+      {promptModal}
+      <div>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#111827', flex: 1 }}>
+            Order Approval
+          </h1>
+          {orders.length > 0 && (
+            <span style={{
+              background: '#f59e0b', color: '#fff',
+              fontSize: 12, fontWeight: 700,
+              padding: '3px 10px', borderRadius: 99,
+            }}>
+              {orders.length} waiting
+            </span>
+          )}
+        </div>
 
-        <button
-          onClick={() => navigate(-1)}
-          style={{
-            padding: "8px 14px",
-            background: "#007bff",
-            color: "#fff",
-            border: "none",
-            borderRadius: "5px",
-            cursor: "pointer"
-          }}
-        >
-          ← Back
-        </button>
-
-        <div style={{ flex: 1, textAlign: "center" }}>
+        {/* Search */}
+        <div style={{ marginBottom: 16 }}>
           <input
-            type="text"
-            placeholder="Search by ID / Customer / Mobile"
+            placeholder="Search by order / customer / mobile"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            style={{
-              padding: "10px",
-              width: "300px",
-              maxWidth: "100%",
-              borderRadius: "6px",
-              border: "1px solid #ccc",
-              textAlign: "center"
-            }}
+            style={{ width: '100%', padding: '8px 12px', border: '1px solid #e5e7eb', borderRadius: 6, fontSize: 14, boxSizing: 'border-box' }}
           />
         </div>
-      </div>
-      {isMobile ? (
-        filteredOrders.map((o) => (
+
+        {loading && <SkeletonList count={5} />}
+
+        {!loading && filtered.length === 0 && (
+          <EmptyState
+            icon="⏳"
+            title="No pending approvals"
+            subtitle="All orders are up to date. Nothing waiting for approval."
+          />
+        )}
+
+        {!loading && filtered.map((row) => (
           <div
-            key={o.id}
+            key={row.id}
             style={{
-              border: "1px solid #ddd",
-              borderRadius: "8px",
-              padding: "12px",
-              marginBottom: "12px",
-              background: "#fff",
+              border: '1px solid #e5e7eb',
+              borderLeft: '4px solid #f59e0b',
+              borderRadius: 8,
+              marginBottom: 12,
+              background: '#fff',
+              overflow: 'hidden',
             }}
           >
-            <div><b>Order No:</b> {o.id}</div>
-            <div>
-              <b>Date:</b> {o.created_at ? new Date(o.created_at).toLocaleDateString() : "-"}
-            </div>
-            <div><b>Customer:</b> {o.customer_name}</div>
-            <div style={{ fontSize: "12px", color: "#666" }}>
-              {o.city || ""} {o.mobile ? `| ${o.mobile}` : ""}
-            </div>
-            <div>
-              <b>Amount:</b> ₹ {Number(o.total_amount || 0).toLocaleString()}
-            </div>
-            <div><b>Status:</b> {o.status}</div>
-            <div><b>Salesman:</b> {o.salesman || "-"}</div>
+            {/* Card header — click to expand */}
             <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: "6px",
-                marginTop: "10px",
-              }}
+              onClick={() => setExpanded(expanded === row.id ? null : row.id)}
+              style={{ padding: '12px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}
             >
-              <button onClick={() => window.location.href = `/invoice/${o.id}`}>
-                View
-              </button>
-              {canApprove && (
-                <button onClick={() => approveOrder(o.id)}>
-                  Approve
-                </button>
-              )}
-              {canReject && (
-                <button onClick={() => rejectOrder(o.id)}>
-                  Reject
-                </button>
-              )}
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: 15, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  {row.order_no || row.order_number || `ORD-${String(row.id).padStart(5, '0')}`}
+                  <StatusBadge status={row.status} />
+                </div>
+
+                {/* Advance / payment details from salesperson */}
+                {(Number(row.advance_amount) > 0 || row.process_without_advance || row.approval_remarks) && (
+                  <div style={{
+                    fontSize: 11, color: '#92400e',
+                    background: '#fffbeb', border: '1px solid #fde68a',
+                    borderRadius: 4, padding: '4px 8px',
+                    marginTop: 4, display: 'inline-flex', flexDirection: 'column', gap: 2,
+                  }}>
+                    {Number(row.advance_amount) > 0 && (
+                      <span>Advance: ₹{Number(row.advance_amount).toLocaleString('en-IN')}</span>
+                    )}
+                    {row.process_without_advance && (
+                      <span>Process without advance</span>
+                    )}
+                    {row.approval_remarks && (
+                      <span>Notes: {row.approval_remarks}</span>
+                    )}
+                  </div>
+                )}
+                {/* Previous rejection reason — visible if order was rejected and re-submitted */}
+                {row.rejection_reason && (
+                  <div style={{
+                    fontSize: 11, color: '#9f1239',
+                    background: '#fff1f2', border: '1px solid #fecdd3',
+                    borderRadius: 4, padding: '3px 8px',
+                    marginTop: 4, display: 'inline-block',
+                  }}>
+                    Prev. rejection: {row.rejection_reason}
+                  </div>
+                )}
+
+                <div style={{ fontSize: 13, color: '#6b7280', marginTop: 3 }}>
+                  {row.customer_name || '—'} · ₹{Number(row.total_amount || 0).toLocaleString('en-IN')}
+                </div>
+                <div style={{ fontSize: 12, color: '#9ca3af' }}>
+                  {row.created_at ? new Date(row.created_at).toLocaleDateString('en-IN') : ''}
+                  {(row.mobile || row.customer_phone) ? ` · ${row.mobile || row.customer_phone}` : ''}
+                </div>
+              </div>
+              <span style={{ fontSize: 18, color: '#9ca3af' }}>{expanded === row.id ? '▲' : '▼'}</span>
             </div>
-          </div>
-        ))
-      ) : (
-        <div style={{ overflowX: "auto" }}>
-          <table border="1" cellPadding="10" style={{ width: "100%" }}>
-            <thead>
-              <tr>
-                <th>Order No.</th>
-                <th>Date</th>
-                <th>Customer</th>
-                <th>Order Value</th>
-                <th>Status</th>
-                <th>Salesman</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredOrders.map((o) => (
-                <tr key={o.id}>
-                  <td>{o.id}</td>
-                  <td>
-                    {o.created_at
-                      ? new Date(o.created_at).toLocaleDateString()
-                      : "-"}
-                  </td>
-                  <td>
-                    <div>{o.customer_name}</div>
-                    <div style={{ fontSize: "12px", color: "#666" }}>
-                      {o.city || ""} {o.mobile ? `| ${o.mobile}` : ""}
-                    </div>
-                  </td>
-                  <td>
-                    ₹ {Number(o.total_amount || 0).toLocaleString()}
-                  </td>
-                  <td>{o.status}</td>
-                  <td>{o.salesman || "-"}</td>
-                  <td>
-                    <button onClick={() => window.location.href = `/invoice/${o.id}`}>
-                      View
+
+            {/* Expanded actions */}
+            {expanded === row.id && (
+              <div style={{ borderTop: '1px solid #f3f4f6', padding: '12px 16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <button
+                      onClick={() => openPanel(
+                        `Order #${row.order_no || row.order_number || row.id}`,
+                        <OrderDetail orderId={row.id} />,
+                      )}
+                      style={btn({ background: '#f8fafc', color: '#374151', border: '1px solid #e2e8f0' })}
+                    >
+                      👁 View
                     </button>
-                    {canApprove && (
-                      <button onClick={() => approveOrder(o.id)}>
-                        Approve
+                    {canApprove && row.status === 'PENDING_APPROVAL' && (
+                      <button
+                        onClick={() => approveOrder(row)}
+                        disabled={pendingIds.has(row.id)}
+                        style={btn({
+                          background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0',
+                          opacity: pendingIds.has(row.id) ? 0.5 : 1,
+                          cursor: pendingIds.has(row.id) ? 'not-allowed' : 'pointer',
+                        })}
+                      >
+                        {pendingIds.has(row.id) ? '…' : '✓ Approve'}
                       </button>
                     )}
-                    {canReject && (
-                      <button onClick={() => rejectOrder(o.id)}>
-                        Reject
+                    {canReject && row.status === 'PENDING_APPROVAL' && (
+                      <button
+                        onClick={() => rejectOrder(row)}
+                        disabled={pendingIds.has(row.id)}
+                        style={btn({
+                          background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca',
+                          opacity: pendingIds.has(row.id) ? 0.5 : 1,
+                          cursor: pendingIds.has(row.id) ? 'not-allowed' : 'pointer',
+                        })}
+                      >
+                        {pendingIds.has(row.id) ? '…' : '✕ Reject'}
                       </button>
                     )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </>
   );
 }

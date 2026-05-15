@@ -18,7 +18,7 @@ const PIPELINE = [
   { key: 'leads',      label: 'Leads',      icon: '👥', href: '/crm/leads',           color: '#f97316', permKey: 'crm'             },
   { key: 'quotations', label: 'Quotations', icon: '📝', href: '/quotations',           color: '#3b82f6', permKey: 'quotation.view'  },
   { key: 'orders',     label: 'Orders',     icon: '📦', href: '/orders',               color: '#6366f1', permKey: 'order.view'      },
-  { key: 'production', label: 'Production', icon: '⚙️', href: '/production/queue',     color: '#dc2626', permKey: 'production.view' },
+  { key: 'production', label: 'Production', icon: '⚙️', href: '/production/execution', color: '#dc2626', permKey: 'production.view' },
   { key: 'dispatch',   label: 'Dispatch',   icon: '🚚', href: '/dispatch',             color: '#8b5cf6', permKey: 'dispatch.view'   },
   { key: 'payments',   label: 'Payments',   icon: '💰', href: '/accounts/outstanding', color: '#d97706', permKey: 'accounts'        },
 ];
@@ -258,6 +258,7 @@ export default function Sidebar({ onClose }) {
   const canSeeAccounts   = hasAnyPermission('invoice.view', 'payment.view');
   const canSeeDispatch   = usePermission('dispatch.view');
   const canSeeStaff      = hasAnyPermission('staff.view', 'rbac.manage');
+  const canViewWorkforce = usePermission('staff.view');
   const canSeeCrm        = hasAnyPermission('lead.view', 'crm.analytics.self');
   const canSeeWhatsApp   = usePermission('whatsapp.manage');
   const canSeeItems      = usePermission('item.view');
@@ -281,8 +282,11 @@ export default function Sidebar({ onClose }) {
   // Sorted order is frozen after first load — prevents jumping on 60s refresh
   const [sortedKeys, setSortedKeys] = useState(null);
   const initialLoadDone             = useRef(false);
+  const fetchCountsInFlight         = useRef(false);
 
   const fetchCounts = useCallback(async () => {
+    if (fetchCountsInFlight.current) return;
+    fetchCountsInFlight.current = true;
     const next    = {};
     const amounts = {};
     const safe    = async (key, fn) => { try { const v = await fn(); next[key] = v; } catch {} };
@@ -309,7 +313,7 @@ export default function Sidebar({ onClose }) {
         return d.total ?? (Array.isArray(d) ? d.length : 0);
       }),
       caps.canViewProduction && safe('production', async () => {
-        const r = await apiFetch('/production/queue?limit=1');
+        const r = await apiFetch('/production/execution/jobs');
         if (!r.ok) return 0;
         const d = await r.json();
         return d.total ?? (Array.isArray(d) ? d.length : 0);
@@ -345,6 +349,7 @@ export default function Sidebar({ onClose }) {
       withPriority.sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]);
       setSortedKeys(withPriority.map(x => x.key));
     }
+    fetchCountsInFlight.current = false;
   }, []);
 
   useEffect(() => {
@@ -501,6 +506,20 @@ export default function Sidebar({ onClose }) {
                   )}
                   {canSeeCustomers && (
                     <>
+                      <SideLabel>Service</SideLabel>
+                      <NavItem label="Service dashboard" href="/service/dashboard" icon="📋" />
+                      <NavItem label="Service tickets" href="/service/tickets" icon="🛠️" />
+                      <NavItem label="AMC contracts" href="/service/amc" icon="📅" />
+                    </>
+                  )}
+                  {canSeeStaff && (
+                    <>
+                      <SideLabel>Field staff</SideLabel>
+                      <NavItem label="Technicians" href="/service/technicians" icon="👷" />
+                    </>
+                  )}
+                  {canSeeCustomers && (
+                    <>
                       <SideLabel>Customers</SideLabel>
                       <NavItem label="All Customers" href="/customers"    icon="🏢" />
                       <NavItem label="Add Customer"  href="/add-customer" icon="➕" />
@@ -514,22 +533,49 @@ export default function Sidebar({ onClose }) {
                       <ShopifyNavItem />
                     </>
                   )}
+                  {canSeeItems && (
+                    <>
+                      <SideLabel>Procurement</SideLabel>
+                      <NavItem label="Stock Overview"         href="/inventory"             icon="📦" />
+                      <NavItem label="Purchase Requirements"  href="/purchase-requirements" icon="🛒" />
+                      <NavItem label="Vendors"                href="/vendors"               icon="🏪" />
+                      <NavItem label="Purchase Orders"      href="/purchase-orders"      icon="📋" />
+                    </>
+                  )}
+                  {canSeeItems && (
+                    <>
+                      <SideLabel>Manufacturing</SideLabel>
+                      <NavItem label="Departments" href="/departments" icon="🏭" />
+                    </>
+                  )}
                   {canSeeOrders && (
                     <>
                       <SideLabel>Orders</SideLabel>
-                      <NavItem label="Pending Approval" href="/pending-approval" icon="⏳" />
+                      <NavItem label="Order Approval" href="/pending-approval" icon="⏳" />
                     </>
                   )}
                   {canSeeProduction && (
                     <>
                       <SideLabel>Production</SideLabel>
-                      <NavItem label="My Jobs" href="/production/my-jobs" icon="🔧" />
+                      <NavItem label="Work Orders" href="/production/execution" icon="🏭" />
+                      <NavItem label="Manufacturing analytics" href="/manufacturing/analytics" icon="📊" />
                     </>
                   )}
                   {canSeeAccounts && (
                     <>
                       <SideLabel>Accounts</SideLabel>
+                      <NavItem label="Finance dashboard" href="/finance" icon="💹" />
+                      <NavItem label="Customer payments" href="/finance/customer-payments" icon="💵" />
+                      <NavItem label="Vendor payments" href="/finance/vendor-payments" icon="🏪" />
                       <NavItem label="Credit Limits" href="/set-credit-limit" icon="🏦" />
+                    </>
+                  )}
+                  {canViewWorkforce && (
+                    <>
+                      <SideLabel>Workforce</SideLabel>
+                      <NavItem label="HR dashboard" href="/workforce/hr" icon="👥" />
+                      <NavItem label="Workforce profiles" href="/workforce/profiles" icon="🪪" />
+                      <NavItem label="Shift master" href="/workforce/shifts" icon="🌅" />
                     </>
                   )}
                   {canSeeStaff && (
@@ -548,6 +594,12 @@ export default function Sidebar({ onClose }) {
           )}
 
         </nav>
+
+        <div style={{ padding: '8px 10px', flexShrink: 0, borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: NAV_MUTED, marginBottom: 6, letterSpacing: '0.04em' }}>MY WORKPLACE</div>
+          <NavItem label="Attendance" href="/workforce/attendance" icon="⏱️" />
+          <NavItem label="Leave requests" href="/workforce/leaves" icon="📅" />
+        </div>
 
         {/* ── Logout ── */}
         <div style={{ padding: '8px 10px', flexShrink: 0, borderTop: '1px solid rgba(255,255,255,0.07)' }}>

@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { apiFetch } from './utils/api';
 import { toast } from './utils/toast';
 import { useRightPanel } from './components/layout/RightPanel';
-import JobDetail from './pages/JobDetail';
 import { getUserCapabilities } from './config/roleCapabilities';
 import KpiCard from './components/dashboard/KpiCard';
 import KpiGrid from './components/dashboard/KpiGrid';
@@ -446,12 +445,8 @@ export default function Dashboard() {
 
   // ── Handlers ───────────────────────────────────────────────────────────────
 
-  const handleDelayedJobClick = (job) => {
-    if (openPanel) {
-      openPanel(`Job #${job.id}`, <JobDetail jobId={job.id} />);
-    } else {
-      navigate('/production/queue');
-    }
+  const handleDelayedJobClick = () => {
+    navigate('/production/execution');
   };
 
   // ── Derived values ─────────────────────────────────────────────────────────
@@ -471,7 +466,7 @@ export default function Dashboard() {
       btnLabel: 'View Jobs',
       bgFrom: '#dc2626', bgTo: '#ef4444',
       loading: loadingSummary || loadingDelayed,
-      onClick: () => navigate('/production/queue'),
+      onClick: () => navigate('/production/execution'),
     },
     caps.canViewHotLeads && {
       key: 'leads',
@@ -495,7 +490,7 @@ export default function Dashboard() {
 
   const quickActions = [
     caps.canViewCrm        && { key: 'leads', icon: '📞', label: 'Call HOT Leads',  color: C.red,    bg: '#fff5f5', href: '/crm/queue'       },
-    caps.canViewProduction  && { key: 'jobs',  icon: '✅', label: 'Complete Jobs',   color: C.green,  bg: '#f0fdf4', href: '/production/queue' },
+    caps.canViewProduction  && { key: 'jobs',  icon: '✅', label: 'Complete Jobs',   color: C.green,  bg: '#f0fdf4', href: '/production/execution' },
     caps.canViewQuotations  && { key: 'quot',  icon: '📝', label: 'Send Quotation',  color: C.blue,   bg: '#eff6ff', href: '/quotation'        },
     caps.canViewOrders      && { key: 'order', icon: '📦', label: 'Add Order',       color: C.purple, bg: '#f5f3ff', href: '/order'            },
   ].filter(Boolean);
@@ -572,6 +567,92 @@ export default function Dashboard() {
           </>
         )}
 
+        {caps.canViewProduction && summary?.manufacturing_intel && (
+          <>
+            <SectionLabel>🏭 Operations exposure</SectionLabel>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)',
+              gap: 10,
+              marginBottom: 20,
+            }}>
+              {[
+                { k: 'wip', label: 'WIP value', v: fmtCurrency(summary.manufacturing_intel.wip_order_value) },
+                { k: 'fg', label: 'FG stock (est.)', v: fmtCurrency(summary.manufacturing_intel.fg_stock_value) },
+                { k: 'pd', label: 'Pending dispatch', v: fmtCurrency(summary.manufacturing_intel.pending_dispatch_value) },
+                { k: 'pr', label: 'Procurement exp.', v: fmtCurrency(summary.manufacturing_intel.procurement_exposure) },
+                { k: 'ex', label: 'Active jobs', v: String(summary.manufacturing_intel.active_execution_jobs ?? '—') },
+                { k: 'dl', label: 'Delayed hints', v: String(summary.manufacturing_intel.delayed_execution_hints ?? '—') },
+                { k: 'lo', label: 'Loss orders (hint)', v: String(summary.manufacturing_intel.loss_making_orders ?? '—') },
+                { k: 'ef', label: 'Efficiency %', v: `${Number(summary.manufacturing_intel.production_efficiency_pct || 0).toFixed(0)}%` },
+              ].map((x) => (
+                <div key={x.k} style={{
+                  background: C.card, borderRadius: 12, border: `1px solid ${C.border}`,
+                  padding: '12px 14px',
+                }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.5 }}>{x.label}</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: C.text, marginTop: 4 }}>{x.v}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginBottom: 24 }}>
+              <button
+                type="button"
+                onClick={() => navigate('/manufacturing/analytics')}
+                style={{
+                  padding: '10px 16px', borderRadius: 10, border: `1px solid ${C.border}`,
+                  background: C.card, fontWeight: 700, cursor: 'pointer', fontSize: 13,
+                }}
+              >
+                Manufacturing analytics →
+              </button>
+            </div>
+          </>
+        )}
+
+        {caps.canViewAccounts && summary?.finance_ops && (
+          <>
+            <SectionLabel>💹 Finance operations</SectionLabel>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)',
+              gap: 10,
+              marginBottom: 12,
+            }}>
+              {[
+                { k: 'tro', label: 'Receivables outstanding', v: fmtCurrency(summary.finance_ops.total_receivables_outstanding) },
+                { k: 'tpo', label: 'Payables outstanding', v: fmtCurrency(summary.finance_ops.total_payables_outstanding) },
+                { k: 'orc', label: 'Overdue collections', v: fmtCurrency(summary.finance_ops.overdue_receivables_amount) },
+                { k: 'opv', label: 'Overdue vendor pay.', v: fmtCurrency(summary.finance_ops.overdue_payables_amount) },
+                { k: 'exi', label: 'Expected in (30d)', v: fmtCurrency(summary.finance_ops.expected_incoming_30d) },
+                { k: 'exo', label: 'Expected out (30d)', v: fmtCurrency(summary.finance_ops.expected_outgoing_30d) },
+                { k: 'ce', label: 'Customer exposure', v: fmtCurrency(summary.finance_ops.customer_exposure) },
+                { k: 've', label: 'Vendor exposure', v: fmtCurrency(summary.finance_ops.vendor_exposure) },
+              ].map((x) => (
+                <div key={x.k} style={{
+                  background: C.card, borderRadius: 12, border: `1px solid ${C.border}`,
+                  padding: '12px 14px',
+                }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.5 }}>{x.label}</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: C.text, marginTop: 4 }}>{x.v}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginBottom: 24 }}>
+              <button
+                type="button"
+                onClick={() => navigate('/finance')}
+                style={{
+                  padding: '10px 16px', borderRadius: 10, border: `1px solid ${C.border}`,
+                  background: C.card, fontWeight: 700, cursor: 'pointer', fontSize: 13,
+                }}
+              >
+                Finance dashboard →
+              </button>
+            </div>
+          </>
+        )}
+
         {/* ── KPI Banner — role-aware live metrics ── */}
         {caps.canViewDashboardSummary && (
           <>
@@ -596,7 +677,7 @@ export default function Dashboard() {
                 <KpiCard icon="🔴" title="Overdue payments" value={kpis?.overdue_payments ?? '—'} color="#dc2626" path="/accounts/outstanding" loading={kpisLoading} trendInverse alert={(kpis?.overdue_payments ?? 0) > 0} />
               )}
               {caps.canViewProduction && (
-                <KpiCard icon="⚙️" title="Production pending" value={kpis?.production_pending ?? '—'} color="#ea580c" path="/production/queue" loading={kpisLoading} />
+                <KpiCard icon="⚙️" title="Production pending" value={kpis?.production_pending ?? '—'} color="#ea580c" path="/production/execution" loading={kpisLoading} />
               )}
               {caps.canViewCrm && (
                 <KpiCard icon="🎯" title="Active leads" value={kpis?.active_leads ?? '—'} color="#6366f1" path="/crm/leads" loading={kpisLoading} />
@@ -634,10 +715,10 @@ export default function Dashboard() {
           <>
             <SectionLabel>⚙️ Production Stages</SectionLabel>
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 10, marginBottom: 20 }}>
-              <StageCard label="Designing" count={summary?.stage_designing} backlog={0} pct={60} color={C.blue}   onClick={() => navigate('/production/queue')} />
-              <StageCard label="Printing"  count={summary?.stage_printing}  backlog={2} pct={45} color={C.orange} onClick={() => navigate('/production/queue')} />
-              <StageCard label="Laser"     count={summary?.stage_laser}     backlog={1} pct={30} color={C.red}    onClick={() => navigate('/production/queue')} />
-              <StageCard label="Assembly"  count={summary?.stage_assembly}  backlog={0} pct={75} color={C.purple} onClick={() => navigate('/production/queue')} />
+              <StageCard label="Designing" count={summary?.stage_designing} backlog={0} pct={60} color={C.blue}   onClick={() => navigate('/production/execution')} />
+              <StageCard label="Printing"  count={summary?.stage_printing}  backlog={2} pct={45} color={C.orange} onClick={() => navigate('/production/execution')} />
+              <StageCard label="Laser"     count={summary?.stage_laser}     backlog={1} pct={30} color={C.red}    onClick={() => navigate('/production/execution')} />
+              <StageCard label="Assembly"  count={summary?.stage_assembly}  backlog={0} pct={75} color={C.purple} onClick={() => navigate('/production/execution')} />
             </div>
           </>
         )}
@@ -651,7 +732,7 @@ export default function Dashboard() {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                 <SectionLabel>⚠ Needs Attention</SectionLabel>
                 <button
-                  onClick={() => navigate('/production/queue')}
+                  onClick={() => navigate('/production/execution')}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: C.blue, fontWeight: 700, padding: 0 }}
                 >
                   View All →

@@ -70,4 +70,29 @@ export async function apiFetch(path, options = {}) {
   }
 }
 
+/**
+ * Parse a fetch Response as JSON without throwing.
+ * Handles 204/205, empty bodies, and non-JSON bodies (e.g. HTML from a proxy).
+ * @param {Response} response
+ * @param {*} fallbackOk Empty / unparseable body when response.ok is still true (e.g. 204).
+ */
+export async function readJsonSafe(response, fallbackOk = null) {
+  const { ok, status } = response;
+  if (status === 204 || status === 205) {
+    return { ok, status, data: fallbackOk, parseFailed: false };
+  }
+  const text = await response.text();
+  if (!text.trim()) {
+    return { ok, status, data: fallbackOk, parseFailed: ok };
+  }
+  try {
+    return { ok, status, data: JSON.parse(text), parseFailed: false };
+  } catch {
+    if (!ok) {
+      console.warn("[API] Non-JSON error body:", text.slice(0, 120));
+    }
+    return { ok, status, data: fallbackOk, parseFailed: true };
+  }
+}
+
 export default apiFetch;

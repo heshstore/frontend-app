@@ -10,7 +10,7 @@ const PRIORITY_COLOR = {
 };
 
 const ENTITY_ROUTE = {
-  job:     (id) => `/production/jobs/${id}`,
+  job:     () => '/production/execution',
   order:   (id) => `/orders/${id}`,
   payment: (id) => `/accounts/history/${id}`,
   lead:    (id) => `/crm/leads/${id}`,

@@ -9,7 +9,7 @@ const ACTION_STYLE = {
   ALL_CLEAR:        { bg: '#f0fff4', border: '#28a745', icon: '✅', btnBg: '#28a745' },
 };
 
-const JOB_ROUTE  = (jobId) => `/production/jobs/${jobId}`;
+const JOB_ROUTE  = () => '/production/execution';
 
 export default function NextActionBanner() {
   const { nextAction, fetchNextAction } = useNotifications();

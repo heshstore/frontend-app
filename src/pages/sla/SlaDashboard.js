@@ -26,7 +26,7 @@ const MODULE_ICON = {
 };
 
 const ENTITY_ROUTES = {
-  job:      (id) => `/production/jobs/${id}`,
+  job:      () => '/production/execution',
   order:    (id) => `/orders/${id}`,
   dispatch: (_)  => `/dispatch`,
   lead:     (id) => `/crm/leads/${id}`,

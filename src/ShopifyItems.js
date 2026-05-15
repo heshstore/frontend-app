@@ -145,6 +145,8 @@ function InlineConfigForm({ item, mainData, selectedItems, selectedVariants,
         gst: gstValue, costPrice: costValue,
         wholesalePrice: calcWholesalePrice(data, retail),
         unit: "Nos",
+        mainCategoryType: data.categoryType  || null,
+        serviceSubtype:   data.categoryType === "SERVICE" ? (data.serviceSubtype || null) : null,
       };
     });
 
@@ -192,11 +194,8 @@ function InlineConfigForm({ item, mainData, selectedItems, selectedVariants,
             style={{ padding: 8, borderRadius: 6, border: "1px solid #ccc" }}
           >
             <option value="">Select GST %</option>
-            <option value="0">0%</option>
             <option value="5">5%</option>
-            <option value="12">12%</option>
             <option value="18">18%</option>
-            <option value="28">28%</option>
           </select>
           <input
             placeholder="Cost Price (₹)"
@@ -206,6 +205,46 @@ function InlineConfigForm({ item, mainData, selectedItems, selectedVariants,
             disabled={!fieldsEnabled}
             style={{ padding: 8, borderRadius: 6, border: "1px solid #ccc" }}
           />
+
+          {/* Category classification */}
+          <div onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 11, color: "#5b21b6", fontWeight: 600, marginBottom: 4 }}>
+              ERP Classification (optional — set after sync)
+            </div>
+            <select
+              value={data.categoryType || ""}
+              onClick={e => e.stopPropagation()}
+              onChange={e => setMainData(p => ({
+                ...p,
+                [item.sku]: { ...(p[item.sku] || {}), categoryType: e.target.value, serviceSubtype: "" },
+              }))}
+              disabled={!fieldsEnabled}
+              style={{ padding: 8, borderRadius: 6, border: "1px solid #ccc", width: "100%" }}
+            >
+              <option value="">— Main Category Type (optional) —</option>
+              <option value="TRADING">Trading</option>
+              <option value="MANUFACTURING">Manufacturing</option>
+              <option value="SERVICE">Service</option>
+            </select>
+            {data.categoryType === "SERVICE" && (
+              <select
+                value={data.serviceSubtype || ""}
+                onClick={e => e.stopPropagation()}
+                onChange={e => setMainData(p => ({
+                  ...p,
+                  [item.sku]: { ...(p[item.sku] || {}), serviceSubtype: e.target.value },
+                }))}
+                disabled={!fieldsEnabled}
+                style={{ padding: 8, borderRadius: 6, border: "1px solid #ccc", width: "100%", marginTop: 6 }}
+              >
+                <option value="">— Service Subtype (optional) —</option>
+                <option value="AMC">AMC</option>
+                <option value="REPAIR">Repair</option>
+                <option value="COMPLAINT">Complaint</option>
+                <option value="SPARE_PART">Spare part</option>
+              </select>
+            )}
+          </div>
 
           {/* Wholesale */}
           <div onClick={e => e.stopPropagation()}>
@@ -369,6 +408,11 @@ function ProductCard({ item, tab, mainData, selectedItems, selectedVariants,
           {tab === "ready" && item.variants[0] && (
             <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
               HSN: {item.variants[0].hsnCode} | GST: {item.variants[0].gst}% | Cost: ₹{item.variants[0].costPrice}
+              {item.variants[0].mainCategoryType && (
+                <span style={{ marginLeft: 8, fontWeight: 600, color: '#5b21b6' }}>
+                  · {item.variants[0].mainCategoryType}
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -534,8 +578,10 @@ export default function ShopifyItems() {
             hsn: item.hsnCode || "",
             gst: item.gst ? String(item.gst) : "",
             cost: item.costPrice || "",
-            wholesale: item.wholesale_price > 0 ? String(item.wholesale_price) : "",
+            wholesale: item.wholesalePrice > 0 ? String(item.wholesalePrice) : "",
             wholesaleMode: "rs",
+            categoryType: item.mainCategoryType || "",
+            serviceSubtype: item.serviceSubtype || "",
           };
         }
       });

@@ -14,6 +14,8 @@ export default function EditCustomer() {
   const { id }   = useParams();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [lifecycle, setLifecycle] = useState(null);
+  const [finance, setFinance] = useState(null);
 
   const [form, setForm] = useState({
     companyName:  '',
@@ -33,6 +35,20 @@ export default function EditCustomer() {
     creditLimit:  '',
     credit_days:  '',
   });
+
+  useEffect(() => {
+    apiFetch(`/after-sales/customers/${id}/lifecycle`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then(setLifecycle)
+      .catch(() => setLifecycle(null));
+  }, [id]);
+
+  useEffect(() => {
+    apiFetch(`/finance-ops/customers/${id}/summary`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then(setFinance)
+      .catch(() => setFinance(null));
+  }, [id]);
 
   useEffect(() => {
     apiFetch(`/customers/${id}`)
@@ -202,6 +218,76 @@ export default function EditCustomer() {
             </FormGrid>
           </FormCard>
         </FormSection>
+
+        {finance && (
+          <FormSection title="Finance (operational)">
+            <FormCard>
+              <p style={{ fontSize: 13, color: '#64748b', marginTop: 0 }}>
+                Receivables and receipts from finance ops — not full accounting.
+              </p>
+              <div style={{ fontSize: 13, marginBottom: 10 }}>
+                <strong>Overdue (receivable rows):</strong>{' '}
+                ₹{Number(finance.overdueAmount || 0).toLocaleString('en-IN')}
+              </div>
+              <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 13 }}>Receivables</div>
+              <div style={{ fontSize: 12, maxHeight: 120, overflow: 'auto', border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
+                {(finance.receivables || []).slice(0, 12).map((r) => (
+                  <div key={r.id} style={{ marginBottom: 4 }}>
+                    Order #{r.order_id} {r.order_no} · {r.status} · out ₹{Number(r.outstanding_amount || 0).toLocaleString('en-IN')}
+                  </div>
+                ))}
+                {!(finance.receivables || []).length && <span style={{ color: '#94a3b8' }}>None</span>}
+              </div>
+              <div style={{ fontWeight: 700, margin: '12px 0 6px', fontSize: 13 }}>Recent receipts (log)</div>
+              <div style={{ fontSize: 12, maxHeight: 100, overflow: 'auto', border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
+                {(finance.payments || []).slice(0, 10).map((p) => (
+                  <div key={p.id} style={{ marginBottom: 4 }}>
+                    {p.payment_date} · {p.payment_mode} · ₹{Number(p.amount || 0).toLocaleString('en-IN')}
+                  </div>
+                ))}
+                {!(finance.payments || []).length && <span style={{ color: '#94a3b8' }}>None</span>}
+              </div>
+            </FormCard>
+          </FormSection>
+        )}
+
+        {lifecycle && (
+          <FormSection title="After-sales & delivery (read-only)">
+            <FormCard>
+              <p style={{ fontSize: 13, color: '#64748b', marginTop: 0 }}>
+                Orders, dispatches, service tickets, and AMC contracts linked to this customer.
+              </p>
+              <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 13 }}>Recent orders</div>
+              <div style={{ fontSize: 12, maxHeight: 140, overflow: 'auto', border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
+                {(lifecycle.orders || []).slice(0, 15).map((o) => (
+                  <div key={o.id} style={{ marginBottom: 4 }}>#{o.id} {o.order_no} · {o.status} · ₹{Number(o.total_amount || 0).toLocaleString('en-IN')}</div>
+                ))}
+                {!(lifecycle.orders || []).length && <span style={{ color: '#94a3b8' }}>None</span>}
+              </div>
+              <div style={{ fontWeight: 700, margin: '12px 0 6px', fontSize: 13 }}>Dispatch documents</div>
+              <div style={{ fontSize: 12, maxHeight: 120, overflow: 'auto', border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
+                {(lifecycle.dispatches || []).slice(0, 12).map((d) => (
+                  <div key={d.id} style={{ marginBottom: 4 }}>{d.dispatch_number} · {d.status}{d.delivered_at ? ` · delivered ${new Date(d.delivered_at).toLocaleDateString('en-IN')}` : ''}</div>
+                ))}
+                {!(lifecycle.dispatches || []).length && <span style={{ color: '#94a3b8' }}>None</span>}
+              </div>
+              <div style={{ fontWeight: 700, margin: '12px 0 6px', fontSize: 13 }}>Service tickets</div>
+              <div style={{ fontSize: 12, maxHeight: 120, overflow: 'auto', border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
+                {(lifecycle.tickets || []).slice(0, 15).map((t) => (
+                  <div key={t.id} style={{ marginBottom: 4 }}>{t.ticketNumber} · {t.serviceType} · {t.status} · item #{t.itemId}</div>
+                ))}
+                {!(lifecycle.tickets || []).length && <span style={{ color: '#94a3b8' }}>None</span>}
+              </div>
+              <div style={{ fontWeight: 700, margin: '12px 0 6px', fontSize: 13 }}>AMC contracts</div>
+              <div style={{ fontSize: 12, maxHeight: 100, overflow: 'auto', border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
+                {(lifecycle.amcContracts || []).map((a) => (
+                  <div key={a.id} style={{ marginBottom: 4 }}>#{a.id} {a.startDate} → {a.endDate} · {a.status}</div>
+                ))}
+                {!(lifecycle.amcContracts || []).length && <span style={{ color: '#94a3b8' }}>None</span>}
+              </div>
+            </FormCard>
+          </FormSection>
+        )}
 
         <FormActions saveLabel="Update customer" loading={loading} />
       </form>

@@ -14,19 +14,26 @@ import { toast } from "./utils/toast";
 import { useConfirm } from "./components/ui/ConfirmModal";
 
 const STATUS_BORDER = {
+  DRAFT:            '#6c757d',
+  GENERATED:        '#1d4ed8',
+  CANCELLED:        '#dc2626',
   PENDING_APPROVAL: '#f59e0b',
+  REJECTED:         '#be123c',
   APPROVED:         '#16a34a',
   IN_PRODUCTION:    '#6366f1',
   READY:            '#0891b2',
   DISPATCHED:       '#0066B3',
-  DRAFT:            '#6c757d',
 };
 
 const STATUS_CHIPS = [
   { value: '',                 label: 'All' },
-  { value: 'PENDING_APPROVAL', label: 'Pending approval' },
+  { value: 'DRAFT',            label: 'Draft' },
+  { value: 'GENERATED',        label: 'Generated' },
+  { value: 'CANCELLED',        label: 'Cancelled' },
+  { value: 'PENDING_APPROVAL', label: 'Pending Approval' },
+  { value: 'REJECTED',         label: 'Rejected' },
   { value: 'APPROVED',         label: 'Approved' },
-  { value: 'IN_PRODUCTION',    label: 'In production' },
+  { value: 'IN_PRODUCTION',    label: 'In Production' },
   { value: 'READY',            label: 'Ready' },
   { value: 'DISPATCHED',       label: 'Dispatched' },
 ];
@@ -54,8 +61,8 @@ export default function OrderList() {
   const [status,   setStatus]   = useState(() => {
     try { return localStorage.getItem(FILTER_KEY) || ''; } catch { return ''; }
   });
-  const [expanded,       setExpanded]       = useState(null);
-  const [approvalOrder,  setApprovalOrder]  = useState(null); // order awaiting approval modal
+  const [expanded,              setExpanded]              = useState(null);
+  const [sendForApprovalOrder, setSendForApprovalOrder]  = useState(null); // order awaiting send-for-approval modal
   const navigate = useNavigate();
   const { dismissByEntity } = useNotifications();
   const { openPanel } = useRightPanel();
@@ -65,13 +72,9 @@ export default function OrderList() {
     setLoading(true);
     try {
       const res  = await apiFetch(`/orders`);
-      const data = await res.json();
-      setOrders(
-        (Array.isArray(data) ? data : []).filter(o =>
-          o.status !== ORDER_STATUS.CANCELLED &&
-          o.status !== ORDER_STATUS.DRAFT
-        )
-      );
+      const json = await res.json();
+      // API returns paginated { data: [], total, page, limit } — unwrap if needed.
+      setOrders(Array.isArray(json) ? json : (json?.data ?? []));
     } catch (err) {
       console.error("Failed to load orders:", err);
     } finally {
@@ -97,29 +100,24 @@ export default function OrderList() {
     return matchText && matchStatus;
   });
 
-  const handleApprovalConfirm = async ({ advance_amount, process_without_advance, remarks }) => {
-    if (!approvalOrder) return;
-    const parts = [];
-    if (advance_amount > 0) parts.push(`Advance received: ₹${advance_amount.toLocaleString('en-IN')}`);
-    if (process_without_advance) parts.push('Process without advance — approved by management');
-    if (remarks) parts.push(remarks);
-    const finalRemarks = parts.join(' | ') || null;
-
+  // STEP 2: "Send For Approval" (GENERATED) — opens advance modal, submits to PENDING_APPROVAL
+  const handleSendForApprovalConfirm = async ({ advance_amount, process_without_advance, remarks }) => {
+    if (!sendForApprovalOrder) return;
     try {
-      const res = await apiFetch(`/orders/${approvalOrder.id}/approve`, {
+      const res = await apiFetch(`/orders/${sendForApprovalOrder.id}/send-for-approval`, {
         method: 'PATCH',
-        body: JSON.stringify({ remarks: finalRemarks }),
+        body: JSON.stringify({ advance_amount, process_without_advance, remarks: remarks || null }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        toast.error(err.message || 'Approval failed');
+        toast.error(err.message || 'Failed to send for approval');
         return;
       }
-      toast.success('Order approved — sent to production');
-      setApprovalOrder(null);
+      toast.success('Sent for approval');
+      setSendForApprovalOrder(null);
       loadOrders();
     } catch {
-      toast.error('Approval failed — please try again');
+      toast.error('Failed to send for approval');
     }
   };
 
@@ -139,11 +137,16 @@ export default function OrderList() {
   return (
     <>
     {confirmModal}
-    {approvalOrder && (
+    {sendForApprovalOrder && (
       <ApprovalModal
-        order={approvalOrder}
-        onConfirm={handleApprovalConfirm}
-        onClose={() => setApprovalOrder(null)}
+        order={sendForApprovalOrder}
+        onConfirm={handleSendForApprovalConfirm}
+        onClose={() => setSendForApprovalOrder(null)}
+        initialValues={{
+          advance_amount:         sendForApprovalOrder.advance_amount,
+          process_without_advance: sendForApprovalOrder.process_without_advance,
+          remarks:                sendForApprovalOrder.approval_remarks,
+        }}
       />
     )}
     <div>
@@ -221,6 +224,16 @@ export default function OrderList() {
                 <StatusBadge status={row.status} />
                 {row.is_wholesaler !== undefined && <PricingBadge isWholesaler={row.is_wholesaler} />}
               </div>
+              {row.quotation_no && (
+                <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>
+                  From Quotation: {row.quotation_no}
+                </div>
+              )}
+              {row.status === ORDER_STATUS.REJECTED && row.rejection_reason && (
+                <div style={{ fontSize: 11, color: '#9f1239', background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 4, padding: '3px 8px', marginTop: 4, display: 'inline-block' }}>
+                  Rejected: {row.rejection_reason}
+                </div>
+              )}
               <div style={{ fontSize: 13, color: '#6b7280', marginTop: 3 }}>
                 {row.customer_name || '—'} · ₹{Number(row.total_amount || 0).toLocaleString('en-IN')}
               </div>
@@ -250,12 +263,12 @@ export default function OrderList() {
                   >
                     ✏ Edit
                   </button>
-                  {row.status === ORDER_STATUS.PENDING_APPROVAL && (
+                  {(row.status === ORDER_STATUS.GENERATED || row.status === ORDER_STATUS.REJECTED) && (
                     <button
-                      onClick={() => setApprovalOrder(row)}
-                      style={btn({ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' })}
+                      onClick={() => setSendForApprovalOrder(row)}
+                      style={btn({ background: '#fef9c3', color: '#a16207', border: '1px solid #fde68a' })}
                     >
-                      ✓ Approve
+                      ↑ Send for Approval
                     </button>
                   )}
                   <button

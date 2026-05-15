@@ -79,16 +79,22 @@ export default function LeadDetail() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Poll for new chat messages while Chat tab is open
+  // Poll for new chat messages while Chat tab is open — 15 s interval, in-flight guard
   useEffect(() => {
     if (tab !== 'chat' || !lead?.whatsapp_chat_id) return;
+    let inFlight = false;
     const fetchMessages = async () => {
+      if (inFlight) return;
+      inFlight = true;
       try {
         const cr = await apiFetch(`/whatsapp/chat/${encodeURIComponent(lead.whatsapp_chat_id)}/messages?leadId=${id}`);
         if (cr.ok) setChatMessages(await cr.json());
-      } catch { /* ignore */ }
+      } catch { /* ignore */ } finally {
+        inFlight = false;
+      }
     };
-    const interval = setInterval(fetchMessages, 4000);
+    fetchMessages(); // immediate first fetch when tab opens
+    const interval = setInterval(fetchMessages, 15_000);
     return () => clearInterval(interval);
   }, [tab, lead?.whatsapp_chat_id, id]);
 

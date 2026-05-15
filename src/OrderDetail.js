@@ -182,6 +182,7 @@ export default function OrderDetail({ orderId: propId }) {
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState(false);
   const [retryCount, setRetryCount] = useState(0);
+  const [planning, setPlanning]     = useState({ requirements: [], workloads: [] });
 
   const retry = () => { setOrder(null); setRetryCount(c => c + 1); };
 
@@ -190,9 +191,17 @@ export default function OrderDetail({ orderId: propId }) {
     setLoading(true);
     setError(false);
 
-    apiFetch(`/orders/${id}`)
-      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
-      .then(data => { if (!cancelled) setOrder(data); })
+    Promise.all([
+      apiFetch(`/orders/${id}`).then(r => { if (!r.ok) throw new Error(); return r.json(); }),
+      apiFetch(`/orders/${id}/material-requirements`).then(r => r.ok ? r.json() : []).catch(() => []),
+      apiFetch(`/orders/${id}/workloads`).then(r => r.ok ? r.json() : []).catch(() => []),
+    ])
+      .then(([orderData, requirements, workloads]) => {
+        if (!cancelled) {
+          setOrder(orderData);
+          setPlanning({ requirements: requirements ?? [], workloads: workloads ?? [] });
+        }
+      })
       .catch(() => { if (!cancelled) setError(true); })
       .finally(() => { if (!cancelled) setLoading(false); });
 
@@ -453,6 +462,94 @@ export default function OrderDetail({ orderId: propId }) {
             />
           </div>
         </Card>
+
+        {/* Section — Manufacturing Planning (visible only when explosion data exists) */}
+        {(planning.requirements.length > 0 || planning.workloads.length > 0) && (
+          <Card>
+            <CardLabel>Manufacturing Planning</CardLabel>
+
+            {planning.requirements.length > 0 && (
+              <>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 8, marginTop: 4 }}>
+                  Raw Material Requirements
+                </div>
+                <div style={{ overflowX: 'auto', marginBottom: 16 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                    <thead>
+                      <tr style={{ background: '#f8fafc' }}>
+                        {['Item', 'Raw Material', 'Order Qty', 'Required', 'Wastage', 'Calc. Qty', 'Unit', 'Status'].map(h => (
+                          <th key={h} style={{ padding: '6px 8px', textAlign: 'left', color: '#6b7280', fontWeight: 600, borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {planning.requirements.map((r, i) => (
+                        <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                          <td style={{ padding: '6px 8px', color: '#374151' }}>{r.order_item_name || '—'}</td>
+                          <td style={{ padding: '6px 8px' }}>
+                            <span style={{ fontWeight: 600, color: '#1d4ed8', fontSize: 11 }}>{r.raw_material_sku || '—'}</span>
+                            <div style={{ color: '#6b7280', fontSize: 11 }}>{r.raw_material_name}</div>
+                          </td>
+                          <td style={{ padding: '6px 8px', color: '#374151' }}>{r.order_item_qty}</td>
+                          <td style={{ padding: '6px 8px', color: '#374151' }}>{Number(r.required_qty).toFixed(3)}</td>
+                          <td style={{ padding: '6px 8px', color: '#9ca3af' }}>{r.wastage_percent}%</td>
+                          <td style={{ padding: '6px 8px', fontWeight: 700, color: '#111827' }}>{Number(r.calculated_qty).toFixed(3)}</td>
+                          <td style={{ padding: '6px 8px', color: '#6b7280' }}>{r.consumption_type}</td>
+                          <td style={{ padding: '6px 8px' }}>
+                            <span style={{
+                              fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 8,
+                              background: r.status === 'READY' ? '#d1fae5' : r.status === 'SHORTAGE' ? '#fee2e2' : '#fef3c7',
+                              color:      r.status === 'READY' ? '#065f46' : r.status === 'SHORTAGE' ? '#dc2626' : '#92400e',
+                            }}>{r.status}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+
+            {planning.workloads.length > 0 && (
+              <>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 8 }}>
+                  Department Workloads
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                    <thead>
+                      <tr style={{ background: '#f8fafc' }}>
+                        {['Item', 'Department', 'Workload Qty', 'Unit', 'Status'].map(h => (
+                          <th key={h} style={{ padding: '6px 8px', textAlign: 'left', color: '#6b7280', fontWeight: 600, borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {planning.workloads.map((w, i) => (
+                        <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                          <td style={{ padding: '6px 8px', color: '#374151' }}>{w.order_item_name || '—'}</td>
+                          <td style={{ padding: '6px 8px' }}>
+                            <span style={{ fontWeight: 600 }}>{w.department_name || '—'}</span>
+                            {w.department_code && <span style={{ color: '#9ca3af', marginLeft: 5, fontSize: 11 }}>{w.department_code}</span>}
+                          </td>
+                          <td style={{ padding: '6px 8px', fontWeight: 700, color: '#111827' }}>{Number(w.workload_qty).toFixed(3)}</td>
+                          <td style={{ padding: '6px 8px', color: '#6b7280' }}>{w.workload_unit}</td>
+                          <td style={{ padding: '6px 8px' }}>
+                            <span style={{
+                              fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 8,
+                              background: w.status === 'DONE' ? '#d1fae5' : w.status === 'IN_PROGRESS' ? '#dbeafe' : '#f3f4f6',
+                              color:      w.status === 'DONE' ? '#065f46' : w.status === 'IN_PROGRESS' ? '#1d4ed8' : '#6b7280',
+                            }}>{w.status}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </Card>
+        )}
 
         <div style={{ height: 32 }} />
       </div>

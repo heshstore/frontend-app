@@ -56,6 +56,7 @@ export default function DocumentActionBar({
   /* ── Actions ────────────────────────────────────────────────────── */
   const handlePrint = () => {
     if (type === 'quotation') window.open(`/quotations/${id}/print`, '_blank');
+    else if (type === 'order') window.open(`/orders/${id}/print`, '_blank');
     else window.print();
   };
 
@@ -89,15 +90,17 @@ export default function DocumentActionBar({
     const refNo   = docNo || `#${id}`;
     const dateStr = fmtDate(docDate);
     const amtStr  = amount ? fmtAmt(amount) : '';
+    const docLabel = type === 'invoice' ? 'Invoice' : type === 'order' ? 'Order Confirmation' : 'Quotation';
+    const refLabel = type === 'invoice' ? 'Invoice No' : type === 'order' ? 'Order No' : 'Quotation No';
     const lines   = [
       `Hello ${name},`,
       '',
-      `Please find your quotation.`,
+      `Please find your ${docLabel} from *${company.name}*.`,
       '',
-      `Quotation No: ${refNo}`,
-      dateStr ? `Date: ${dateStr}`   : null,
-      amtStr  ? `Amount: ${amtStr}` : null,
-      publicPdfUrl ? `\nDownload PDF:\n${publicPdfUrl}` : null,
+      `*${refLabel}:* ${refNo}`,
+      dateStr ? `*Date:* ${dateStr}`   : null,
+      amtStr  ? `*Amount:* ${amtStr}` : null,
+      publicPdfUrl ? `\n*View PDF:* ${publicPdfUrl}` : null,
       '',
       'Regards,',
       company.name,

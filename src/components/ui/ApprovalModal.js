@@ -20,10 +20,18 @@ const lbl = {
   letterSpacing: '0.04em',
 };
 
-export default function ApprovalModal({ order, onConfirm, onClose }) {
-  const [advanceAmount,        setAdvanceAmount]        = useState('');
-  const [processWithoutAdvance, setProcessWithoutAdvance] = useState(false);
-  const [notes,                setNotes]                = useState('');
+export default function ApprovalModal({ order, onConfirm, onClose, initialValues }) {
+  const [advanceAmount,        setAdvanceAmount]        = useState(
+    initialValues?.advance_amount != null && Number(initialValues.advance_amount) > 0
+      ? String(Number(initialValues.advance_amount))
+      : '',
+  );
+  const [processWithoutAdvance, setProcessWithoutAdvance] = useState(
+    initialValues?.process_without_advance ?? false,
+  );
+  const [notes,                setNotes]                = useState(
+    initialValues?.remarks ?? '',
+  );
   const [submitting,           setSubmitting]           = useState(false);
 
   // Inject keyframe once
@@ -150,7 +158,7 @@ export default function ApprovalModal({ order, onConfirm, onClose }) {
             disabled={submitting}
             style={{ flex: 2, padding: '11px', borderRadius: 8, background: submitting ? '#93c5fd' : theme.primary, color: '#fff', border: 'none', cursor: submitting ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: 14 }}
           >
-            {submitting ? 'Approving…' : 'Approve & Send to Production'}
+            {submitting ? 'Sending…' : 'Send for Approval'}
           </button>
         </div>
       </div>

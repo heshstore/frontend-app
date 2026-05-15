@@ -11,19 +11,22 @@ const STATE_COLOR = {
   CONNECTED:    theme.success,
   QR_ACTIVE:    theme.warning,
   INITIALIZING: '#0d6efd',
+  PAUSED:       '#9333ea',
   DISCONNECTED: theme.danger,
 };
 
 const LOG_LABELS = {
-  ready:             'Connected',
-  disconnected:      'Disconnected',
-  qr:                'QR generated',
-  auth_failure:      'Auth failure',
-  loading:           'Chromium loading',
-  restart_initiated: 'Restart initiated',
-  initializing:      'Initializing',
-  error:             'Error',
-  ping:              null, // suppress
+  ready:               'Connected',
+  disconnected:        'Disconnected',
+  qr:                  'QR generated',
+  auth_failure:        'Auth failure',
+  loading:             'Chromium loading',
+  restart_initiated:   'Restart initiated',
+  reconnect_initiated: 'Reconnect initiated',
+  initializing:        'Initializing',
+  paused:              'QR limit — paused',
+  error:               'Error',
+  ping:                null, // suppress
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -97,7 +100,8 @@ export default function WhatsAppMonitor() {
   const [qrData, setQrData]     = useState(null);
   const [log, setLog]           = useState([]);
   const [sseOk, setSseOk]       = useState(false);
-  const [restarting, setRestarting] = useState(false);
+  const [restarting,   setRestarting]   = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
 
   const esRef      = useRef(null);
   const logRef     = useRef(null);
@@ -167,8 +171,11 @@ export default function WhatsAppMonitor() {
           setStatus(prev => prev ? { ...prev, state: 'INITIALIZING' } : prev);
         } else if (data.type === 'auth_failure') {
           setStatus(prev => prev ? { ...prev, connected: false, state: 'DISCONNECTED' } : prev);
-        } else if (data.type === 'restart_initiated') {
-          setStatus(prev => prev ? { ...prev, state: 'INITIALIZING', connected: false } : prev);
+        } else if (data.type === 'restart_initiated' || data.type === 'reconnect_initiated') {
+          setStatus(prev => prev ? { ...prev, state: 'INITIALIZING', connected: false, qrPaused: false } : prev);
+        } else if (data.type === 'paused') {
+          setStatus(prev => prev ? { ...prev, state: 'PAUSED', connected: false, qrActive: false, qrPaused: true, qrCount: data.qrCount } : prev);
+          setQrData({ active: false, qr: null, generatedAt: null });
         }
 
         appendLog(data);
@@ -192,7 +199,7 @@ export default function WhatsAppMonitor() {
     };
   }, [connectSse]);
 
-  // ── Restart handler ───────────────────────────────────────────────────────
+  // ── Action handlers ───────────────────────────────────────────────────────
 
   const handleRestart = async () => {
     if (!await confirm(
@@ -208,10 +215,20 @@ export default function WhatsAppMonitor() {
     }
   };
 
+  const handleReconnect = async () => {
+    setReconnecting(true);
+    try {
+      await apiFetch('/whatsapp/admin/reconnect', { method: 'POST' });
+    } catch { /* SSE will update state */ } finally {
+      setReconnecting(false);
+    }
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────
 
-  const stateColor = STATE_COLOR[status?.state] ?? theme.danger;
+  const stateColor  = STATE_COLOR[status?.state] ?? theme.danger;
   const isConnected = status?.connected;
+  const isPaused    = status?.state === 'PAUSED' || status?.qrPaused;
 
   return (
     <>
@@ -248,10 +265,40 @@ export default function WhatsAppMonitor() {
           <Row label="Last disconnect reason" value={status?.lastDisconnectReason} valueColor={status?.lastDisconnectReason ? theme.danger : undefined} />
           <Row label="Downtime" value={status?.downtimeMinutes != null ? `${status.downtimeMinutes} min` : null} />
           <Row label="Last connected" value={ago(status?.lastReadyAt)} />
-          <Row label="QR scans attempted" value={status?.qrCount ?? 0} />
+          <Row label="QR scans attempted" value={`${status?.qrCount ?? 0} / ${status?.maxQrRetries ?? 5}`} valueColor={isPaused ? '#9333ea' : undefined} />
           <Row label="Recovery scan" value={status?.recoveringMessages ? 'Running…' : 'Idle'} valueColor={status?.recoveringMessages ? '#0d6efd' : undefined} />
           <Row label="App version" value={status?.appVersion} />
         </Card>
+
+        {/* ── PAUSED banner — shown when QR retry limit is hit ── */}
+        {isPaused && (
+          <Card style={{ background: '#faf5ff', borderColor: '#ddd6fe' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+              <span style={{ fontSize: 22, flexShrink: 0 }}>⏸</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 14, color: '#7c3aed', marginBottom: 4 }}>
+                  WhatsApp Paused — QR retry limit reached
+                </div>
+                <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 12 }}>
+                  {status?.maxQrRetries ?? 5} QR codes were shown without a successful scan.
+                  The client has stopped to prevent runaway resource usage.
+                  Click <strong>Reconnect</strong> to generate a fresh QR.
+                </div>
+                <button
+                  onClick={handleReconnect}
+                  disabled={reconnecting}
+                  style={{
+                    padding: '9px 20px', background: reconnecting ? '#aaa' : '#7c3aed',
+                    color: '#fff', border: 'none', borderRadius: 6,
+                    fontWeight: 700, fontSize: 13, cursor: reconnecting ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {reconnecting ? 'Reconnecting…' : '↺ Reconnect WhatsApp'}
+                </button>
+              </div>
+            </div>
+          </Card>
+        )}
 
         {/* ── Section B: QR panel ── */}
         <Card>
@@ -290,15 +337,28 @@ export default function WhatsAppMonitor() {
           <SectionLabel>Actions</SectionLabel>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <button
+              onClick={handleReconnect}
+              disabled={reconnecting || status?.connected}
+              style={{
+                padding: '9px 18px',
+                background: reconnecting ? '#aaa' : isPaused ? '#7c3aed' : '#0d6efd',
+                color: '#fff', border: 'none', borderRadius: 6,
+                fontWeight: 700, fontSize: 13,
+                cursor: (reconnecting || status?.connected) ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {reconnecting ? 'Reconnecting…' : '↺ Reconnect'}
+            </button>
+            <button
               onClick={handleRestart}
               disabled={restarting}
               style={{
-                padding: '9px 18px', background: restarting ? '#aaa' : '#0d6efd',
+                padding: '9px 18px', background: restarting ? '#aaa' : '#6b7280',
                 color: '#fff', border: 'none', borderRadius: 6,
                 fontWeight: 700, fontSize: 13, cursor: restarting ? 'not-allowed' : 'pointer',
               }}
             >
-              {restarting ? 'Restarting…' : 'Restart WhatsApp Client'}
+              {restarting ? 'Restarting…' : 'Restart Client'}
             </button>
             <button
               onClick={fetchStatus}
@@ -312,7 +372,9 @@ export default function WhatsAppMonitor() {
             </button>
           </div>
           <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 8 }}>
-            Restart preserves the linked phone number. Use "Disconnect &amp; Change Number" on the /whatsapp page to fully re-link.
+            <strong>Reconnect</strong> resets QR counters and starts a fresh pairing session.
+            <strong> Restart</strong> preserves auth session — use after a brief connection drop.
+            Use "Disconnect &amp; Change Number" on the /whatsapp page to fully re-link.
           </div>
         </Card>
 
