@@ -19,18 +19,10 @@ const URGENCY_COLORS = {
   LOW: '#6c757d',
 };
 
-const SOURCE_LABELS = {
-  INDIAMART: 'IndiaMart',
-  META_ADS: 'Meta Ads',
-  GOOGLE_ADS: 'Google Ads',
-  SHOPIFY: 'Shopify',
-  WHATSAPP: 'WhatsApp',
-  DIRECT_CALL: 'Direct Call',
-  MANUAL: 'Manual',
-};
+import { SOURCE_LABELS } from './crmSourceLabels';
 
 function ScoreDial({ score }) {
-  const color = score >= 70 ? '#198754' : score >= 40 ? '#ffc107' : '#dc3545';
+  const color = score >= 60 ? '#198754' : score >= 30 ? '#ffc107' : '#dc3545';
   return (
     <div
       style={{

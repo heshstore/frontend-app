@@ -1,19 +1,47 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import PageLayout from '../components/layout/PageLayout';
 import { apiFetch } from '../utils/api';
 import { theme } from '../theme';
 import { toast } from '../utils/toast';
 
-const SOURCES = ['DIRECT', 'INDIAMART', 'META', 'GOOGLE', 'SHOPIFY', 'WHATSAPP'];
-const SOURCE_LABELS = {
-  DIRECT: 'Direct / Manual',
-  INDIAMART: 'IndiaMart',
-  META: 'Meta Ads',
-  GOOGLE: 'Google',
-  SHOPIFY: 'Shopify',
-  WHATSAPP: 'WhatsApp',
+// Manual / high-trust sources — phone is optional for these
+const MANUAL_SOURCES = new Set([
+  'WALK_IN', 'REFERRAL', 'EXHIBITION', 'FIELD_VISIT',
+  'OLD_CUSTOMER', 'DEALER_REFERENCE', 'BUSINESS_CARD', 'IMPORTED', 'DIRECT',
+]);
+
+const SOURCES = [
+  // High-trust manual
+  { value: 'WALK_IN',          label: 'Walk-In (Showroom)',     group: 'manual' },
+  { value: 'REFERRAL',         label: 'Reference',              group: 'manual' },
+  { value: 'OLD_CUSTOMER',     label: 'Old Customer Re-enquiry', group: 'manual' },
+  { value: 'EXHIBITION',       label: 'Exhibition / Event',      group: 'manual' },
+  { value: 'FIELD_VISIT',      label: 'Field Visit',             group: 'manual' },
+  { value: 'DEALER_REFERENCE', label: 'Dealer Reference',        group: 'manual' },
+  { value: 'BUSINESS_CARD',    label: 'Business Card',           group: 'manual' },
+  { value: 'DIRECT',           label: 'Direct / Manual Entry',   group: 'manual' },
+  { value: 'IMPORTED',         label: 'Imported List',           group: 'manual' },
+  // Digital / auto-captured
+  { value: 'INDIAMART',        label: 'IndiaMart',               group: 'digital' },
+  { value: 'META',             label: 'Facebook',                group: 'digital' },
+  { value: 'GOOGLE',           label: 'Google',                  group: 'digital' },
+  { value: 'WHATSAPP',         label: 'WhatsApp',                group: 'digital' },
+  { value: 'SHOPIFY',          label: 'Website',                 group: 'digital' },
+];
+
+// Hint text shown below phone field based on source
+const PHONE_HINTS = {
+  WALK_IN:          'Mobile optional for walk-in leads — enter if shared.',
+  REFERRAL:         'Mobile optional — ask for it during first call.',
+  EXHIBITION:       'Mobile optional — enter if business card was shared.',
+  FIELD_VISIT:      'Mobile optional — enter if available.',
+  OLD_CUSTOMER:     'Mobile optional — check customer records first.',
+  DEALER_REFERENCE: 'Mobile optional for dealer references.',
+  BUSINESS_CARD:    'Enter number from business card if available.',
+  IMPORTED:         'Mobile optional for imported records.',
 };
+
 const PRIORITIES = ['HIGH', 'MEDIUM', 'LOW'];
 
 function sentenceCaseWords(s) {
@@ -31,6 +59,9 @@ function normalizePhone(raw) {
 export default function LeadForm() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
+  const { id } = useParams();
+  const isEditMode = Boolean(id);
+
   const [form, setForm] = useState({
     name: params.get('name') || '',
     phone: params.get('phone') || '',
@@ -55,14 +86,49 @@ export default function LeadForm() {
     apiFetch('/users/dropdown').then((r) => r.json()).then((d) => setUsers(Array.isArray(d) ? d : [])).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    if (!isEditMode) return;
+    setLoading(true);
+    apiFetch(`/crm/leads/${id}`)
+      .then((r) => r.json())
+      .then((lead) => {
+        setForm({
+          name: lead.name || '',
+          phone: lead.phone || '',
+          email: lead.email || '',
+          city: lead.city || '',
+          country: lead.country || 'India',
+          source: lead.source || 'DIRECT',
+          lead_priority: lead.lead_priority || 'MEDIUM',
+          product_interest: lead.product_interest || '',
+          requirement_note: lead.requirement_note || '',
+          notes: lead.notes || '',
+          utm_source: lead.utm_source || '',
+          utm_campaign: lead.utm_campaign || '',
+          follow_up_date: lead.follow_up_date ? lead.follow_up_date.slice(0, 16) : '',
+          assigned_to: lead.assigned_to ? String(lead.assigned_to) : '',
+        });
+      })
+      .catch(() => setError('Failed to load lead data.'))
+      .finally(() => setLoading(false));
+  }, [id, isEditMode]);
+
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  const isManualSource = MANUAL_SOURCES.has(form.source);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    const phone = normalizePhone(form.phone);
-    if (phone.length !== 10) {
+
+    // Phone validation: required for digital sources, optional for manual sources
+    const phone = form.phone ? normalizePhone(form.phone) : '';
+    if (form.phone && phone.length !== 10) {
       setError('Phone number must be 10 digits. Please check the number and try again.');
+      return;
+    }
+    if (!isManualSource && !phone) {
+      setError('Phone number is required for this source type.');
       return;
     }
 
@@ -71,9 +137,9 @@ export default function LeadForm() {
       const payload = {
         ...form,
         name: sentenceCaseWords(form.name),
-        phone,
-        city: form.city.trim(),
-        country: form.country.trim(),
+        phone: phone || undefined,
+        city: form.city.trim() || undefined,
+        country: form.country.trim() || undefined,
         notes: form.notes ? form.notes.charAt(0).toUpperCase() + form.notes.slice(1) : undefined,
         requirement_note: form.requirement_note || undefined,
         product_interest: form.product_interest ? sentenceCaseWords(form.product_interest) : undefined,
@@ -82,6 +148,22 @@ export default function LeadForm() {
         utm_source: form.utm_source || undefined,
         utm_campaign: form.utm_campaign || undefined,
       };
+
+      if (isEditMode) {
+        const res = await apiFetch(`/crm/leads/${id}`, {
+          method: 'PUT',
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setError(data?.message || 'Failed to update lead. Please check all fields and try again.');
+          return;
+        }
+        toast.success('Lead updated');
+        navigate(`/crm/leads/${id}`);
+        return;
+      }
+
       const res = await apiFetch('/crm/leads', {
         method: 'POST',
         body: JSON.stringify(payload),
@@ -116,12 +198,60 @@ export default function LeadForm() {
   const row = { marginBottom: 14 };
   const grid2 = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 };
 
+  if (loading && isEditMode) {
+    return <PageLayout title="Edit Lead"><p style={{ padding: 20 }}>Loading lead...</p></PageLayout>;
+  }
+
   return (
-    <PageLayout title="New Lead">
+    <PageLayout title={isEditMode ? 'Edit Lead' : 'New Lead'}>
       <form onSubmit={handleSubmit} style={{ maxWidth: 600, margin: '0 auto' }}>
         {error && (
           <div style={{ background: '#f8d7da', color: '#842029', padding: 12, borderRadius: 6, marginBottom: 14, fontSize: 13 }}>
             {error}
+          </div>
+        )}
+
+        {/* Source + Priority — FIRST so phone hint is context-aware */}
+        <div style={grid2}>
+          <div style={row}>
+            <label style={lbl}>Lead Source *</label>
+            <select style={inp} required value={form.source} onChange={(e) => set('source', e.target.value)}>
+              <optgroup label="— Manual / High Trust —">
+                {SOURCES.filter(s => s.group === 'manual').map(s => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </optgroup>
+              <optgroup label="— Digital / Auto-Captured —">
+                {SOURCES.filter(s => s.group === 'digital').map(s => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </optgroup>
+            </select>
+          </div>
+          <div style={row}>
+            <label style={lbl}>Priority</label>
+            <select style={inp} value={form.lead_priority} onChange={(e) => set('lead_priority', e.target.value)}>
+              {PRIORITIES.map((p) => <option key={p}>{p}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {/* Source category info banner */}
+        {isManualSource ? (
+          <div style={{
+            background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 6,
+            padding: '8px 12px', marginBottom: 14, fontSize: 12, color: '#166534',
+          }}>
+            <strong>High-trust lead</strong> — Phone is optional. Lead will be marked PARTIAL and held for manual follow-up until mobile is added.
+            {form.source === 'OLD_CUSTOMER' && ' Priority auto-elevated to HIGH.'}
+            {form.source === 'REFERRAL' && ' Priority auto-elevated to HIGH.'}
+          </div>
+        ) : (
+          <div style={{
+            background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 6,
+            padding: '8px 12px', marginBottom: 14, fontSize: 12, color: '#1e40af',
+          }}>
+            <strong>Digital lead</strong> — Phone is required for telecaller auto-assignment.
           </div>
         )}
 
@@ -137,32 +267,41 @@ export default function LeadForm() {
             />
           </div>
           <div style={row}>
-            <label style={lbl}>Phone *</label>
+            <label style={lbl}>
+              Phone {isManualSource ? <span style={{ color: '#9ca3af', fontWeight: 400 }}>(optional)</span> : '*'}
+            </label>
             <input
-              style={inp} required value={form.phone}
+              style={inp}
+              required={!isManualSource}
+              value={form.phone}
               onChange={(e) => set('phone', e.target.value)}
-              onBlur={(e) => set('phone', normalizePhone(e.target.value))}
-              placeholder="10-digit mobile number"
+              onBlur={(e) => e.target.value && set('phone', normalizePhone(e.target.value))}
+              placeholder={isManualSource ? 'Enter if available' : '10-digit mobile number'}
               maxLength={15}
             />
+            {PHONE_HINTS[form.source] && (
+              <div style={{ fontSize: 11, color: '#6b7280', marginTop: 3 }}>
+                {PHONE_HINTS[form.source]}
+              </div>
+            )}
           </div>
         </div>
 
         {/* City + Country */}
         <div style={grid2}>
           <div style={row}>
-            <label style={lbl}>City *</label>
+            <label style={lbl}>City</label>
             <input
-              style={inp} required value={form.city}
+              style={inp} value={form.city}
               onChange={(e) => set('city', e.target.value)}
               onBlur={(e) => set('city', sentenceCaseWords(e.target.value))}
               placeholder="e.g. Mumbai"
             />
           </div>
           <div style={row}>
-            <label style={lbl}>Country *</label>
+            <label style={lbl}>Country</label>
             <input
-              style={inp} required value={form.country}
+              style={inp} value={form.country}
               onChange={(e) => set('country', e.target.value)}
               onBlur={(e) => set('country', sentenceCaseWords(e.target.value))}
               placeholder="e.g. India"
@@ -178,22 +317,6 @@ export default function LeadForm() {
             onChange={(e) => set('email', e.target.value)}
             placeholder="email@example.com"
           />
-        </div>
-
-        {/* Source + Priority */}
-        <div style={grid2}>
-          <div style={row}>
-            <label style={lbl}>Lead Source *</label>
-            <select style={inp} required value={form.source} onChange={(e) => set('source', e.target.value)}>
-              {SOURCES.map((s) => <option key={s} value={s}>{SOURCE_LABELS[s]}</option>)}
-            </select>
-          </div>
-          <div style={row}>
-            <label style={lbl}>Priority</label>
-            <select style={inp} value={form.lead_priority} onChange={(e) => set('lead_priority', e.target.value)}>
-              {PRIORITIES.map((p) => <option key={p}>{p}</option>)}
-            </select>
-          </div>
         </div>
 
         {/* Product interest */}
@@ -271,7 +394,7 @@ export default function LeadForm() {
               opacity: loading ? 0.7 : 1,
             }}
           >
-            {loading ? 'Saving...' : 'Save Lead'}
+            {loading ? 'Saving...' : isEditMode ? 'Update Lead' : 'Save Lead'}
           </button>
           <button
             type="button"

@@ -1,12 +1,38 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../utils/api';
 import { normalizePhoneForWhatsApp } from '../utils/phone';
+import { WorkModeCustomerContext } from './CustomerIntelPanel';
 
 const SCORE_BG   = (s) => s >= 60 ? '#dcfce7' : s >= 30 ? '#fef3c7' : '#fee2e2';
 const SCORE_TEXT = (s) => s >= 60 ? '#15803d' : s >= 30 ? '#92400e' : '#b91c1c';
 
 function digits(phone) {
   return normalizePhoneForWhatsApp(phone);
+}
+
+function presetFollowUpTimes() {
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const fmt = (d) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+  const tomorrow9am = new Date(now);
+  tomorrow9am.setDate(now.getDate() + 1);
+  tomorrow9am.setHours(9, 0, 0, 0);
+
+  const in2days = new Date(now);
+  in2days.setDate(now.getDate() + 2);
+  in2days.setHours(10, 0, 0, 0);
+
+  const nextWeek = new Date(now);
+  nextWeek.setDate(now.getDate() + 7);
+  nextWeek.setHours(10, 0, 0, 0);
+
+  return [
+    { label: 'Tomorrow 9am', value: fmt(tomorrow9am) },
+    { label: 'In 2 days',    value: fmt(in2days) },
+    { label: 'Next week',    value: fmt(nextWeek) },
+  ];
 }
 
 // ── All-done screen ───────────────────────────────────────────────────────────
@@ -35,18 +61,36 @@ function AllDone({ total, onExit }) {
 // ── Main WorkMode component ───────────────────────────────────────────────────
 
 export default function WorkMode({ items, onExit, onRefresh }) {
+  const navigate = useNavigate();
   const [idx, setIdx]                 = useState(0);
   const [stage, setStage]             = useState('idle'); // idle | calling | connected | not_reached
   const [noteText, setNoteText]       = useState('');
   const [rescheduleDate, setRescheduleDate] = useState('');
   const [submitting, setSubmitting]   = useState(false);
+  const [customerMatch, setCustomerMatch] = useState(null);
 
   const goNext = useCallback(() => {
     setIdx(i => i + 1);
     setStage('idle');
     setNoteText('');
     setRescheduleDate('');
+    setCustomerMatch(null);
   }, []);
+
+  // Fetch customer intelligence for the current lead (AbortController prevents stale match
+  // from a previous lead appearing on the next lead card)
+  useEffect(() => {
+    if (idx >= items.length) return;
+    const leadId = items[idx]?.lead?.id;
+    if (!leadId) return;
+    const ctrl = new AbortController();
+    setCustomerMatch(null);
+    apiFetch(`/crm/leads/${leadId}/customer-match`, { signal: ctrl.signal })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (!ctrl.signal.aborted) setCustomerMatch(data?.matched ? data : null); })
+      .catch(() => { if (!ctrl.signal.aborted) setCustomerMatch(null); });
+    return () => ctrl.abort();
+  }, [idx, items]);
 
   if (idx >= items.length) return <AllDone total={items.length} onExit={onExit} />;
 
@@ -116,6 +160,8 @@ export default function WorkMode({ items, onExit, onRefresh }) {
     }
   };
 
+  const presets = presetFollowUpTimes();
+
   const S = {
     btn: (bg, color = '#fff') => ({
       border: 'none', borderRadius: 8, cursor: 'pointer',
@@ -134,9 +180,17 @@ export default function WorkMode({ items, onExit, onRefresh }) {
           <span style={{ fontWeight: 800, fontSize: 15 }}>⚡ Calling Mode</span>
           <span style={{ fontSize: 13, opacity: 0.8 }}>{idx + 1} of {items.length}</span>
         </div>
-        <button onClick={onExit} style={{ ...S.btn('rgba(255,255,255,0.2)'), padding: '6px 14px', fontSize: 13 }}>
-          ✕ Exit
-        </button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button
+            onClick={() => { onExit(); navigate(`/crm/leads/${lead.id}`); }}
+            style={{ ...S.btn('rgba(255,255,255,0.15)'), padding: '5px 11px', fontSize: 12 }}
+          >
+            Open Lead
+          </button>
+          <button onClick={onExit} style={{ ...S.btn('rgba(255,255,255,0.2)'), padding: '6px 14px', fontSize: 13 }}>
+            ✕ Exit
+          </button>
+        </div>
       </div>
 
       {/* ── Progress bar ── */}
@@ -146,20 +200,14 @@ export default function WorkMode({ items, onExit, onRefresh }) {
 
       {/* ── Lead info ── */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px 16px 8px' }}>
-        <div style={{ marginBottom: 18 }}>
+        <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 28, fontWeight: 800, color: '#111', lineHeight: 1.2, marginBottom: 6 }}>
             {lead.name || '—'}
           </div>
           <a href={`tel:+91${d}`} style={{ fontSize: 22, fontWeight: 700, color: '#0066B3', textDecoration: 'none', display: 'block', marginBottom: 10 }}>
             {lead.phone}
           </a>
-          {lead.product_interest && (
-            <div style={{ fontSize: 14, color: '#374151', marginBottom: 4 }}>📦 {lead.product_interest}</div>
-          )}
-          {lead.context && (
-            <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>🌐 {lead.context}</div>
-          )}
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
             {score != null && (
               <span style={{ padding: '4px 12px', borderRadius: 20, background: SCORE_BG(score), color: SCORE_TEXT(score), fontWeight: 700, fontSize: 13 }}>
                 {score} pts
@@ -181,11 +229,38 @@ export default function WorkMode({ items, onExit, onRefresh }) {
           </div>
         </div>
 
+        {/* Customer intelligence context — shown when lead matches an existing customer */}
+        <WorkModeCustomerContext match={customerMatch} />
+
+        {/* Call context panel — product interest + requirement + notes */}
+        {(lead.product_interest || lead.requirement_note || lead.notes) && (
+          <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: 12, marginBottom: 14 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#15803d', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+              📋 Lead Context
+            </div>
+            {lead.product_interest && (
+              <div style={{ fontSize: 13, color: '#1f2937', marginBottom: 4 }}>
+                <strong>Interest:</strong> {lead.product_interest}
+              </div>
+            )}
+            {lead.requirement_note && (
+              <div style={{ fontSize: 13, color: '#1f2937', marginBottom: 4 }}>
+                <strong>Requirement:</strong> {lead.requirement_note}
+              </div>
+            )}
+            {lead.notes && (
+              <div style={{ fontSize: 12, color: '#374151', borderTop: '1px solid #86efac', paddingTop: 6, marginTop: 4 }}>
+                <strong>Notes:</strong> {lead.notes}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Script */}
         {nextAction?.script && (
           <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: 14, marginBottom: 16 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: '#92400e', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-              📋 Call Script
+              📞 Call Script
             </div>
             <pre style={{ margin: 0, fontSize: 13, color: '#1f2937', whiteSpace: 'pre-wrap', fontFamily: 'inherit', lineHeight: 1.6 }}>
               {nextAction.script}
@@ -210,7 +285,7 @@ export default function WorkMode({ items, onExit, onRefresh }) {
           </div>
         )}
 
-        {/* Stage: connected — take note */}
+        {/* Stage: connected — take note + optional convert shortcut */}
         {stage === 'connected' && (
           <div style={{ background: '#f0fdf4', border: '2px solid #86efac', borderRadius: 12, padding: 16 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: '#15803d', marginBottom: 10 }}>
@@ -226,26 +301,66 @@ export default function WorkMode({ items, onExit, onRefresh }) {
             />
             {nextAction?.nextStatusOnComplete && (
               <div style={{ fontSize: 12, color: '#15803d', marginBottom: 10 }}>
-                Will also advance status to <strong>{nextAction.nextStatusOnComplete}</strong>
+                Will advance status to <strong>{nextAction.nextStatusOnComplete}</strong>
               </div>
             )}
-            <button onClick={saveConnected} disabled={submitting} style={{ ...S.btn('#16a34a'), width: '100%', padding: 14, fontSize: 15, opacity: submitting ? 0.7 : 1 }}>
+            <button onClick={saveConnected} disabled={submitting} style={{ ...S.btn('#16a34a'), width: '100%', padding: 14, fontSize: 15, opacity: submitting ? 0.7 : 1, marginBottom: 8 }}>
               {submitting ? 'Saving…' : 'Save + Next Lead →'}
             </button>
+            {/* Convert / quotation shortcut — runs the proper check-then-route flow */}
+            {['INTERESTED', 'QUOTATION', 'CONTACTED'].includes(lead.status) && (
+              <button
+                onClick={async () => {
+                  try {
+                    const res = await apiFetch(`/crm/leads/${lead.id}/convert`, { method: 'POST' });
+                    const data = await res.json();
+                    onExit();
+                    if (data.customerExists) {
+                      navigate(`/quotation?customerId=${data.customerId}&leadId=${lead.id}`);
+                    } else {
+                      // No customer yet — go to LeadDetail where Convert modal fires
+                      navigate(`/crm/leads/${lead.id}`);
+                    }
+                  } catch {
+                    onExit();
+                    navigate(`/crm/leads/${lead.id}`);
+                  }
+                }}
+                style={{ ...S.btn('#6f42c1'), width: '100%', padding: 12, fontSize: 13 }}
+              >
+                Create Customer & Quotation →
+              </button>
+            )}
           </div>
         )}
 
-        {/* Stage: not reached — reschedule */}
+        {/* Stage: not reached — reschedule with presets */}
         {stage === 'not_reached' && (
           <div style={{ background: '#fef2f2', border: '2px solid #fca5a5', borderRadius: 12, padding: 16 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: '#b91c1c', marginBottom: 10 }}>
               ❌ No Answer — Schedule a follow-up
             </div>
+            {/* Preset buttons */}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+              {presets.map((p) => (
+                <button
+                  key={p.label}
+                  onClick={() => setRescheduleDate(p.value)}
+                  style={{
+                    padding: '6px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                    background: rescheduleDate === p.value ? '#dc2626' : '#fff',
+                    color: rescheduleDate === p.value ? '#fff' : '#374151',
+                    border: `1px solid ${rescheduleDate === p.value ? '#dc2626' : '#fca5a5'}`,
+                  }}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
             <input
               type="datetime-local"
               value={rescheduleDate}
               onChange={e => setRescheduleDate(e.target.value)}
-              autoFocus
               style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #fca5a5', fontSize: 13, boxSizing: 'border-box', marginBottom: 10 }}
             />
             <div style={{ display: 'flex', gap: 8 }}>

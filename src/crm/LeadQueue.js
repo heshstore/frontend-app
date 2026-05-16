@@ -5,6 +5,7 @@ import { apiFetch } from '../utils/api';
 import { normalizePhoneForWhatsApp } from '../utils/phone';
 import { theme } from '../theme';
 import WorkMode from './WorkMode';
+import { HOT_LEAD_WINDOWS, WAITING_L2_MINS, WAITING_L3_MINS, OVERDUE_MINS } from './crmConstants';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -46,6 +47,25 @@ const PRIMARY_BTN = {
   FOLLOW_UP: { label: '📅 Schedule Follow-up', bg: '#f97316' },
 };
 
+// Returns a WAITING badge descriptor if the customer is waiting for a salesman reply,
+// or null if no badge should be shown. Escalates by wait time using crmConstants thresholds.
+function waitingBadge(lead) {
+  const replyAt  = lead.last_customer_reply_at ? +new Date(lead.last_customer_reply_at) : null;
+  const salesAt  = lead.last_salesman_reply_at ? +new Date(lead.last_salesman_reply_at) : null;
+  if (!replyAt || ['CONVERTED', 'LOST'].includes(lead.status)) return null;
+  if (salesAt && salesAt >= replyAt) return null;
+  const waitMs   = Date.now() - replyAt;
+  if (waitMs <= 0) return null;
+  const waitMins = Math.floor(waitMs / 60000);
+  if (waitMins < WAITING_L2_MINS) return null;
+  const age = waitMins >= 60
+    ? `${Math.floor(waitMins / 60)}h ${waitMins % 60}m`
+    : `${waitMins}m`;
+  if (waitMins >= OVERDUE_MINS) return { text: `WAITING · ${age}`, bg: '#fee2e2', color: '#991b1b', border: '#fca5a5' };
+  if (waitMins >= WAITING_L3_MINS) return { text: `WAITING · ${age}`, bg: '#ffedd5', color: '#9a3412', border: '#fb923c' };
+  return { text: `WAITING · ${age}`, bg: '#fef9c3', color: '#854d0e', border: '#fde047' };
+}
+
 // ── Section header ───────────────────────────────────────────────────────────
 
 function SectionHeader({ label, count, color }) {
@@ -81,10 +101,11 @@ function LeadCard({ item, onRefresh }) {
   const [localStatus, setLocalStatus] = useState(lead.status);
   const [removed] = useState(false);
 
-  const sc     = STATUS_COLOR[localStatus] || { bg: '#f3f4f6', text: '#374151' };
-  const d      = phoneDigits(lead.phone);
-  const pType  = getPrimaryActionType(nextAction);
-  const pBtn   = PRIMARY_BTN[pType];
+  const sc      = STATUS_COLOR[localStatus] || { bg: '#f3f4f6', text: '#374151' };
+  const d       = phoneDigits(lead.phone);
+  const pType   = getPrimaryActionType(nextAction);
+  const pBtn    = PRIMARY_BTN[pType];
+  const wBadge  = waitingBadge(lead);
 
   const togglePanel = (name) => {
     setCallState(null);
@@ -271,6 +292,17 @@ function LeadCard({ item, onRefresh }) {
           {isOverdue && (
             <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}>
               ⚠ Overdue
+            </span>
+          )}
+          {wBadge && (
+            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: wBadge.bg, color: wBadge.color, border: `1px solid ${wBadge.border}` }}>
+              💬 {wBadge.text}
+            </span>
+          )}
+          {/* Existing customer badge — no extra API call, uses customer_id already in lead */}
+          {lead.customer_id && (
+            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: '#dcfce7', color: '#15803d', border: '1px solid #86efac' }}>
+              🏢 Existing
             </span>
           )}
         </div>
@@ -508,16 +540,45 @@ export default function LeadQueue() {
     );
   }
 
-  const overdue = items.filter(i => i.isOverdue);
-  const high    = items.filter(i => !i.isOverdue && i.lead.lead_priority === 'HIGH');
-  const normal  = items.filter(i => !i.isOverdue && i.lead.lead_priority !== 'HIGH');
+  // Defense-in-depth: backend already excludes these, but filter client-side too
+  // in case cached data or older backend versions include non-operational leads.
+  const NON_OPERATIONAL = new Set(['TRACKING_ONLY', 'JUNK', 'DUPLICATE']);
+  const displayItems = items.filter(i => !NON_OPERATIONAL.has(i.lead?.lead_quality));
+
+  const now = Date.now();
+
+  // HOT: NEW status + high-intent source (META/GOOGLE/INDIAMART/LINKEDIN) within urgency window
+  const hot = displayItems.filter(i => {
+    const w = HOT_LEAD_WINDOWS[i.lead.source];
+    if (!w || i.lead.status !== 'NEW') return false;
+    const ageMins = i.ageHours * 60;
+    return ageMins >= w.minMins && ageMins < w.maxMins;
+  });
+  const hotIds = new Set(hot.map(i => i.lead.id));
+
+  // OVERDUE: follow-up date is past (excludes HOT leads — HOT takes precedence)
+  const overdue = displayItems.filter(i => i.isOverdue && !hotIds.has(i.lead.id));
+
+  // WAITING: customer replied 30+ min ago, salesman hasn't responded (excludes HOT + OVERDUE)
+  const waiting = displayItems.filter(i => {
+    if (hotIds.has(i.lead.id) || i.isOverdue) return false;
+    const replyAt = i.lead.last_customer_reply_at ? +new Date(i.lead.last_customer_reply_at) : null;
+    const salesAt = i.lead.last_salesman_reply_at ? +new Date(i.lead.last_salesman_reply_at) : null;
+    if (!replyAt) return false;
+    if (salesAt && salesAt >= replyAt) return false;
+    return (now - replyAt) / 60000 >= WAITING_L2_MINS;
+  });
+  const waitingIds = new Set(waiting.map(i => i.lead.id));
+
+  const high   = displayItems.filter(i => !hotIds.has(i.lead.id) && !waitingIds.has(i.lead.id) && !i.isOverdue && i.lead.lead_priority === 'HIGH');
+  const normal = displayItems.filter(i => !hotIds.has(i.lead.id) && !waitingIds.has(i.lead.id) && !i.isOverdue && i.lead.lead_priority !== 'HIGH');
 
   return (
     <>
       {/* Work Mode overlay */}
       {workMode && (
         <WorkMode
-          items={items}
+          items={displayItems}
           onExit={() => setWorkMode(false)}
           onRefresh={refresh}
         />
@@ -527,10 +588,10 @@ export default function LeadQueue() {
         {/* ── Top bar ── */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 13, color: theme.textMuted }}>
-            {refreshing ? 'Refreshing…' : `${items.length} lead${items.length !== 1 ? 's' : ''} in queue`}
+            {refreshing ? 'Refreshing…' : `${displayItems.length} lead${displayItems.length !== 1 ? 's' : ''} in queue`}
           </span>
           <div style={{ display: 'flex', gap: 8 }}>
-            {items.length > 0 && (
+            {displayItems.length > 0 && (
               <button onClick={() => setWorkMode(true)} style={{
                 padding: '8px 14px', background: '#f97316', color: '#fff',
                 border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 700, cursor: 'pointer',
@@ -554,7 +615,7 @@ export default function LeadQueue() {
         </div>
 
         {/* ── Empty state ── */}
-        {items.length === 0 && (
+        {displayItems.length === 0 && (
           <div style={{ textAlign: 'center', padding: '60px 20px' }}>
             <div style={{ fontSize: 48, marginBottom: 12 }}>🎉</div>
             <div style={{ fontSize: 16, fontWeight: 700, color: theme.text }}>You're all caught up!</div>
@@ -568,11 +629,25 @@ export default function LeadQueue() {
           </div>
         )}
 
-        {/* ── Sections ── */}
+        {/* ── Sections (priority order: HOT → OVERDUE → WAITING → HIGH → ACTIVE) ── */}
+        {hot.length > 0 && (
+          <>
+            <SectionHeader label="🔥 Hot — Respond Now" count={hot.length} color="#dc2626" />
+            {hot.map(item => <LeadCard key={item.lead.id} item={item} onRefresh={refresh} />)}
+          </>
+        )}
+
         {overdue.length > 0 && (
           <>
-            <SectionHeader label="🔴 Overdue" count={overdue.length} color="#ef4444" />
+            <SectionHeader label="⚠ Overdue Follow-ups" count={overdue.length} color="#ef4444" />
             {overdue.map(item => <LeadCard key={item.lead.id} item={item} onRefresh={refresh} />)}
+          </>
+        )}
+
+        {waiting.length > 0 && (
+          <>
+            <SectionHeader label="💬 Customer Waiting" count={waiting.length} color="#d97706" />
+            {waiting.map(item => <LeadCard key={item.lead.id} item={item} onRefresh={refresh} />)}
           </>
         )}
 

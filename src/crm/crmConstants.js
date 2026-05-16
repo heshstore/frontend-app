@@ -26,3 +26,18 @@ export const HOT_LEAD_WINDOWS = {
 export const WAITING_L2_MINS  = 30;
 export const WAITING_L3_MINS  = 120;
 export const OVERDUE_MINS     = 240;
+
+/**
+ * Allowed forward-only status transitions.
+ * Mirrors backend lead.service.ts VALID_TRANSITIONS exactly.
+ * Frontend uses this to disable invalid options in the status dropdown.
+ * Backend remains the authoritative enforcer — this is UI-only.
+ */
+export const VALID_TRANSITIONS = {
+  NEW:        ['CONTACTED', 'LOST'],
+  CONTACTED:  ['INTERESTED', 'LOST'],
+  INTERESTED: ['QUOTATION', 'CONTACTED', 'LOST'],
+  QUOTATION:  ['CONVERTED', 'INTERESTED', 'LOST'],
+  CONVERTED:  [],
+  LOST:       ['CONTACTED'],
+};

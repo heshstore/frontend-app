@@ -38,6 +38,13 @@ const ACTION_ICON = {
   SLA_WARNING:          '⚠️',
   SLA_ESCALATED:        '🚨',
   SLA_RESOLVED:         '✅',
+  CALL_LOGGED:          '📞',
+  FOLLOWUP_CREATED:     '📅',
+  // CRM automation (System Audit)
+  AUTOMATION_PAUSED:    '⏸',
+  AUTOMATION_RESUMED:   '▶️',
+  AUTOMATION_SNOOZED:   '💤',
+  SYSTEM_NOTE:          '⚙️',
 };
 
 // ── Time formatting ───────────────────────────────────────────────────────────
@@ -253,16 +260,20 @@ export default function ActivityTimeline({
   const [page,     setPage]     = useState(1);
   const [loading,  setLoading]  = useState(!externalItems);
   const [error,    setError]    = useState(null);
-  const seenIds = useRef(new Set());
+  const seenIds  = useRef(new Set());
+  const fetchGen = useRef(0);
 
   const fetchPage = useCallback(async (p) => {
     if (!entityType || entityId == null) return;
+    const gen = ++fetchGen.current;
     setLoading(true);
     setError(null);
     try {
-      const res  = await apiFetch(`/activity/entity/${entityType}/${entityId}?page=${p}`);
+      const res = await apiFetch(`/activity/entity/${entityType}/${entityId}?page=${p}`);
+      if (fetchGen.current !== gen) return;
       if (!res.ok) throw new Error('Failed to load activity');
       const data = await res.json();
+      if (fetchGen.current !== gen) return;
       const newItems = (data.items ?? []).filter(i => {
         if (seenIds.current.has(i.id)) return false;
         seenIds.current.add(i.id);
@@ -275,9 +286,10 @@ export default function ActivityTimeline({
       }
       setTotal(data.total ?? 0);
     } catch (e) {
+      if (fetchGen.current !== gen) return;
       setError('Could not load activity history.');
     } finally {
-      setLoading(false);
+      if (fetchGen.current === gen) setLoading(false);
     }
   }, [entityType, entityId]);
 
@@ -285,6 +297,7 @@ export default function ActivityTimeline({
     if (externalItems) {
       setItems(externalItems);
     } else {
+      fetchGen.current += 1;
       seenIds.current = new Set();
       setPage(1);
       fetchPage(1);

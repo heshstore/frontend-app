@@ -3,14 +3,7 @@ import PageLayout from '../components/layout/PageLayout';
 import { apiFetch } from '../utils/api';
 import { theme } from '../theme';
 
-const SOURCE_LABELS = {
-  DIRECT: 'Direct / Manual',
-  INDIAMART: 'IndiaMart',
-  META: 'Meta Ads',
-  GOOGLE: 'Google',
-  SHOPIFY: 'Shopify',
-  WHATSAPP: 'WhatsApp',
-};
+import { SOURCE_LABELS } from './crmSourceLabels';
 
 function hasPermission(key) {
   try { return JSON.parse(localStorage.getItem('permissions') || '[]').includes(key); } catch { return false; }

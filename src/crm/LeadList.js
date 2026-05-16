@@ -2,9 +2,9 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PageLayout from '../components/layout/PageLayout';
 import { apiFetch } from '../utils/api';
-import { normalizePhoneForWhatsApp } from '../utils/phone';
 import { theme } from '../theme';
 import { HOT_LEAD_WINDOWS, WAITING_L2_MINS, WAITING_L3_MINS, OVERDUE_MINS } from './crmConstants';
+import { SOURCE_LABELS } from './crmSourceLabels';
 import './LeadList.css';
 
 const STATUS_COLORS = {
@@ -16,15 +16,20 @@ const STATUS_COLORS = {
   LOST:      { bg: '#f8d7da', text: '#842029' },
 };
 
-const SOURCE_LABELS = {
-  INDIAMART:   'IndiaMart',
-  META_ADS:    'Meta Ads',
-  GOOGLE_ADS:  'Google Ads',
-  SHOPIFY:     'Shopify',
-  WHATSAPP:    'WhatsApp',
-  DIRECT_CALL: 'Direct Call',
-  MANUAL:      'Manual',
+const QUALITY_STYLE = {
+  QUALIFIED:     { bg: '#dcfce7', text: '#15803d', label: 'Qualified' },
+  PARTIAL:       { bg: '#dbeafe', text: '#1d4ed8', label: 'Partial'   },
+  TRACKING_ONLY: { bg: '#f3f4f6', text: '#6b7280', label: 'Tracking'  },
+  DUPLICATE:     { bg: '#fef9c3', text: '#92400e', label: 'Duplicate' },
+  JUNK:          { bg: '#fee2e2', text: '#b91c1c', label: 'Junk'      },
+  AUTO_CAPTURED: { bg: '#f3e8ff', text: '#7e22ce', label: 'Auto'      },
 };
+
+// Sources where physical/relationship trust means less urgency for auto-contact
+const MANUAL_SOURCE_SET = new Set([
+  'WALK_IN', 'REFERRAL', 'EXHIBITION', 'FIELD_VISIT',
+  'OLD_CUSTOMER', 'DEALER_REFERENCE', 'BUSINESS_CARD', 'IMPORTED', 'DIRECT',
+]);
 
 const PRIORITY_COLORS = { HIGH: '#dc3545', MEDIUM: '#ffc107', LOW: '#198754' };
 
@@ -116,6 +121,7 @@ export default function LeadList() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [sourceFilter, setSourceFilter] = useState('');
+  const [activeTab, setActiveTab] = useState('crm'); // crm | tracking | duplicates | junk
   const [expanded, setExpanded] = useState(null);
   const [page, setPage] = useState(0);
 
@@ -126,6 +132,10 @@ export default function LeadList() {
       if (statusFilter) p.set('status', statusFilter);
       if (sourceFilter) p.set('source', sourceFilter);
       if (search) p.set('search', search);
+      if (activeTab === 'crm')        p.set('operationalOnly', 'true');
+      else if (activeTab === 'tracking')  p.set('quality', 'TRACKING_ONLY');
+      else if (activeTab === 'duplicates') p.set('quality', 'DUPLICATE');
+      else if (activeTab === 'junk')   p.set('quality', 'JUNK');
       const res = await apiFetch(`/crm/leads?${p}`);
       const data = await res.json();
       setLeads(Array.isArray(data) ? data : []);
@@ -135,7 +145,7 @@ export default function LeadList() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, sourceFilter, search]);
+  }, [statusFilter, sourceFilter, search, activeTab]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -165,6 +175,30 @@ export default function LeadList() {
         </button>
       </div>
 
+      {/* Tab bar */}
+      <div style={{ display: 'flex', gap: 2, marginBottom: 14, borderBottom: `2px solid ${theme.border}`, paddingBottom: 0 }}>
+        {[
+          { key: 'crm',        label: 'CRM Leads',  color: '#0066B3' },
+          { key: 'tracking',   label: 'Tracking',   color: '#6b7280' },
+          { key: 'duplicates', label: 'Duplicates', color: '#d97706' },
+          { key: 'junk',       label: 'Junk',       color: '#dc2626' },
+        ].map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => { setActiveTab(tab.key); setPage(0); }}
+            style={{
+              padding: '8px 16px', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+              borderRadius: '6px 6px 0 0', marginBottom: -2,
+              background: activeTab === tab.key ? '#fff' : 'transparent',
+              color: activeTab === tab.key ? tab.color : theme.textMuted,
+              borderBottom: activeTab === tab.key ? `2px solid ${tab.color}` : '2px solid transparent',
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       {/* Filters */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
         <input
@@ -173,14 +207,27 @@ export default function LeadList() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <select style={{ ...inp }} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-          <option value="">All Statuses</option>
-          {Object.keys(STATUS_COLORS).map((s) => <option key={s}>{s}</option>)}
-        </select>
-        <select style={{ ...inp }} value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}>
-          <option value="">All Sources</option>
-          {Object.keys(SOURCE_LABELS).map((s) => <option key={s} value={s}>{SOURCE_LABELS[s]}</option>)}
-        </select>
+        {activeTab === 'crm' && (
+          <>
+            <select style={{ ...inp }} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="">All Statuses</option>
+              {Object.keys(STATUS_COLORS).map((s) => <option key={s}>{s}</option>)}
+            </select>
+            <select style={{ ...inp }} value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}>
+              <option value="">All Sources</option>
+              <optgroup label="Manual / High Trust">
+                {['WALK_IN','REFERRAL','OLD_CUSTOMER','EXHIBITION','FIELD_VISIT','DEALER_REFERENCE','BUSINESS_CARD','DIRECT','IMPORTED'].map(s => (
+                  <option key={s} value={s}>{SOURCE_LABELS[s]}</option>
+                ))}
+              </optgroup>
+              <optgroup label="Digital / Auto-Captured">
+                {['INDIAMART','META','GOOGLE','WHATSAPP','SHOPIFY','LINKEDIN'].map(s => (
+                  <option key={s} value={s}>{SOURCE_LABELS[s]}</option>
+                ))}
+              </optgroup>
+            </select>
+          </>
+        )}
         <button
           onClick={() => navigate('/crm/leads/new')}
           style={{ ...inp, background: theme.primary, color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 600 }}
@@ -189,11 +236,43 @@ export default function LeadList() {
         </button>
       </div>
 
+      {/* Tracking Intelligence banner */}
+      {activeTab === 'tracking' && (
+        <div style={{
+          background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8,
+          padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#6b7280',
+        }}>
+          <strong style={{ color: '#374151' }}>Tracking Intelligence</strong> — Anonymous visitors and product-view-only events.
+          These are not actionable leads. No phone, no email. Read-only view for analytics.
+        </div>
+      )}
+
+      {activeTab === 'duplicates' && (
+        <div style={{
+          background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8,
+          padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#92400e',
+        }}>
+          <strong>Duplicate leads</strong> — Same phone number already exists in CRM. Review and merge or discard.
+        </div>
+      )}
+
+      {activeTab === 'junk' && (
+        <div style={{
+          background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8,
+          padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#991b1b',
+        }}>
+          <strong>Junk leads</strong> — No contact info, no product interest. Digital tracking events with nothing actionable.
+        </div>
+      )}
+
       {loading && <p style={{ color: theme.textMuted, fontSize: 13 }}>Loading...</p>}
 
       {!loading && leads.length === 0 && (
         <p style={{ color: theme.textMuted, textAlign: 'center', marginTop: 40 }}>
-          No leads found. Create your first lead or wait for incoming webhooks.
+          {activeTab === 'crm'        && 'No active leads. Create your first lead or wait for incoming webhooks.'}
+          {activeTab === 'tracking'   && 'No tracking events yet. Anonymous Shopify visitors will appear here.'}
+          {activeTab === 'duplicates' && 'No duplicate leads found.'}
+          {activeTab === 'junk'       && 'No junk leads found.'}
         </p>
       )}
 
@@ -207,65 +286,140 @@ export default function LeadList() {
           ? new Date(lead.follow_up_date).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
           : null;
         const isWaiting   = badge?.text?.startsWith('WAITING');
+        const isMuted     = activeTab === 'tracking' || activeTab === 'junk';
 
         return (
           <div
             key={lead.id}
+            onClick={() => navigate(`/crm/leads/${lead.id}`)}
             style={{
-              border: `1px solid ${badge?.cardBorder ?? theme.border}`,
+              border: `1px solid ${badge?.cardBorder ?? (isMuted ? '#e5e7eb' : theme.border)}`,
               borderRadius: 8,
               marginBottom: 8,
-              background: lead.duplicate_flag ? '#fff8e1' : '#fff',
+              background: isMuted ? '#f9fafb' : (lead.duplicate_flag ? '#fff8e1' : '#fff'),
               overflow: 'hidden',
+              opacity: isMuted ? 0.85 : 1,
+              cursor: 'pointer',
+              userSelect: 'none',
             }}
           >
-            {/* Row header */}
-            <div
-              style={{
-                display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
-                cursor: 'pointer', flexWrap: 'wrap',
-              }}
-              onClick={() => setExpanded(isOpen ? null : lead.id)}
-            >
-              {badge && (
+            {/* Row header — clicking anywhere on card navigates to detail;
+                chevron button intercepts and toggles the preview panel instead */}
+            <div style={{ padding: '10px 14px' }}>
+              {/* Top row: badges + age + chevron */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
+                {/* Lead reference — primary business ID, always first */}
+                {lead.lead_ref ? (
+                  <span style={{
+                    fontSize: 11, fontWeight: 700, flexShrink: 0,
+                    fontFamily: "'Courier New', Courier, monospace",
+                    letterSpacing: '0.04em',
+                    background: '#e8edf5', color: '#1e3a5f',
+                    border: '1px solid #c3cfe2',
+                    borderRadius: 5, padding: '2px 8px',
+                  }}>
+                    {lead.lead_ref}
+                  </span>
+                ) : (
+                  <span style={{
+                    fontSize: 10, fontWeight: 600, flexShrink: 0,
+                    fontFamily: "'Courier New', Courier, monospace",
+                    background: '#f3f4f6', color: '#9ca3af',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: 5, padding: '2px 8px',
+                    fontStyle: 'italic',
+                  }}>
+                    Generating…
+                  </span>
+                )}
+                {badge && (
+                  <span style={{
+                    fontSize: 11, fontWeight: 700, flexShrink: 0,
+                    background: badge.bg, color: badge.color,
+                    border: `1px solid ${badge.border}`,
+                    borderRadius: 4, padding: '2px 7px',
+                  }}>
+                    {badge.text}
+                  </span>
+                )}
+                {isAutoActive && (
+                  <span style={{
+                    fontSize: 9, fontWeight: 700, letterSpacing: 0.5,
+                    background: '#e0f2fe', color: '#0369a1',
+                    padding: '2px 6px', borderRadius: 3, flexShrink: 0,
+                  }}>
+                    AUTO{lastAutoTime ? ` · ${lastAutoTime}` : ''}
+                  </span>
+                )}
+                {/* Quality badge */}
+                {lead.lead_quality && QUALITY_STYLE[lead.lead_quality] && (
+                  <span style={{
+                    fontSize: 9, fontWeight: 700, letterSpacing: 0.4,
+                    background: QUALITY_STYLE[lead.lead_quality].bg,
+                    color: QUALITY_STYLE[lead.lead_quality].text,
+                    padding: '2px 6px', borderRadius: 3, flexShrink: 0,
+                    textTransform: 'uppercase',
+                  }}>
+                    {QUALITY_STYLE[lead.lead_quality].label}
+                  </span>
+                )}
+                {/* Source — green bg for manual/trusted, slate for digital */}
                 <span style={{
-                  fontSize: 11, fontWeight: 700, flexShrink: 0,
-                  background: badge.bg, color: badge.color,
-                  border: `1px solid ${badge.border}`,
-                  borderRadius: 4, padding: '2px 7px',
+                  fontSize: 10, fontWeight: 600, flexShrink: 0,
+                  borderRadius: 3, padding: '2px 6px',
+                  background: MANUAL_SOURCE_SET.has(lead.source) ? '#dcfce7' : '#f1f5f9',
+                  color:      MANUAL_SOURCE_SET.has(lead.source) ? '#15803d' : '#64748b',
                 }}>
-                  {badge.text}
+                  {MANUAL_SOURCE_SET.has(lead.source) ? '✓ ' : ''}{SOURCE_LABELS[lead.source] || lead.source}
                 </span>
-              )}
-              {/* Auto active badge */}
-              {isAutoActive && (
+                {/* Status */}
                 <span style={{
-                  fontSize: 9, fontWeight: 700, letterSpacing: 0.5,
-                  background: '#e0f2fe', color: '#0369a1',
-                  padding: '2px 6px', borderRadius: 3, flexShrink: 0,
+                  fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 10,
+                  background: sc.bg, color: sc.text, flexShrink: 0,
                 }}>
-                  AUTO{lastAutoTime ? ` · ${lastAutoTime}` : ''}
+                  {lead.status}
                 </span>
-              )}
-              <span style={{ fontWeight: 600, fontSize: 14, flex: '1 1 120px' }}>{lead.name}</span>
-              <span style={{ fontSize: 13, color: theme.textMuted }}>{lead.phone}</span>
-              <span style={{
-                fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 12,
-                background: sc.bg, color: sc.text,
-              }}>
-                {lead.status}
-              </span>
-              <span style={{ fontSize: 11, color: theme.textMuted }}>{SOURCE_LABELS[lead.source] || lead.source}</span>
-              <span style={{
-                fontSize: 11, color: PRIORITY_COLORS[lead.lead_priority] || theme.textMuted,
-                fontWeight: 600,
-              }}>
-                {lead.lead_priority}
-              </span>
-              <span style={{ fontSize: 11, color: theme.textMuted, marginLeft: 'auto' }}>
-                {ageLabel(lead.created_at)}
-              </span>
-              <span style={{ fontSize: 12, color: theme.primary }}>{isOpen ? '▲' : '▼'}</span>
+                <span style={{ fontSize: 11, color: theme.textMuted, marginLeft: 'auto' }}>
+                  {ageLabel(lead.created_at)}
+                </span>
+                <span
+                  onClick={(e) => { e.stopPropagation(); setExpanded(isOpen ? null : lead.id); }}
+                  style={{ fontSize: 12, color: theme.primary, padding: '4px 6px', cursor: 'pointer' }}
+                  title={isOpen ? 'Collapse preview' : 'Expand preview'}
+                >
+                  {isOpen ? '▲' : '▼'}
+                </span>
+              </div>
+
+              {/* Main info row: name + contact details */}
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+                <span style={{ fontWeight: 700, fontSize: 14, color: '#111827', flex: '1 1 120px' }}>
+                  {lead.name}
+                </span>
+                {lead.phone && (
+                  <span style={{ fontSize: 12, color: '#374151' }}>{lead.phone}</span>
+                )}
+                {lead.email && (
+                  <span style={{ fontSize: 12, color: '#374151' }}>{lead.email}</span>
+                )}
+                {lead.city && (
+                  <span style={{ fontSize: 12, color: '#9ca3af' }}>{lead.city}</span>
+                )}
+                {lead.product_interest && (
+                  <span style={{
+                    fontSize: 11, color: '#6b7280', fontStyle: 'italic',
+                    maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>
+                    {lead.product_interest}
+                  </span>
+                )}
+                <span style={{
+                  fontSize: 11, color: PRIORITY_COLORS[lead.lead_priority] || theme.textMuted,
+                  fontWeight: 600,
+                }}>
+                  {lead.lead_priority}
+                </span>
+              </div>
             </div>
 
             {/* Duplicate warning */}
@@ -278,10 +432,22 @@ export default function LeadList() {
             {/* Expanded details */}
             {isOpen && (
               <div style={{ padding: '10px 14px', borderTop: `1px solid ${theme.border}`, background: theme.surface }}>
-                {lead.product_interest && (
-                  <p style={{ margin: '0 0 6px', fontSize: 13 }}>
-                    <strong>Interest:</strong> {lead.product_interest}
-                  </p>
+                {/* Quality score row */}
+                {lead.lead_quality && (
+                  <div style={{ marginBottom: 8, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                    {lead.quality_score != null && (
+                      <span style={{ fontSize: 12, color: '#6b7280' }}>
+                        Quality score: <strong style={{ color: lead.quality_score >= 60 ? '#16a34a' : lead.quality_score >= 30 ? '#d97706' : '#dc2626' }}>
+                          {lead.quality_score}/100
+                        </strong>
+                      </span>
+                    )}
+                    {lead.context_history && (
+                      <span style={{ fontSize: 11, color: '#9ca3af', fontStyle: 'italic' }}>
+                        {lead.context_history}
+                      </span>
+                    )}
+                  </div>
                 )}
                 {lead.notes && (
                   <p style={{ margin: '0 0 6px', fontSize: 13 }}>
@@ -298,35 +464,8 @@ export default function LeadList() {
                     <strong>Customer replied:</strong> {new Date(lead.last_customer_reply_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                   </p>
                 )}
-                <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-                  <button
-                    onClick={() => navigate(`/crm/leads/${lead.id}`)}
-                    style={{ padding: '6px 14px', background: theme.primary, color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}
-                  >
-                    Open
-                  </button>
-                  <button
-                    onClick={() => navigate(`/crm/leads/${lead.id}`)}
-                    style={{ padding: '6px 14px', background: '#198754', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}
-                  >
-                    Edit
-                  </button>
-                  {lead.email && (
-                    <a
-                      href={`mailto:${lead.email}`}
-                      style={{ padding: '6px 14px', background: '#6c757d', color: '#fff', borderRadius: 6, fontSize: 13, textDecoration: 'none' }}
-                    >
-                      Email
-                    </a>
-                  )}
-                  <a
-                    href={`https://wa.me/${normalizePhoneForWhatsApp(lead.phone)}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{ padding: '6px 14px', background: '#25D366', color: '#fff', borderRadius: 6, fontSize: 13, textDecoration: 'none' }}
-                  >
-                    WhatsApp
-                  </a>
+                <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 8, fontStyle: 'italic' }}>
+                  Tap card to open full detail
                 </div>
               </div>
             )}
