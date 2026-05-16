@@ -16,11 +16,12 @@ const btn = (extra = {}) => ({
 });
 
 export default function CustomerList() {
-  const [customers, setCustomers] = useState([]);
-  const [loading,   setLoading]   = useState(false);
-  const [search,    setSearch]    = useState('');
-  const [expanded,  setExpanded]  = useState(null);
-  const [page,      setPage]      = useState(1);
+  const [customers,      setCustomers]      = useState([]);
+  const [loading,        setLoading]        = useState(false);
+  const [search,         setSearch]         = useState('');
+  const [expanded,       setExpanded]       = useState(null);
+  const [page,           setPage]           = useState(1);
+  const [customerDetail, setCustomerDetail] = useState({}); // id → full detail
   const navigate = useNavigate();
   const perPage  = 50;
   const [confirm, confirmModal] = useConfirm();
@@ -45,6 +46,20 @@ export default function CustomerList() {
     loadCustomers(search);
     setPage(1);
   }, [search, loadCustomers]);
+
+  const handleExpand = async (id) => {
+    const next = expanded === id ? null : id;
+    setExpanded(next);
+    if (next && !customerDetail[id]) {
+      try {
+        const res = await apiFetch(`/customers/${id}`);
+        if (res.ok) {
+          const d = await res.json();
+          setCustomerDetail((prev) => ({ ...prev, [id]: d }));
+        }
+      } catch { /* ignore */ }
+    }
+  };
 
   const handleDelete = async (id) => {
     if (!await confirm('Delete this customer?', 'This cannot be undone.', { danger: true, confirmLabel: 'Delete' })) return;
@@ -103,7 +118,7 @@ export default function CustomerList() {
           >
             {/* Collapsed header */}
             <div
-              onClick={() => setExpanded(expanded === c.id ? null : c.id)}
+              onClick={() => handleExpand(c.id)}
               style={{ padding: '12px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10 }}
             >
               {/* Avatar */}
@@ -151,6 +166,44 @@ export default function CustomerList() {
                   <InfoRow icon="🧾" value={c.gstNumber || 'Not registered'} label="GST" />
                   <InfoRow icon="💰" value={`₹${(c.creditLimit ?? 0).toLocaleString('en-IN')}${c.credit_days > 0 ? ` · ${c.credit_days}d` : ''}`} label="Credit" />
                 </div>
+
+                {/* Lead history */}
+                {(() => {
+                  const detail = customerDetail[c.id];
+                  if (!detail) return <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 10 }}>Loading lead history…</div>;
+                  const { leadStats, leadHistory = [] } = detail;
+                  if (!leadStats || leadStats.totalLeads === 0) return null;
+                  return (
+                    <div style={{
+                      background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 7,
+                      padding: '8px 12px', marginBottom: 12,
+                    }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#0369a1', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        Lead History
+                      </div>
+                      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 12, color: '#1e40af', marginBottom: 8 }}>
+                        <span><strong>{leadStats.totalLeads}</strong> leads</span>
+                        <span><strong>{leadStats.convertedLeads}</strong> converted</span>
+                        <span><strong>{leadStats.conversionRate}%</strong> rate</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {leadHistory.map((l) => (
+                          <span
+                            key={l.id}
+                            onClick={() => navigate(`/crm/leads/${l.id}`)}
+                            style={{
+                              fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4,
+                              background: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd',
+                              fontFamily: 'monospace', cursor: 'pointer',
+                            }}
+                          >
+                            {l.lead_ref || `LD-${l.id}`}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Actions */}
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

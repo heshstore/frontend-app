@@ -159,6 +159,9 @@ export default function PaymentHistory() {
 
           <div style={{ fontSize: 12, color: '#6b7280' }}>
             {fmtDate(p.created_at)}
+            {p.received_by_name && (
+              <span> · Received by <b>{p.received_by_name}</b></span>
+            )}
           </div>
 
           {p.payment_reference && (

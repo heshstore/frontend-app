@@ -12,6 +12,7 @@ import OrderDetail from "./OrderDetail";
 import ApprovalModal from "./components/ui/ApprovalModal";
 import { toast } from "./utils/toast";
 import { useConfirm } from "./components/ui/ConfirmModal";
+import DocumentOwnershipPanel from "./components/ownership/DocumentOwnershipPanel";
 
 const STATUS_BORDER = {
   DRAFT:            '#6c757d',
@@ -237,6 +238,7 @@ export default function OrderList() {
               <div style={{ fontSize: 13, color: '#6b7280', marginTop: 3 }}>
                 {row.customer_name || '—'} · ₹{Number(row.total_amount || 0).toLocaleString('en-IN')}
               </div>
+              <DocumentOwnershipPanel data={row} docType="order" variant="list" />
               <div style={{ fontSize: 12, color: '#9ca3af' }}>
                 {row.created_at ? new Date(row.created_at).toLocaleDateString('en-IN') : ''}
                 {row.mobile ? ` · ${row.mobile}` : ''}

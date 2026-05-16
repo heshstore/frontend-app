@@ -9,6 +9,7 @@ import EmptyState from './components/ui/EmptyState';
 import { SkeletonList } from './components/ui/SkeletonCard';
 import { toast } from './utils/toast';
 import { useConfirm } from './components/ui/ConfirmModal';
+import DocumentOwnershipPanel from './components/ownership/DocumentOwnershipPanel';
 
 const EDITABLE_STATUSES    = ['DRAFT', 'GENERATED'];
 const CONVERTIBLE_STATUSES = ['GENERATED'];
@@ -250,6 +251,7 @@ export default function QuotationList() {
                   <div style={{ fontSize: 13, color: theme.textMuted, marginTop: 3 }}>
                     {q.customer_name || '—'} · ₹{Number(q.total_amount || 0).toLocaleString('en-IN')}
                   </div>
+                  <DocumentOwnershipPanel data={q} docType="quotation" variant="list" />
                   <div style={{ fontSize: 12, color: theme.textMuted }}>
                     {q.created_at ? new Date(q.created_at).toLocaleDateString('en-IN') : ''}
                     {q.valid_till ? ` · Valid till ${new Date(q.valid_till).toLocaleDateString('en-IN')}` : ''}
@@ -269,32 +271,9 @@ export default function QuotationList() {
               {/* Expanded */}
               {expanded === q.id && (
                 <div style={{ borderTop: `1px solid ${theme.border}`, padding: '12px 16px' }}>
-
-                  {/* Items */}
-                  {q.items && q.items.length > 0 && (
-                    <div style={{ marginBottom: 14 }}>
-                      <div style={{ fontWeight: 600, marginBottom: 6, fontSize: 13, color: '#374151' }}>Items</div>
-                      {q.items.map((item, i) => (
-                        <div key={i} style={{
-                          display: 'flex', justifyContent: 'space-between', fontSize: 13,
-                          padding: '4px 0', borderBottom: `1px solid #f3f4f6`,
-                        }}>
-                          <span style={{ color: '#111' }}>{item.item_name || item.sku || `Item ${i + 1}`}</span>
-                          <span style={{ color: '#6b7280' }}>
-                            ×{item.qty} @ ₹{Number(item.rate || 0).toLocaleString('en-IN')} = <strong>₹{Number(item.amount || 0).toLocaleString('en-IN')}</strong>
-                          </span>
-                        </div>
-                      ))}
-                      <div style={{ textAlign: 'right', fontSize: 13, fontWeight: 700, marginTop: 6 }}>
-                        Total: ₹{Number(q.total_amount || 0).toLocaleString('en-IN')}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Action row */}
                   <div style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    flexWrap: 'wrap', gap: 8, paddingTop: 8, borderTop: `1px solid #f3f4f6`,
+                    flexWrap: 'wrap', gap: 8,
                   }}>
 
                     {/* Left */}

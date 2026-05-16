@@ -10,6 +10,7 @@
 import React from 'react';
 import { company, bank, hasBankDetails } from './config/company';
 import { inr, fmtDate, amountInWords } from './utils/docFormatters';
+import DocumentOwnershipPanel from './components/ownership/DocumentOwnershipPanel';
 
 /* ── Print + screen styles ──────────────────────────────────────────────── */
 const CSS = `
@@ -429,12 +430,7 @@ export default function QuotationTemplate({ data, wrapClass = 'qp-screen' }) {
                   <span className="qp-pi-val">{fmtDate(data.valid_till)}</span>
                 </div>
               )}
-              {data.sales_person && (
-                <div className="qp-pi-row">
-                  <span className="qp-pi-key">Sales Man</span>
-                  <span className="qp-pi-val">{data.sales_person}</span>
-                </div>
-              )}
+              <DocumentOwnershipPanel data={data} docType="quotation" variant="print" />
             </div>
           </div>
 

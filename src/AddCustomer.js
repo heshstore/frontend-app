@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import PageLayout from "./components/layout/PageLayout";
 import {
   FormSection, FormCard, FormGrid, FormField, FormActions,
@@ -49,6 +49,8 @@ const CUSTOMER_TYPES = [
 
 export default function AddCustomer() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const leadId = searchParams.get('leadId');
 
   const [form, setForm] = useState({
     companyName:   '',
@@ -199,7 +201,11 @@ export default function AddCustomer() {
       const data = await res.json();
       if (!res.ok) { toast.error(data.message || 'Error saving customer'); return; }
       toast.success('Customer added successfully');
-      navigate('/customers');
+      if (leadId) {
+        navigate(`/quotation?customerId=${data.id}&leadId=${leadId}`);
+      } else {
+        navigate('/customers');
+      }
     } catch {
       toast.error('Error saving customer');
     } finally {

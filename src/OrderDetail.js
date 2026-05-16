@@ -4,6 +4,7 @@ import { apiFetch } from './utils/api';
 import { normalizePhoneForWhatsApp } from './utils/phone';
 import { ORDER_STATUS_LABELS } from './constants/orderStatus';
 import DocActions from './components/DocActions';
+import DocumentOwnershipPanel from './components/ownership/DocumentOwnershipPanel';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -342,9 +343,7 @@ export default function OrderDetail({ orderId: propId }) {
           {order.payment_type && (
             <InfoRow label="Payment Type" value={order.payment_type} />
           )}
-          {order.salesman_name && (
-            <InfoRow label="Salesman" value={order.salesman_name} />
-          )}
+          <DocumentOwnershipPanel data={order} docType="order" variant="screen" />
         </Card>
 
         {/* Section 3 — Payment summary */}

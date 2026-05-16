@@ -11,6 +11,7 @@
 import React from 'react';
 import { company, bank, hasBankDetails } from './config/company';
 import { inr, fmtDate, amountInWords, DOC_TEMPLATE_CSS } from './utils/docFormatters';
+import DocumentOwnershipPanel from './components/ownership/DocumentOwnershipPanel';
 
 /* ── Order status display ──────────────────────────────────────────────── */
 const STATUS_LABEL = {
@@ -128,12 +129,7 @@ export default function OrderTemplate({ data, wrapClass = 'qp-screen' }) {
                   <span className="qp-pi-val">{fmtDate(data.due_date)}</span>
                 </div>
               )}
-              {data.salesman_name && (
-                <div className="qp-pi-row">
-                  <span className="qp-pi-key">Sales Man</span>
-                  <span className="qp-pi-val">{data.salesman_name}</span>
-                </div>
-              )}
+              <DocumentOwnershipPanel data={data} docType="order" variant="print" />
               {statusLabel && (
                 <div style={{ marginTop: 4, textAlign: 'right' }}>
                   <span

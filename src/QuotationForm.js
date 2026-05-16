@@ -75,14 +75,29 @@ export default function QuotationForm() {
   // When coming from lead conversion, use sentinel to trigger customer prefill
   const effectiveEditId = editId || (customerId ? `_prefill_${customerId}` : null);
 
-  const loadData = useCallback(loadQuotation, []);
+  // Extend loadQuotation to also fetch the lead's assigned salesman when leadId is present
+  const loadData = useCallback(async (id) => {
+    const result = await loadQuotation(id);
+    if (result && leadId && !result.form.salesman_id) {
+      try {
+        const lr = await apiFetch(`/crm/leads/${leadId}`);
+        if (lr.ok) {
+          const lead = await lr.json();
+          if (lead.assigned_to) result.form.salesman_id = String(lead.assigned_to);
+        }
+      } catch {}
+    }
+    return result;
+  }, [leadId]);
 
   const onSubmit = useCallback(async (payload, id) => {
     // Strip sentinel prefix — this is a new quotation
     const isNew = !id || String(id).startsWith("_prefill_");
+    // Attach lead_id for CRM traceability
+    const enrichedPayload = leadId ? { ...payload, lead_id: Number(leadId) } : payload;
     const res = await apiFetch(
       isNew ? `/quotations` : `/quotations/${id}`,
-      { method: isNew ? "POST" : "PUT", body: JSON.stringify(payload) }
+      { method: isNew ? "POST" : "PUT", body: JSON.stringify(enrichedPayload) }
     );
     if (res.ok) {
       const saved = await res.json().catch(() => ({}));

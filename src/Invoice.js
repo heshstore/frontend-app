@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { apiFetch } from "./utils/api";
 import { toast } from "./utils/toast";
+import DocumentOwnershipPanel from "./components/ownership/DocumentOwnershipPanel";
+import { formatPersonLine, normalizeOwnership } from "./utils/documentOwnership";
 
 export default function Invoice() {
   const { id } = useParams();
@@ -87,6 +89,9 @@ const grandTotal =
   gst18 +
   gst5;
 
+  const owner = normalizeOwnership(invoice);
+  const salesmanLine = formatPersonLine(owner.salesmanName, owner.salesmanRole, owner.salesmanPhone);
+
   return (
     <div className="invoice">
       {/* HEADER */}
@@ -139,12 +144,14 @@ const grandTotal =
         </div>
 
         <div>
-          Sales Man: -<br/>
-          PI No: {invoice.order_number}<br/>
+          Sales Man: {salesmanLine || "—"}<br/>
+          PI No: {invoice.order_number || invoice.order_no}<br/>
           PI Date: {new Date().toLocaleDateString()}<br/>
           PI Validity: One Month
         </div>
       </div>
+
+      <DocumentOwnershipPanel data={invoice} docType="order" variant="screen" />
 
       {/* TABLE */}
       <table className="table">

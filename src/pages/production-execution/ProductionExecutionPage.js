@@ -623,6 +623,12 @@ function JobDetailDrawer({ jobId, onClose, onRefresh }) {
                               {Number(stage.completed_qty) > 0 && ` · Done: ${fmt(stage.completed_qty)}`}
                               {Number(stage.rejected_qty)  > 0 && ` · Rejected: ${fmt(stage.rejected_qty)}`}
                             </div>
+                            {(stage.operatorName || stage.movedByName) && (
+                              <div style={{ fontSize: 11, color: "#475569", marginTop: 2 }}>
+                                {stage.operatorName && <>Operator: <b>{stage.operatorName}</b></>}
+                                {stage.movedByName && <> · Moved by: <b>{stage.movedByName}</b></>}
+                              </div>
+                            )}
                           </div>
                           <StatusBadge status={stage.status} />
                         </div>

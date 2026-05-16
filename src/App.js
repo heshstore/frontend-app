@@ -72,12 +72,11 @@ import AttendancePage             from "./pages/workforce/AttendancePage";
 import LeaveRequestsPage          from "./pages/workforce/LeaveRequestsPage";
 import ShiftMasterPage            from "./pages/workforce/ShiftMasterPage";
 
-const BYPASS_AUTH = true; // DEBUG: set to false once auth is confirmed working
+const BYPASS_AUTH = false;
 
-/** Any authenticated user — used for public-ish protected pages (dashboard, etc.) */
+/** Any authenticated user */
 const PrivateRoute = ({ children }) => {
   if (BYPASS_AUTH) return children;
-
   const token = localStorage.getItem("access_token");
   const isLoggedIn = localStorage.getItem("isLoggedIn");
   if (token || isLoggedIn === "true") return children;
@@ -85,11 +84,11 @@ const PrivateRoute = ({ children }) => {
 };
 
 /**
- * Permission-gated route.
+ * Permission-gated route (matches sidebar + backend RBAC).
  * `permission` can be a single string or an array (any-of match).
- * Admin role always passes. Non-matching users are sent to /dashboard.
  */
 const PermissionRoute = ({ children, permission }) => {
+  if (BYPASS_AUTH) return children;
   const token = localStorage.getItem("access_token");
   const isLoggedIn = localStorage.getItem("isLoggedIn");
   if (!token && isLoggedIn !== "true") return <Navigate to="/" replace />;
@@ -120,60 +119,55 @@ function App() {
           <ToastContainer />
           <Routes>
 
-            {/* Login — no layout */}
             <Route path="/" element={<Login />} />
 
-            {/* All authenticated routes — rendered inside Layout via <Outlet /> */}
             <Route element={<Layout />}>
 
-              {/* Dashboard */}
-              <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+              <Route path="/dashboard" element={
+                <PermissionRoute permission={["order.view", "lead.view", "crm.analytics.self", "production.view", "payment.view", "invoice.view"]}>
+                  <Dashboard />
+                </PermissionRoute>
+              } />
 
-              {/* Orders */}
-              <Route path="/order" element={<PrivateRoute><OrderForm /></PrivateRoute>} />
-              <Route path="/order-list" element={<PrivateRoute><OrderList /></PrivateRoute>} />
-              <Route path="/orders" element={<PrivateRoute><OrderList /></PrivateRoute>} />
-              <Route path="/orders/:id" element={<PrivateRoute><OrderDetail /></PrivateRoute>} />
-              <Route path="/orders/:id/view" element={<PrivateRoute><OrderView /></PrivateRoute>} />
-              <Route path="/edit-order/:id" element={<PrivateRoute><OrderForm /></PrivateRoute>} />
-              <Route path="/pending-approval" element={<PrivateRoute><PendingApproval /></PrivateRoute>} />
+              <Route path="/order" element={<PermissionRoute permission="order.create"><OrderForm /></PermissionRoute>} />
+              <Route path="/order-list" element={<PermissionRoute permission="order.view"><OrderList /></PermissionRoute>} />
+              <Route path="/orders" element={<PermissionRoute permission="order.view"><OrderList /></PermissionRoute>} />
+              <Route path="/orders/:id" element={<PermissionRoute permission="order.view"><OrderDetail /></PermissionRoute>} />
+              <Route path="/orders/:id/view" element={<PermissionRoute permission="order.view"><OrderView /></PermissionRoute>} />
+              <Route path="/edit-order/:id" element={<PermissionRoute permission="order.edit"><OrderForm /></PermissionRoute>} />
+              <Route path="/pending-approval" element={<PermissionRoute permission="order.approve"><PendingApproval /></PermissionRoute>} />
 
-              {/* Quotations */}
-              <Route path="/quotation" element={<PrivateRoute><QuotationForm /></PrivateRoute>} />
-              <Route path="/quotations" element={<PrivateRoute><QuotationList /></PrivateRoute>} />
-              <Route path="/quotations/:id/view" element={<PrivateRoute><QuotationView /></PrivateRoute>} />
+              <Route path="/quotation" element={<PermissionRoute permission="quotation.create"><QuotationForm /></PermissionRoute>} />
+              <Route path="/quotations" element={<PermissionRoute permission="quotation.view"><QuotationList /></PermissionRoute>} />
+              <Route path="/quotations/:id/view" element={<PermissionRoute permission="quotation.view"><QuotationView /></PermissionRoute>} />
 
-              {/* Customers */}
-              <Route path="/customers" element={<PrivateRoute><CustomerList /></PrivateRoute>} />
-              <Route path="/add-customer" element={<PrivateRoute><AddCustomer /></PrivateRoute>} />
-              <Route path="/customer/create" element={<PrivateRoute><AddCustomer /></PrivateRoute>} />
-              <Route path="/edit-customer/:id" element={<PrivateRoute><EditCustomer /></PrivateRoute>} />
+              <Route path="/customers" element={<PermissionRoute permission="customer.view"><CustomerList /></PermissionRoute>} />
+              <Route path="/add-customer" element={<PermissionRoute permission="customer.create"><AddCustomer /></PermissionRoute>} />
+              <Route path="/customer/create" element={<PermissionRoute permission="customer.create"><AddCustomer /></PermissionRoute>} />
+              <Route path="/edit-customer/:id" element={<PermissionRoute permission="customer.view"><EditCustomer /></PermissionRoute>} />
 
-              <Route path="/service/tickets/:id" element={<PrivateRoute><ServiceTicketsPage /></PrivateRoute>} />
-              <Route path="/service/tickets" element={<PrivateRoute><ServiceTicketsPage /></PrivateRoute>} />
-              <Route path="/service/dashboard" element={<PrivateRoute><ServiceDashboardPage /></PrivateRoute>} />
-              <Route path="/service/amc" element={<PrivateRoute><AmcContractsPage /></PrivateRoute>} />
-              <Route path="/service/technicians" element={<PrivateRoute><TechniciansPage /></PrivateRoute>} />
+              <Route path="/service/tickets/:id" element={<PermissionRoute permission="customer.view"><ServiceTicketsPage /></PermissionRoute>} />
+              <Route path="/service/tickets" element={<PermissionRoute permission="customer.view"><ServiceTicketsPage /></PermissionRoute>} />
+              <Route path="/service/dashboard" element={<PermissionRoute permission="customer.view"><ServiceDashboardPage /></PermissionRoute>} />
+              <Route path="/service/amc" element={<PermissionRoute permission="customer.view"><AmcContractsPage /></PermissionRoute>} />
+              <Route path="/service/technicians" element={<PermissionRoute permission="staff.view"><TechniciansPage /></PermissionRoute>} />
 
-              {/* Items */}
-              <Route path="/add-item" element={<PrivateRoute><AddItem /></PrivateRoute>} />
-              <Route path="/edit-item/:id" element={<PrivateRoute><EditItem /></PrivateRoute>} />
-              <Route path="/items" element={<PrivateRoute><ItemList /></PrivateRoute>} />
-              <Route path="/shopify-items" element={<PrivateRoute><ShopifyItems /></PrivateRoute>} />
+              <Route path="/add-item" element={<PermissionRoute permission="item.create"><AddItem /></PermissionRoute>} />
+              <Route path="/edit-item/:id" element={<PermissionRoute permission="item.edit"><EditItem /></PermissionRoute>} />
+              <Route path="/items" element={<PermissionRoute permission="item.view"><ItemList /></PermissionRoute>} />
+              <Route path="/shopify-items" element={<PermissionRoute permission="item.view"><ShopifyItems /></PermissionRoute>} />
 
-              {/* Invoice */}
-              <Route path="/invoice/:id" element={<PrivateRoute><Invoice /></PrivateRoute>} />
-              <Route path="/payment/:orderId" element={<PrivateRoute><PaymentEntry /></PrivateRoute>} />
+              <Route path="/invoice/:id" element={<PermissionRoute permission="invoice.view"><Invoice /></PermissionRoute>} />
+              <Route path="/payment/:orderId" element={<PermissionRoute permission="payment.create"><PaymentEntry /></PermissionRoute>} />
 
-              {/* Accounts */}
-              <Route path="/set-credit-limit" element={<PrivateRoute><SetCreditLimit /></PrivateRoute>} />
-              <Route path="/accounts/outstanding" element={<PrivateRoute><OutstandingOrders /></PrivateRoute>} />
-              <Route path="/accounts/payment/:orderId" element={<PrivateRoute><PaymentForm /></PrivateRoute>} />
-              <Route path="/accounts/history/:orderId" element={<PrivateRoute><PaymentHistory /></PrivateRoute>} />
+              <Route path="/set-credit-limit" element={<PermissionRoute permission="customer.edit"><SetCreditLimit /></PermissionRoute>} />
+              <Route path="/accounts/outstanding" element={<PermissionRoute permission={["payment.view", "invoice.view"]}><OutstandingOrders /></PermissionRoute>} />
+              <Route path="/accounts/payment/:orderId" element={<PermissionRoute permission="payment.create"><PaymentForm /></PermissionRoute>} />
+              <Route path="/accounts/history/:orderId" element={<PermissionRoute permission="payment.view"><PaymentHistory /></PermissionRoute>} />
 
-              <Route path="/finance" element={<PrivateRoute><FinanceDashboardPage /></PrivateRoute>} />
-              <Route path="/finance/customer-payments" element={<PrivateRoute><CustomerPaymentsPage /></PrivateRoute>} />
-              <Route path="/finance/vendor-payments" element={<PrivateRoute><VendorPaymentsPage /></PrivateRoute>} />
+              <Route path="/finance" element={<PermissionRoute permission="payment.view"><FinanceDashboardPage /></PermissionRoute>} />
+              <Route path="/finance/customer-payments" element={<PermissionRoute permission="payment.view"><CustomerPaymentsPage /></PermissionRoute>} />
+              <Route path="/finance/vendor-payments" element={<PermissionRoute permission="payment.view"><VendorPaymentsPage /></PermissionRoute>} />
 
               <Route path="/workforce/hr" element={<PermissionRoute permission="staff.view"><HrDashboardPage /></PermissionRoute>} />
               <Route path="/workforce/profiles" element={<PermissionRoute permission="staff.view"><WorkforceProfilesPage /></PermissionRoute>} />
@@ -181,68 +175,50 @@ function App() {
               <Route path="/workforce/attendance" element={<PrivateRoute><AttendancePage /></PrivateRoute>} />
               <Route path="/workforce/leaves" element={<PrivateRoute><LeaveRequestsPage /></PrivateRoute>} />
 
-              {/* CRM */}
-              <Route path="/crm/leads" element={<PrivateRoute><LeadList /></PrivateRoute>} />
-              <Route path="/crm/leads/new" element={<PrivateRoute><LeadForm /></PrivateRoute>} />
-              <Route path="/crm/leads/:id" element={<PrivateRoute><LeadDetail /></PrivateRoute>} />
-              <Route path="/crm/queue" element={<PrivateRoute><LeadQueue /></PrivateRoute>} />
-              <Route path="/crm/analytics" element={<PrivateRoute><CrmAnalytics /></PrivateRoute>} />
-              <Route path="/crm/followups" element={<PrivateRoute><FollowUpView /></PrivateRoute>} />
-              <Route path="/crm/automation-settings" element={<PrivateRoute><AutomationSettings /></PrivateRoute>} />
-              <Route path="/whatsapp" element={<PrivateRoute><WhatsAppQR /></PrivateRoute>} />
+              <Route path="/crm/leads" element={<PermissionRoute permission="lead.view"><LeadList /></PermissionRoute>} />
+              <Route path="/crm/leads/new" element={<PermissionRoute permission="lead.create"><LeadForm /></PermissionRoute>} />
+              <Route path="/crm/leads/:id/edit" element={<PermissionRoute permission="lead.edit"><LeadForm /></PermissionRoute>} />
+              <Route path="/crm/leads/:id" element={<PermissionRoute permission="lead.view"><LeadDetail /></PermissionRoute>} />
+              <Route path="/crm/queue" element={<PermissionRoute permission="lead.view"><LeadQueue /></PermissionRoute>} />
+              <Route path="/crm/analytics" element={<PermissionRoute permission={["crm.analytics.self", "crm.analytics.team", "crm.analytics.all"]}><CrmAnalytics /></PermissionRoute>} />
+              <Route path="/crm/followups" element={<PermissionRoute permission="lead.view"><FollowUpView /></PermissionRoute>} />
+              <Route path="/crm/automation-settings" element={<PermissionRoute permission="lead.edit"><AutomationSettings /></PermissionRoute>} />
+              <Route path="/whatsapp" element={<PermissionRoute permission={["lead.view", "whatsapp.manage"]}><WhatsAppQR /></PermissionRoute>} />
               <Route path="/admin/whatsapp" element={<PermissionRoute permission="whatsapp.manage"><WhatsAppMonitor /></PermissionRoute>} />
 
-              {/* Production */}
+              <Route path="/dispatch/orders/:id" element={<PermissionRoute permission="dispatch.view"><DispatchOrdersPage /></PermissionRoute>} />
+              <Route path="/dispatch/orders" element={<PermissionRoute permission="dispatch.view"><DispatchOrdersPage /></PermissionRoute>} />
+              <Route path="/dispatch" element={<PermissionRoute permission="dispatch.view"><ReadyOrders /></PermissionRoute>} />
+              <Route path="/dispatch/create" element={<PermissionRoute permission="dispatch.create"><DispatchForm /></PermissionRoute>} />
+              <Route path="/dispatch/list" element={<PermissionRoute permission="dispatch.view"><DispatchList /></PermissionRoute>} />
 
-              {/* Dispatch */}
-              <Route path="/dispatch/orders/:id" element={<PrivateRoute><DispatchOrdersPage /></PrivateRoute>} />
-              <Route path="/dispatch/orders" element={<PrivateRoute><DispatchOrdersPage /></PrivateRoute>} />
-              <Route path="/dispatch" element={<PrivateRoute><ReadyOrders /></PrivateRoute>} />
-              <Route path="/dispatch/create" element={<PrivateRoute><DispatchForm /></PrivateRoute>} />
-              <Route path="/dispatch/list" element={<PrivateRoute><DispatchList /></PrivateRoute>} />
+              <Route path="/sla" element={<PermissionRoute permission="staff.view"><SlaDashboard /></PermissionRoute>} />
+              <Route path="/activity" element={<PermissionRoute permission="staff.view"><ActivityCenter /></PermissionRoute>} />
+              <Route path="/kpi" element={<PermissionRoute permission="staff.view"><KpiDashboard /></PermissionRoute>} />
 
-              {/* SLA */}
-              <Route path="/sla" element={<PrivateRoute><SlaDashboard /></PrivateRoute>} />
+              <Route path="/departments" element={<PermissionRoute permission="production.view"><DepartmentList /></PermissionRoute>} />
 
-              {/* Activity */}
-              <Route path="/activity" element={<PrivateRoute><ActivityCenter /></PrivateRoute>} />
+              <Route path="/inventory" element={<PermissionRoute permission="inventory.view"><InventoryPage /></PermissionRoute>} />
+              <Route path="/purchase-requirements" element={<PermissionRoute permission="inventory.view"><PurchaseRequirementsPage /></PermissionRoute>} />
+              <Route path="/vendors" element={<PermissionRoute permission="inventory.view"><VendorsPage /></PermissionRoute>} />
+              <Route path="/purchase-orders" element={<PermissionRoute permission="inventory.view"><PurchaseOrdersPage /></PermissionRoute>} />
+              <Route path="/purchase-orders/:id" element={<PermissionRoute permission="inventory.view"><PurchaseOrderDetailPage /></PermissionRoute>} />
+              <Route path="/production/execution" element={<PermissionRoute permission="production.view"><ProductionExecutionPage /></PermissionRoute>} />
+              <Route path="/manufacturing/analytics" element={<PermissionRoute permission="production.view"><ManufacturingAnalyticsPage /></PermissionRoute>} />
 
-              {/* KPI */}
-              <Route path="/kpi" element={<PrivateRoute><KpiDashboard /></PrivateRoute>} />
-
-              {/* Manufacturing / BOQ */}
-              <Route path="/departments" element={<PrivateRoute><DepartmentList /></PrivateRoute>} />
-
-              {/* Inventory */}
-              <Route path="/inventory"              element={<PrivateRoute><InventoryPage /></PrivateRoute>} />
-              <Route path="/purchase-requirements"    element={<PrivateRoute><PurchaseRequirementsPage /></PrivateRoute>} />
-              <Route path="/vendors"                  element={<PrivateRoute><VendorsPage /></PrivateRoute>} />
-              <Route path="/purchase-orders"          element={<PrivateRoute><PurchaseOrdersPage /></PrivateRoute>} />
-              <Route path="/purchase-orders/:id"      element={<PrivateRoute><PurchaseOrderDetailPage /></PrivateRoute>} />
-              <Route path="/production/execution"    element={<PrivateRoute><ProductionExecutionPage /></PrivateRoute>} />
-              <Route path="/manufacturing/analytics"   element={<PrivateRoute><ManufacturingAnalyticsPage /></PrivateRoute>} />
-
-              {/* Staff & Settings */}
               <Route path="/staff" element={<PermissionRoute permission="staff.view"><StaffManagement /></PermissionRoute>} />
               <Route path="/rbac" element={<PermissionRoute permission="rbac.manage"><RbacMatrix /></PermissionRoute>} />
 
-              {/* Notification Center */}
               <Route path="/notifications" element={<PrivateRoute><NotificationCenter /></PrivateRoute>} />
 
-              {/* Placeholder routes */}
-              <Route path="/accounts" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-              <Route path="/delivery" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+              <Route path="/accounts" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/delivery" element={<Navigate to="/dashboard" replace />} />
 
             </Route>
 
-            {/* Print pages — outside Layout (no sidebar/navbar) */}
-            <Route path="/quotations/:id/print" element={<PrivateRoute><QuotationPrint /></PrivateRoute>} />
-            <Route path="/orders/:id/print" element={<PrivateRoute><OrderPrint /></PrivateRoute>} />
+            <Route path="/quotations/:id/print" element={<PermissionRoute permission="quotation.view"><QuotationPrint /></PermissionRoute>} />
+            <Route path="/orders/:id/print" element={<PermissionRoute permission="order.view"><OrderPrint /></PermissionRoute>} />
 
-            {/* Debug route — outside Layout, no auth */}
-            <Route path="/test" element={<div style={{ padding: 20, fontSize: 18 }}>TEST PAGE WORKS</div>} />
-
-            {/* Catch-all */}
             <Route path="*" element={<Navigate to="/" replace />} />
 
           </Routes>

@@ -52,19 +52,21 @@ function DispatchOrderList() {
                 <th style={{ padding: 12 }}>Dispatch #</th>
                 <th style={{ padding: 12 }}>Order</th>
                 <th style={{ padding: 12 }}>Customer</th>
+                <th style={{ padding: 12 }}>Salesman</th>
                 <th style={{ padding: 12 }}>Status</th>
                 <th style={{ padding: 12 }} />
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 && (
-                <tr><td colSpan={5} style={{ padding: 28, color: "#94a3b8", textAlign: "center" }}>No dispatch orders yet.</td></tr>
+                <tr><td colSpan={6} style={{ padding: 28, color: "#94a3b8", textAlign: "center" }}>No dispatch orders yet.</td></tr>
               )}
               {rows.map((r) => (
                 <tr key={r.id} style={{ borderTop: "1px solid #e2e8f0" }}>
                   <td style={{ padding: 12, fontWeight: 700 }}>{r.dispatch_number ?? r.dispatchNumber}</td>
                   <td style={{ padding: 12 }}>{r.orderNo ?? r.order_no}</td>
                   <td style={{ padding: 12 }}>{r.customerName ?? r.customer_name}</td>
+                  <td style={{ padding: 12, fontSize: 12 }}>{r.salesman_name ?? "—"}</td>
                   <td style={{ padding: 12, color: ST[r.status] ?? "#64748b", fontWeight: 700 }}>{r.status?.replace(/_/g, " ")}</td>
                   <td style={{ padding: 12 }}>
                     <Link to={`/dispatch/orders/${r.id}`} style={{ color: "#005fb8", fontWeight: 700 }}>Open</Link>
@@ -215,6 +217,13 @@ function DispatchOrderDetail({ id }) {
           <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 700 }}>DISPATCH</div>
           <div style={{ fontSize: 20, fontWeight: 800 }}>{doc.dispatch_number ?? doc.dispatchNumber}</div>
           <div style={{ fontSize: 13, color: "#64748b" }}>{doc.orderNo ?? doc.order_no} · {doc.customerName ?? doc.customer_name}</div>
+          {(doc.salesman_name || doc.packed_by_name || doc.dispatched_by_name) && (
+            <div style={{ fontSize: 12, color: "#475569", marginTop: 6 }}>
+              {doc.salesman_name && <>Salesman: <b>{doc.salesman_name}</b> · </>}
+              {doc.packed_by_name && <>Packed by: <b>{doc.packed_by_name}</b> · </>}
+              {doc.dispatched_by_name && <>Dispatched by: <b>{doc.dispatched_by_name}</b></>}
+            </div>
+          )}
         </div>
         <span style={{ fontWeight: 800, color: ST[status] ?? "#64748b" }}>{status?.replace(/_/g, " ")}</span>
       </div>
