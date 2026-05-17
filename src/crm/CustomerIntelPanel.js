@@ -492,6 +492,55 @@ export default function CustomerIntelPanel({ match, leadId }) {
             </div>
           )}
 
+          {/* Conversion Timeline Intelligence */}
+          {match.conversionTimeline && (
+            match.conversionTimeline.avgSalesCycleDays !== null ||
+            match.conversionTimeline.mostCommonObjection !== null ||
+            match.conversionTimeline.repeatLeadFrequency > 1
+          ) && (() => {
+            const ct = match.conversionTimeline;
+            return (
+              <div style={{
+                background: '#f0f9ff', border: '1px solid #bae6fd',
+                borderRadius: 7, padding: '9px 12px', marginBottom: 12,
+              }}>
+                <div style={{
+                  fontSize: 10, fontWeight: 700, color: '#0369a1',
+                  textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 7,
+                }}>
+                  Buying Pattern
+                </div>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: ct.mostCommonObjection ? 7 : 0 }}>
+                  {ct.avgSalesCycleDays !== null && (
+                    <div style={{ background: '#fff', border: '1px solid #bae6fd', borderRadius: 6, padding: '6px 10px', flex: 1, minWidth: 80 }}>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: '#0369a1' }}>{ct.avgSalesCycleDays}d</div>
+                      <div style={{ fontSize: 10, color: '#6b7280', textTransform: 'uppercase', fontWeight: 600, marginTop: 2 }}>Avg Sales Cycle</div>
+                    </div>
+                  )}
+                  {ct.convertedLeads > 0 && (
+                    <div style={{ background: '#fff', border: '1px solid #bae6fd', borderRadius: 6, padding: '6px 10px', flex: 1, minWidth: 80 }}>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: '#15803d' }}>{ct.convertedLeads}×</div>
+                      <div style={{ fontSize: 10, color: '#6b7280', textTransform: 'uppercase', fontWeight: 600, marginTop: 2 }}>Converted</div>
+                    </div>
+                  )}
+                  {ct.repeatLeadFrequency > 1 && (
+                    <div style={{ background: '#fff', border: '1px solid #bae6fd', borderRadius: 6, padding: '6px 10px', flex: 1, minWidth: 80 }}>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: '#7c3aed' }}>{ct.totalLeads}</div>
+                      <div style={{ fontSize: 10, color: '#6b7280', textTransform: 'uppercase', fontWeight: 600, marginTop: 2 }}>Total Leads</div>
+                    </div>
+                  )}
+                </div>
+                {ct.mostCommonObjection && (
+                  <div style={{ fontSize: 11, color: '#374151' }}>
+                    <span style={{ fontWeight: 700, color: '#9a3412' }}>Common objection: </span>
+                    {ct.mostCommonObjection}
+                    <span style={{ color: '#9ca3af', marginLeft: 4 }}>— known blocker, address proactively</span>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
           {/* Channels + Salesmen */}
           {(channels.length > 0 || salesmen.length > 0) && (
             <div style={{

@@ -12,6 +12,22 @@ import { toast } from '../utils/toast';
 import { WAITING_L2_MINS, WAITING_L3_MINS, OVERDUE_MINS, VALID_TRANSITIONS } from './crmConstants';
 import CustomerIntelPanel from './CustomerIntelPanel';
 import { SOURCE_LABELS } from './crmSourceLabels';
+import LeadHealthBar from './components/LeadHealthBar';
+import LeadMissionBlock from './components/LeadMissionBlock';
+import ManagerInterventionPanel from './components/ManagerInterventionPanel';
+import OutcomeNextSteps from './components/OutcomeNextSteps';
+import LeadFollowupsPanel from './components/LeadFollowupsPanel';
+import CollapsibleSection from './components/CollapsibleSection';
+import PriorityBadges from './components/PriorityBadges';
+import { needsManagerIntervention } from './crmCockpit';
+import {
+  getCrmVisibilityMode,
+  isTelecallerMode,
+  isManagerMode,
+  isAdminMode,
+  wfStateLabel,
+  slaLabel,
+} from './crmVisibility';
 
 const URGENCY_BG = { HIGH: '#fff3f3', MEDIUM: '#fffbea', LOW: '#f8f9fa' };
 const URGENCY_BORDER = { HIGH: '#dc3545', MEDIUM: '#ffc107', LOW: '#6c757d' };
@@ -30,8 +46,6 @@ const STATUS_DESCRIPTIONS = {
 };
 // Forward stages shown in order; LOST is visually separated below
 const FORWARD_STATUSES = ['NEW', 'CONTACTED', 'INTERESTED', 'QUOTATION', 'CONVERTED'];
-const NOTE_TYPES = ['GENERAL'];
-
 
 function waitingInfo(lead) {
   if (!lead || ['CONVERTED', 'LOST'].includes(lead.status)) return null;
@@ -48,6 +62,60 @@ function waitingInfo(lead) {
   if (waitMins >= WAITING_L3_MINS) return { text: `WAITING · ${age}`, bg: '#ffedd5', color: '#9a3412', border: '#fb923c' };
   return { text: `WAITING · ${age}`, bg: '#fef9c3', color: '#854d0e', border: '#fde047' };
 }
+
+// ── SLA helpers (mirror backend computeSlaStatus / countdown) ────────────────
+// These derive from next_action_due_at only — never follow_up_date.
+
+function computeSlaStatus(nextActionDueAt) {
+  if (!nextActionDueAt) return 'NONE';
+  const diffMs = new Date(nextActionDueAt) - Date.now();
+  if (diffMs > 2 * 3_600_000)    return 'ON_TIME';
+  if (diffMs >= 0)               return 'DUE_SOON';
+  if (diffMs >= -24 * 3_600_000) return 'OVERDUE';
+  return 'CRITICAL';
+}
+
+function slaCountdown(nextActionDueAt) {
+  if (!nextActionDueAt) return null;
+  const diffMs = new Date(nextActionDueAt) - Date.now();
+  const absMins  = Math.abs(Math.round(diffMs / 60_000));
+  const absHours = Math.floor(absMins / 60);
+  const absDays  = Math.floor(absHours / 24);
+  if (diffMs > 0) {
+    if (absMins < 60)   return `Due in ${absMins}m`;
+    if (absMins < 1440) return `Due in ${absHours}h`;
+    return `Due in ${absDays}d`;
+  }
+  if (absMins < 60)   return `Overdue by ${absMins}m`;
+  if (absMins < 1440) return `Overdue by ${absHours}h`;
+  return `Overdue by ${absDays}d`;
+}
+
+const SLA_STATUS_STYLE = {
+  ON_TIME:  { bg: '#dcfce7', color: '#15803d', border: '#86efac', label: 'On Time'  },
+  DUE_SOON: { bg: '#fef3c7', color: '#92400e', border: '#fde68a', label: 'Due Soon' },
+  OVERDUE:  { bg: '#fee2e2', color: '#b91c1c', border: '#fca5a5', label: 'Overdue'  },
+  CRITICAL: { bg: '#4c0519', color: '#fecdd3', border: '#9f1239', label: 'Critical' },
+  NONE:     { bg: '#f3f4f6', color: '#6b7280', border: '#e5e7eb', label: ''         },
+};
+
+const WF_STATE_LABEL = {
+  FIRST_CALL:      '📞 First Call',
+  FOLLOW_UP:       '🔄 Follow Up',
+  NO_ANSWER_1:     '📵 No Answer ×1',
+  NO_ANSWER_2:     '📵 No Answer ×2',
+  NO_ANSWER_ESC:   '🚨 Escalated',
+  CALLBACK_WAIT:   '⏰ Callback Wait',
+  SEND_QUOTATION:  '📄 Send Quotation',
+  CHASE_QUOTATION: '📋 Chase Quotation',
+  NEGOTIATING:     '🤝 Negotiating',
+  NURTURE:         '🌱 Nurture',
+  CONVERTED:       '✅ Converted',
+  LOST:            '❌ Lost',
+};
+
+// States where a structured outcome is required — generic CALL logging is warned
+const CRITICAL_WF_STATES = new Set(['CALLBACK_WAIT', 'SEND_QUOTATION', 'CHASE_QUOTATION', 'NEGOTIATING']);
 
 export default function LeadDetail() {
   const { id } = useParams();
@@ -77,6 +145,8 @@ export default function LeadDetail() {
   const [customerMatch, setCustomerMatch] = useState(undefined); // undefined=loading, null=no match
   const [pendingStatus, setPendingStatus] = useState(null); // status awaiting confirmation
   const [showOverride, setShowOverride] = useState(false);  // manager/admin override toggle
+  const [postOutcomeGuide, setPostOutcomeGuide] = useState(null);
+  const managerPanelRef = useRef(null);
 
   // ── Call timer
   const [callStage, setCallStage] = useState('idle'); // idle | calling | connected | not_reached
@@ -399,17 +469,29 @@ export default function LeadDetail() {
         noteText  = parts.join('. ');
         newStatus = decision?.nextAction?.nextStatusOnComplete;
       } else if (outcomeMode === 'NO_ANSWER') {
-        noteText  = `📵 No answer${durPart}. ${outcomeForm.note || ''}`.trimEnd();
-        const t9am = new Date(); t9am.setDate(t9am.getDate() + 1); t9am.setHours(9, 0, 0, 0);
-        fuDate    = outcomeForm.followUpDate || t9am.toISOString();
-        fuNote    = 'No answer — rescheduled';
+        noteText = `📵 No answer${durPart}. ${outcomeForm.note || ''}`.trimEnd();
+        // Rotate retry time by attempt count so we don't always call at the same hour
+        const noAnswerCount = decision?.outcomeHistory?.noAnswerCount ?? 0;
+        let defaultRetry;
+        if (noAnswerCount === 0) {
+          defaultRetry = new Date(); defaultRetry.setDate(defaultRetry.getDate() + 1); defaultRetry.setHours(9, 0, 0, 0);
+        } else if (noAnswerCount === 1) {
+          // Second no-answer → try same-day 4pm (different slot)
+          defaultRetry = new Date(); defaultRetry.setHours(16, 0, 0, 0);
+          if (defaultRetry <= new Date()) { defaultRetry.setDate(defaultRetry.getDate() + 1); defaultRetry.setHours(16, 0, 0, 0); }
+        } else {
+          // Third+ → day after tomorrow 11am
+          defaultRetry = new Date(); defaultRetry.setDate(defaultRetry.getDate() + 2); defaultRetry.setHours(11, 0, 0, 0);
+        }
+        fuDate = outcomeForm.followUpDate || defaultRetry.toISOString();
+        fuNote = `No answer (attempt ${noAnswerCount + 1}) — rescheduled`;
       } else if (outcomeMode === 'LATER') {
         const parts = ['⏰ Will buy later' + durPart];
         if (outcomeForm.reason) parts.push(outcomeForm.reason);
         if (outcomeForm.note)   parts.push(outcomeForm.note);
-        noteText  = parts.join('. ');
-        fuDate    = outcomeForm.followUpDate;
-        fuNote    = outcomeForm.reason || 'Will buy later';
+        noteText = parts.join('. ');
+        fuDate   = outcomeForm.followUpDate;
+        fuNote   = outcomeForm.reason || 'Will buy later';
       } else if (outcomeMode === 'NOT_INTERESTED') {
         const parts = ['❌ Not interested' + durPart];
         if (outcomeForm.reason)        parts.push(outcomeForm.reason);
@@ -422,7 +504,7 @@ export default function LeadDetail() {
       if (newStatus === 'CONVERTED') {
         await apiFetch(`/crm/leads/${id}/log-action`, {
           method: 'POST',
-          body: JSON.stringify({ note: noteText, noteType: 'CALL' }),
+          body: JSON.stringify({ note: noteText, noteType: 'CALL', outcomeType: outcomeMode }),
         });
         setWaCtaMsg(buildWaMessage('INTERESTED'));
         setWaTracked(false);
@@ -432,7 +514,7 @@ export default function LeadDetail() {
 
       const res = await apiFetch(`/crm/leads/${id}/log-action`, {
         method: 'POST',
-        body: JSON.stringify({ note: noteText, noteType: 'CALL', ...(newStatus ? { newStatus } : {}) }),
+        body: JSON.stringify({ note: noteText, noteType: 'CALL', outcomeType: outcomeMode, ...(newStatus ? { newStatus } : {}), ...(outcomeForm.objectionType ? { objectionType: outcomeForm.objectionType } : {}), ...(outcomeMode === 'LATER' && fuDate ? { callbackDate: fuDate } : {}) }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -445,9 +527,24 @@ export default function LeadDetail() {
           method: 'POST',
           body: JSON.stringify({ due_date: fuDate, note: fuNote }),
         });
+        // LATER outcome: snooze automation until callback time so WA reminders don't
+        // fire while the customer is waiting for the promised callback
+        if (outcomeMode === 'LATER') {
+          const durationMins = Math.round((new Date(fuDate) - new Date()) / 60_000);
+          if (durationMins > 0) {
+            const snoozeReason = outcomeForm.reason
+              ? `Customer callback promised: ${outcomeForm.reason}`
+              : 'Customer asked to be called back later';
+            await apiFetch(`/crm/leads/${id}/automation/snooze`, {
+              method: 'POST',
+              body: JSON.stringify({ durationMins, reason: snoozeReason }),
+            });
+          }
+        }
       }
 
       setWaCtaMsg(buildWaMessage(outcomeMode));
+      setPostOutcomeGuide(outcomeMode);
       setWaTracked(false);
       setOutcomeMode(null);
       setOutcomeForm({ note: '', quantity: '', budget: '', requirement: '', reason: '', followUpDate: '', objectionType: '' });
@@ -474,7 +571,26 @@ export default function LeadDetail() {
   const wInfo = waitingInfo(lead);
   const canConvert = hasPermission('lead.convert') && lead.status !== 'CONVERTED' && lead.status !== 'LOST';
   const canEdit = hasPermission('lead.edit');
+  const crmMode = getCrmVisibilityMode(currentUser, hasPermission);
   const phoneDigits = normalizePhoneForWhatsApp(lead.phone);
+  const missionBlockProps = {
+    lead,
+    decision,
+    phoneDigits,
+    theme,
+    callStage,
+    setCallStage,
+    setCallSecs,
+    callSecs,
+    setOutcomeMode,
+    fmtSecs,
+    mode: crmMode,
+    onManagerFocus: () => managerPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+    onCreateQuotation: () => {
+      if (lead.customer_id) navigate(`/quotation?customerId=${lead.customer_id}&leadId=${id}`);
+      else navigate(`/quotation?leadId=${id}`);
+    },
+  };
 
   return (
     <PageLayout title={`Lead: ${lead.name}`}>
@@ -486,8 +602,9 @@ export default function LeadDetail() {
         />
       )}
 
-      {/* Customer Intelligence Panel */}
-      <CustomerIntelPanel match={customerMatch} leadId={id} />
+      <CollapsibleSection title="Customer intelligence" defaultOpen={!isTelecallerMode(crmMode)}>
+        <CustomerIntelPanel match={customerMatch} leadId={id} />
+      </CollapsibleSection>
 
       {/* ── Unified Telecaller Workspace ─────────────────────────────────────── */}
       <div style={{
@@ -501,7 +618,114 @@ export default function LeadDetail() {
         overflow: 'hidden',
       }}>
 
-        {/* ── Header: identity + badges ── */}
+        {/* ── Operation Strip (manager / admin) ── */}
+        {!isTelecallerMode(crmMode) && (() => {
+          const slaStatus       = computeSlaStatus(lead.next_action_due_at);
+          const countdown       = slaCountdown(lead.next_action_due_at);
+          const slaStyle        = SLA_STATUS_STYLE[slaStatus];
+          const wfLabel         = isAdminMode(crmMode)
+            ? lead.workflow_state
+            : (WF_STATE_LABEL[lead.workflow_state] || wfStateLabel(lead.workflow_state, crmMode));
+          const isEscalated     = Array.isArray(lead.tags) && lead.tags.includes('needs_manager_review');
+          const isStale         = Array.isArray(lead.tags) && lead.tags.includes('stale_lead');
+          const isBlocked       = (lead.no_answer_count ?? 0) >= 5;
+          const isCallbackAbuse = Array.isArray(lead.tags) && lead.tags.includes('callback_abuse_risk');
+          const isSnoozedOp     = !!lead.automation_snooze_until && new Date(lead.automation_snooze_until) > new Date();
+          const isPausedOp      = Array.isArray(lead.tags) && lead.tags.includes('automation_off') && !isSnoozedOp;
+          const autoLabel       = isSnoozedOp ? '⏸ SNOOZED' : isPausedOp ? '⏸ PAUSED' : '🤖 ACTIVE';
+          const autoColor       = isSnoozedOp ? '#92400e' : isPausedOp ? '#b91c1c' : '#15803d';
+          const autoBg          = isSnoozedOp ? '#fef3c7' : isPausedOp ? '#fee2e2' : '#dcfce7';
+          const lockInfo        = lead.lockInfo;
+          const isLockedByOther = lockInfo && lockInfo.userId !== lead._currentUserId;
+          return (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
+              background: '#1e293b', borderBottom: '1px solid #334155', flexWrap: 'wrap',
+            }}>
+              {wfLabel && (
+                <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: '#334155', color: '#e2e8f0' }}>
+                  {wfLabel}
+                </span>
+              )}
+              {slaStatus !== 'NONE' && (
+                <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: slaStyle.bg, color: slaStyle.color, border: `1px solid ${slaStyle.border}` }}>
+                  {isAdminMode(crmMode) ? slaStatus : (slaLabel(slaStatus, crmMode) || slaStyle.label)}
+                </span>
+              )}
+              {countdown && (
+                <span style={{ fontSize: 11, fontWeight: 600, color: (slaStatus === 'CRITICAL' || slaStatus === 'OVERDUE') ? '#fca5a5' : '#94a3b8', fontFamily: 'monospace' }}>
+                  {countdown}
+                </span>
+              )}
+              {isEscalated && (
+                <span style={{ fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 4, background: '#7f1d1d', color: '#fecdd3', border: '1px solid #9f1239', letterSpacing: 0.3 }}>
+                  🚨 MANAGER REVIEW
+                </span>
+              )}
+              {isStale && (
+                <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: '#fef9c3', color: '#854d0e', border: '1px solid #fde047' }}>
+                  ⚠ STALE
+                </span>
+              )}
+              {isBlocked && (
+                <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5' }}>
+                  🚫 BLOCKED
+                </span>
+              )}
+              {isCallbackAbuse && (
+                <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: '#fff7ed', color: '#c2410c', border: '1px solid #fdba74' }}>
+                  🔁 CALLBACK ABUSE
+                </span>
+              )}
+              {isLockedByOther && (
+                <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: '#1e3a5f', color: '#93c5fd', border: '1px solid #3b82f6' }}>
+                  🔒 {lockInfo.userName}
+                </span>
+              )}
+              <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: autoBg, color: autoColor }}>
+                {autoLabel}
+              </span>
+            </div>
+          );
+        })()}
+
+        <LeadHealthBar lead={lead} mode={crmMode} />
+
+        <LeadMissionBlock {...missionBlockProps} />
+
+        {isManagerMode(crmMode) && needsManagerIntervention(lead) && (
+          <div ref={managerPanelRef} style={{ padding: '10px 16px 0' }}>
+            <ManagerInterventionPanel
+              lead={lead}
+              decision={decision}
+              canEdit={canEdit}
+              onReassign={() => setShowReassign(true)}
+              onOverride={() => setShowOverride(true)}
+              onMarkLost={() => handleStatusChange('LOST')}
+              onSnooze={() => setShowSnoozePanel(true)}
+              onForceQuotation={() => {
+                if (lead.customer_id) {
+                  navigate(`/quotation?customerId=${lead.customer_id}&leadId=${id}`);
+                } else if (hasPermission('quotation.view')) {
+                  navigate(`/quotation?leadId=${id}`);
+                }
+              }}
+            />
+          </div>
+        )}
+
+        {isTelecallerMode(crmMode) ? (
+          <div style={{ padding: '8px 16px', borderBottom: `1px solid ${theme.border}`, display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+            {lead.phone ? (
+              <a href={`tel:+91${phoneDigits}`} style={{ fontSize: 15, fontWeight: 700, color: theme.primary, textDecoration: 'none' }}>{lead.phone}</a>
+            ) : (
+              <span style={{ fontSize: 13, color: '#9ca3af' }}>No phone</span>
+            )}
+            {lead.lead_ref && <span style={{ fontSize: 11, color: '#64748b', fontFamily: 'monospace' }}>{lead.lead_ref}</span>}
+            {lead.city && <span style={{ fontSize: 12, color: '#9ca3af' }}>{lead.city}</span>}
+            <span style={{ marginLeft: 'auto', fontSize: 11, color: theme.textMuted }}>{lead.assignedUser?.name || 'Unassigned'}</span>
+          </div>
+        ) : (
         <div style={{
           background: wInfo ? wInfo.bg :
             (decision?.nextAction?.urgency ? URGENCY_BG[decision.nextAction.urgency] : '#f8f9fa'),
@@ -521,15 +745,14 @@ export default function LeadDetail() {
                   {lead.lead_ref}
                 </span>
               )}
-              {decision?.nextAction?.label && decision.nextAction.action !== 'NONE' && (
-                <span style={{
-                  fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 10,
-                  background: URGENCY_BORDER[decision.nextAction.urgency] || '#374151',
-                  color: '#fff',
-                }}>
-                  {decision.nextAction.label}
-                </span>
-              )}
+              <PriorityBadges
+                lead={lead}
+                mode={crmMode}
+                slaStatus={computeSlaStatus(lead.next_action_due_at)}
+                lockInfo={lead.lockInfo}
+                currentUserId={lead._currentUserId ?? currentUser?.id}
+                showCountdown
+              />
               {wInfo && (
                 <span style={{
                   fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 10,
@@ -730,6 +953,7 @@ export default function LeadDetail() {
             </div>
           )}
         </div>
+        )}
 
         {/* ── Journey summary strip ── */}
         {lead.journey && (lead.journey.quotations?.length > 0 || lead.journey.orders?.length > 0) && (
@@ -802,24 +1026,6 @@ export default function LeadDetail() {
           </div>
         )}
 
-        {/* ── Call script — always visible when present, no toggle ── */}
-        {decision?.nextAction?.script && (
-          <div style={{ padding: '12px 16px', background: '#fffbeb', borderBottom: '1px solid #fde68a' }}>
-            <div style={{
-              fontSize: 10, fontWeight: 700, color: '#92400e',
-              textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6,
-            }}>
-              📞 Call Script
-            </div>
-            <pre style={{
-              margin: 0, fontSize: 13, color: '#1f2937',
-              whiteSpace: 'pre-wrap', fontFamily: 'inherit', lineHeight: 1.65,
-            }}>
-              {decision.nextAction.script}
-            </pre>
-          </div>
-        )}
-
         {/* ── Lead context: requirement + notes ── */}
         {(lead.requirement_note || lead.notes) && (
           <div style={{ padding: '10px 16px', background: '#f8fafc', borderBottom: `1px solid ${theme.border}` }}>
@@ -836,45 +1042,6 @@ export default function LeadDetail() {
             {lead.notes && (
               <div style={{ fontSize: 12, color: '#374151' }}>
                 <strong>Notes:</strong> {lead.notes}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── CALL CONTROLS ── */}
-        {decision?.nextAction && decision.nextAction.action !== 'NONE' && lead.phone && (
-          <div style={{ padding: '10px 16px', borderBottom: `1px solid ${theme.border}` }}>
-            {callStage === 'idle' && (
-              <button
-                onClick={() => {
-                  window.location.href = `tel:+91${phoneDigits}`;
-                  setTimeout(() => { setCallStage('calling'); setCallSecs(0); }, 600);
-                }}
-                style={{ width: '100%', padding: '11px', background: theme.primary, color: '#fff', border: 'none', borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}
-              >
-                📞 Start Call — {lead.phone}
-              </button>
-            )}
-            {callStage !== 'idle' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#0369a1', fontFamily: 'monospace', background: '#e0f2fe', padding: '4px 10px', borderRadius: 6 }}>
-                  {callStage === 'calling' ? '📞' : callStage === 'connected' ? '✅' : '❌'} {fmtSecs(callSecs)}
-                </span>
-                {callStage === 'calling' && (
-                  <>
-                    <button onClick={() => setCallStage('connected')} style={{ padding: '6px 14px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                      ✅ Connected
-                    </button>
-                    <button onClick={() => { setCallStage('not_reached'); setOutcomeMode('NO_ANSWER'); }} style={{ padding: '6px 14px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                      ❌ No Answer
-                    </button>
-                  </>
-                )}
-                {callStage !== 'idle' && (
-                  <button onClick={() => { setCallStage('idle'); setCallSecs(0); }} style={{ marginLeft: 'auto', padding: '4px 10px', background: '#f3f4f6', color: '#6b7280', border: '1px solid #e5e7eb', borderRadius: 5, fontSize: 11, cursor: 'pointer' }}>
-                    Reset
-                  </button>
-                )}
               </div>
             )}
           </div>
@@ -954,6 +1121,11 @@ export default function LeadDetail() {
                 </button>
               ))}
             </div>
+            {isManagerMode(crmMode) && CRITICAL_WF_STATES.has(lead.workflow_state) && !outcomeMode && (
+              <div style={{ padding: '7px 10px', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 6, marginBottom: 8, fontSize: 12, color: '#9a3412', fontWeight: 600 }}>
+                ⚠️ Please select an outcome for this stage before logging the call.
+              </div>
+            )}
 
             {/* INTERESTED */}
             {outcomeMode === 'INTERESTED' && (
@@ -990,10 +1162,17 @@ export default function LeadDetail() {
             )}
 
             {/* NO ANSWER */}
-            {outcomeMode === 'NO_ANSWER' && (
+            {outcomeMode === 'NO_ANSWER' && (() => {
+              const noAns = decision?.outcomeHistory?.noAnswerCount ?? 0;
+              const attemptLabel = noAns === 0
+                ? 'Auto-schedules retry for tomorrow 9 AM'
+                : noAns === 1
+                ? 'Attempt 2 — try a different time slot (suggested: today 4 PM)'
+                : `Attempt ${noAns + 1} — consider escalating or trying WhatsApp`;
+              return (
               <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, padding: 12 }}>
                 <div style={{ fontSize: 12, color: '#374151', marginBottom: 8 }}>
-                  Auto-schedules follow-up for <strong>tomorrow at 9:00 AM</strong> unless you pick a different time:
+                  {attemptLabel}:
                 </div>
                 <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
                   {presetFollowUpTimes().map((p) => (
@@ -1008,7 +1187,8 @@ export default function LeadDetail() {
                   {submittingOutcome ? 'Saving...' : 'Save & Schedule Follow-up'}
                 </button>
               </div>
-            )}
+              );
+            })()}
 
             {/* LATER */}
             {outcomeMode === 'LATER' && (
@@ -1029,6 +1209,11 @@ export default function LeadDetail() {
                   <input type="datetime-local" style={{ width: '100%', padding: '7px 10px', borderRadius: 5, border: '1px solid #fde68a', fontSize: 13, boxSizing: 'border-box' }} value={outcomeForm.followUpDate} onChange={(e) => setOutcomeForm((f) => ({ ...f, followUpDate: e.target.value }))} />
                 </div>
                 <input style={{ width: '100%', padding: '7px 10px', borderRadius: 5, border: '1px solid #fde68a', fontSize: 13, boxSizing: 'border-box', marginBottom: 10 }} placeholder="Additional note..." value={outcomeForm.note} onChange={(e) => setOutcomeForm((f) => ({ ...f, note: e.target.value }))} />
+                {outcomeForm.followUpDate && isManagerMode(crmMode) && (
+                  <div style={{ fontSize: 11, color: '#92400e', background: '#fef9c3', borderRadius: 5, padding: '5px 8px', marginBottom: 8 }}>
+                    ⏸ Reminders paused until callback time.
+                  </div>
+                )}
                 <button onClick={logStructuredOutcome} disabled={submittingOutcome || !outcomeForm.followUpDate} style={{ width: '100%', padding: '9px', background: '#92400e', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: (submittingOutcome || !outcomeForm.followUpDate) ? 0.7 : 1 }}>
                   {submittingOutcome ? 'Saving...' : 'Save Follow-up'}
                 </button>
@@ -1056,6 +1241,26 @@ export default function LeadDetail() {
                   </select>
                 </div>
                 <input style={{ width: '100%', padding: '7px 10px', borderRadius: 5, border: '1px solid #e5e7eb', fontSize: 13, boxSizing: 'border-box', marginBottom: 10 }} placeholder="Note..." value={outcomeForm.note} onChange={(e) => setOutcomeForm((f) => ({ ...f, note: e.target.value }))} />
+                {/* Objection routing suggestion — shown once objection type is selected */}
+                {outcomeForm.objectionType && (() => {
+                  const ROUTING = {
+                    HIGH_PRICE:   { label: 'Re-engage in 14 days with revised pricing',   bg: '#fef9c3', color: '#713f12' },
+                    TIMING:       { label: 'Re-engage in 30 days when timing is right',    bg: '#fef9c3', color: '#713f12' },
+                    EMI:          { label: 'Share EMI options + re-engage in 7 days',      bg: '#ede9fe', color: '#4c1d95' },
+                    COMPETITOR:   { label: 'Re-engage in 60 days or mark as Lost',         bg: '#fee2e2', color: '#7f1d1d' },
+                    QUALITY:      { label: 'Escalate to manager — share references/samples', bg: '#fff1f2', color: '#9f1239' },
+                    NOT_NEEDED:   { label: 'No requirement — recommend marking Lost',       bg: '#f1f5f9', color: '#475569' },
+                    CREDIT:       { label: 'Escalate to manager for credit terms',          bg: '#fef3c7', color: '#78350f' },
+                    OTHER:        null,
+                  }[outcomeForm.objectionType];
+                  if (!ROUTING) return null;
+                  return (
+                    <div style={{ background: ROUTING.bg, border: `1px solid ${ROUTING.color}33`, borderRadius: 6, padding: '7px 10px', marginBottom: 10 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: ROUTING.color }}>⚡ Suggested next step: </span>
+                      <span style={{ fontSize: 11, color: ROUTING.color }}>{ROUTING.label}</span>
+                    </div>
+                  );
+                })()}
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button onClick={logStructuredOutcome} disabled={submittingOutcome} style={{ flex: 1, padding: '9px', background: '#374151', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: submittingOutcome ? 0.7 : 1 }}>
                     {submittingOutcome ? 'Saving...' : 'Save Note'}
@@ -1069,30 +1274,20 @@ export default function LeadDetail() {
           </div>
         )}
 
-        {/* ── WHATSAPP CTA — shown after outcome save ── */}
-        {waCtaMsg && (
-          <div style={{ padding: '12px 16px', background: '#f0fdf4', borderBottom: `1px solid #86efac` }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#15803d', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              💬 Send WhatsApp Message
-            </div>
-            <pre style={{ margin: '0 0 10px', fontSize: 12, color: '#374151', whiteSpace: 'pre-wrap', fontFamily: 'inherit', background: '#fff', border: '1px solid #86efac', borderRadius: 6, padding: '8px 10px', lineHeight: 1.6 }}>
-              {waCtaMsg}
-            </pre>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <a
-                href={`https://wa.me/${phoneDigits}?text=${encodeURIComponent(waCtaMsg)}`}
-                target="_blank"
-                rel="noreferrer"
-                onClick={() => { if (!waTracked) { trackWaOpen(); setWaTracked(true); } }}
-                style={{ flex: 1, display: 'block', textAlign: 'center', padding: '10px', background: '#25D366', color: '#fff', borderRadius: 7, fontSize: 13, fontWeight: 700, textDecoration: 'none' }}
-              >
-                Open WhatsApp{waTracked ? ' ✓' : ''}
-              </a>
-              <button onClick={() => setWaCtaMsg(null)} style={{ padding: '10px 14px', background: '#f3f4f6', color: '#6b7280', border: '1px solid #e5e7eb', borderRadius: 7, fontSize: 12, cursor: 'pointer' }}>
-                Dismiss
-              </button>
-            </div>
-          </div>
+        {(postOutcomeGuide || waCtaMsg) && (
+          <OutcomeNextSteps
+            mode={postOutcomeGuide}
+            waMessage={waCtaMsg}
+            phoneDigits={phoneDigits}
+            onWaOpen={() => { if (!waTracked) { trackWaOpen(); setWaTracked(true); } }}
+            onCreateQuotation={() => {
+              if (lead.customer_id) navigate(`/quotation?customerId=${lead.customer_id}&leadId=${id}`);
+              else navigate(`/quotation?leadId=${id}`);
+            }}
+            onScheduleCallback={() => setOutcomeMode('LATER')}
+            onMarkLost={() => handleStatusChange('LOST')}
+            onDismiss={() => { setPostOutcomeGuide(null); setWaCtaMsg(null); }}
+          />
         )}
 
         {/* ── OBJECTION ASSIST ── */}
@@ -1134,8 +1329,8 @@ export default function LeadDetail() {
         </div>
       </div>
 
-      {/* Automation control bar */}
-      {!['CONVERTED', 'LOST'].includes(lead.status) && (() => {
+      {/* Automation control bar (manager / admin) */}
+      {!isTelecallerMode(crmMode) && !['CONVERTED', 'LOST'].includes(lead.status) && (() => {
         const isSnoozed  = !!lead.automation_snooze_until && new Date(lead.automation_snooze_until) > new Date();
         const isPaused   = Array.isArray(lead.tags) && lead.tags.includes('automation_off');
         const isActive   = !isPaused;
@@ -1254,7 +1449,9 @@ export default function LeadDetail() {
         <button style={tabBtn('timeline')} onClick={() => setTab('timeline')}>Customer Journey</button>
         <button style={tabBtn('notes')} onClick={() => setTab('notes')}>Notes ({notes.filter(n => n.type === 'GENERAL' && !/^Automation (paused|resumed|snoozed)/i.test(n.note || '') && !/whatsapp.*(opened|down|unavailable)/i.test(n.note || '') && !/^Phone not provided/i.test(n.note || '')).length})</button>
         <button style={tabBtn('followups')} onClick={() => setTab('followups')}>Follow-ups ({followups.length})</button>
-        <button style={tabBtn('activity')} onClick={() => setTab('activity')}>System Audit</button>
+        {isManagerMode(crmMode) && (
+          <button style={tabBtn('activity')} onClick={() => setTab('activity')}>Operational Logs</button>
+        )}
         {lead.whatsapp_chat_id && (
           <button style={tabBtn('chat')} onClick={() => setTab('chat')}>Chat</button>
         )}
@@ -1266,7 +1463,7 @@ export default function LeadDetail() {
         )}
 
         {tab === 'activity' && (
-          <ActivityTimeline entityType="lead" entityId={lead.id} maxHeight="500px" />
+          <ActivityTimeline entityType="lead" entityId={lead.id} maxHeight="500px" operationalOnly />
         )}
 
         {tab === 'notes' && (() => {
@@ -1309,210 +1506,21 @@ export default function LeadDetail() {
           );
         })()}
 
-        {tab === 'followups' && (() => {
-          const now          = new Date();
-          const fmtDue       = (d) => new Date(d).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-          const fmtRelative  = (d) => {
-            const diff = new Date(d) - now;
-            const mins = Math.round(diff / 60000);
-            if (mins < 0) {
-              const ago = Math.abs(mins);
-              if (ago < 60)  return `${ago}m overdue`;
-              if (ago < 1440) return `${Math.floor(ago / 60)}h overdue`;
-              return `${Math.floor(ago / 1440)}d overdue`;
-            }
-            if (mins < 60)  return `in ${mins}m`;
-            if (mins < 1440) return `in ${Math.floor(mins / 60)}h`;
-            return `in ${Math.floor(mins / 1440)}d`;
-          };
-
-          const overdue   = followups.filter(f => !f.is_completed && new Date(f.due_date) < now);
-          const upcoming  = followups.filter(f => !f.is_completed && new Date(f.due_date) >= now);
-          const completed = followups.filter(f => f.is_completed);
-
-          const na        = decision?.nextAction;
-          const isTerminal = lead.status === 'CONVERTED' || lead.status === 'LOST';
-          const isSnoozed  = !!lead.automation_snooze_until && new Date(lead.automation_snooze_until) > now;
-          const isPaused   = Array.isArray(lead.tags) && lead.tags.includes('automation_off') && !isSnoozed;
-          const lastCall   = [...notes].reverse().find(n => n.type === 'CALL');
-
-          const URGENCY_COLOR = { HIGH: '#dc2626', MEDIUM: '#d97706', LOW: '#16a34a' };
-          const URGENCY_BG    = { HIGH: '#fff1f2', MEDIUM: '#fffbeb', LOW: '#f0fdf4' };
-
-          const StatusCard = () => {
-            if (isTerminal) {
-              return (
-                <div style={{ background: lead.status === 'CONVERTED' ? '#f0fdf4' : '#fff1f2', border: `1px solid ${lead.status === 'CONVERTED' ? '#86efac' : '#fca5a5'}`, borderRadius: 8, padding: '12px 14px', marginBottom: 12 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: lead.status === 'CONVERTED' ? '#15803d' : '#dc2626' }}>
-                    {lead.status === 'CONVERTED' ? '✅ Lead converted — workflow complete' : '❌ Lead marked as lost — workflow closed'}
-                  </div>
-                  {lastCall && (
-                    <div style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>
-                      Last interaction: {lastCall.note?.slice(0, 100)}
-                    </div>
-                  )}
-                </div>
-              );
-            }
-            if (!na || na.action === 'NONE') return null;
-            const urgColor = URGENCY_COLOR[na.urgency] || '#374151';
-            const urgBg    = URGENCY_BG[na.urgency]    || '#f9fafb';
-            return (
-              <div style={{ background: urgBg, border: `1.5px solid ${urgColor}`, borderRadius: 8, padding: '12px 14px', marginBottom: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                  <span style={{ fontSize: 10, fontWeight: 800, background: urgColor, color: '#fff', padding: '2px 7px', borderRadius: 99, letterSpacing: 0.5 }}>
-                    {na.urgency}
-                  </span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: urgColor }}>{na.label}</span>
-                </div>
-                {overdue.length > 0 && (
-                  <div style={{ fontSize: 12, color: '#dc2626', fontWeight: 600, marginBottom: 4 }}>
-                    ⚠️ {overdue.length} callback{overdue.length > 1 ? 's' : ''} overdue — immediate action required
-                  </div>
-                )}
-                {upcoming.length > 0 && !overdue.length && (
-                  <div style={{ fontSize: 12, color: '#6b7280' }}>
-                    Next callback: <strong>{fmtDue(upcoming[0].due_date)}</strong> ({fmtRelative(upcoming[0].due_date)})
-                    {upcoming[0].note && ` — ${upcoming[0].note}`}
-                  </div>
-                )}
-                {!upcoming.length && !overdue.length && (
-                  <div style={{ fontSize: 12, color: '#6b7280' }}>No callback scheduled — schedule one below</div>
-                )}
-              </div>
-            );
-          };
-
-          const AutomationStatus = () => (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: theme.surface, borderRadius: 6, marginBottom: 12, fontSize: 12 }}>
-              <span style={{ color: isSnoozed ? '#d97706' : isPaused ? '#dc2626' : '#16a34a', fontSize: 10, fontWeight: 800 }}>
-                {isSnoozed ? '💤 SNOOZED' : isPaused ? '⏸ PAUSED' : '⚙️ ACTIVE'}
-              </span>
-              <span style={{ color: theme.textMuted }}>
-                {isSnoozed
-                  ? `Automation resumes ${fmtDue(lead.automation_snooze_until)}${lead.automation_snooze_reason ? ` — ${lead.automation_snooze_reason}` : ''}`
-                  : isPaused
-                  ? 'Automation disabled — manual follow-ups only'
-                  : 'Reminders and WA running automatically'}
-              </span>
-            </div>
-          );
-
-          const LastInteraction = () => {
-            if (!lastCall) return null;
-            return (
-              <div style={{ background: '#fefce8', border: '1px solid #fde68a', borderLeft: '3px solid #d97706', borderRadius: 6, padding: '8px 12px', marginBottom: 12 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#92400e', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 }}>Last call outcome</div>
-                <div style={{ fontSize: 12, color: '#1c1917', lineHeight: 1.5 }}>{lastCall.note}</div>
-                <div style={{ fontSize: 11, color: '#92400e', marginTop: 3 }}>
-                  {new Date(lastCall.created_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                </div>
-              </div>
-            );
-          };
-
-          const CallbackItem = ({ f }) => {
-            const isOverdue  = new Date(f.due_date) < now;
-            const isManual   = !!f.created_by;
-            return (
-              <div style={{
-                padding: '10px 12px', borderRadius: 6, marginBottom: 6,
-                background: isOverdue ? '#fff1f2' : theme.surface,
-                borderLeft: `3px solid ${isOverdue ? '#dc2626' : '#d1d5db'}`,
-                display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
-              }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: isOverdue ? '#dc2626' : theme.text }}>
-                      {fmtDue(f.due_date)}
-                    </span>
-                    <span style={{ fontSize: 11, color: isOverdue ? '#dc2626' : '#6b7280' }}>({fmtRelative(f.due_date)})</span>
-                    {!isManual && (
-                      <span style={{ fontSize: 9, fontWeight: 700, background: '#e0f2fe', color: '#0369a1', padding: '1px 5px', borderRadius: 3 }}>AUTO</span>
-                    )}
-                    {isOverdue && (
-                      <span style={{ fontSize: 9, fontWeight: 700, background: '#fee2e2', color: '#b91c1c', padding: '1px 5px', borderRadius: 3 }}>OVERDUE</span>
-                    )}
-                  </div>
-                  {f.note && <p style={{ margin: '3px 0 0', fontSize: 12, color: theme.textMuted }}>{f.note}</p>}
-                  {!isManual && (
-                    <p style={{ margin: '3px 0 0', fontSize: 11, color: '#6b7280', fontStyle: 'italic' }}>
-                      Complete by logging a call outcome above
-                    </p>
-                  )}
-                </div>
-                {isManual && (
-                  <button
-                    onClick={() => completeFu(f.id)}
-                    title="Only use if this was handled outside the call workflow"
-                    style={{
-                      padding: '3px 10px', background: 'none', border: '1px solid #d1d5db',
-                      borderRadius: 5, cursor: 'pointer', fontSize: 11, color: '#6b7280',
-                      flexShrink: 0, marginTop: 2,
-                    }}
-                  >
-                    Mark done
-                  </button>
-                )}
-              </div>
-            );
-          };
-
-          return (
-            <div>
-              <StatusCard />
-              <AutomationStatus />
-              <LastInteraction />
-
-              {(overdue.length > 0 || upcoming.length > 0) && (
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                  Scheduled callbacks ({overdue.length + upcoming.length})
-                </div>
-              )}
-              {[...overdue, ...upcoming].map(f => <CallbackItem key={f.id} f={f} />)}
-
-              {/* Schedule new callback */}
-              {!isTerminal && (
-                <form onSubmit={addFollowUp} style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-                  <input
-                    type="datetime-local" style={{ ...inp, width: 195 }}
-                    value={newFu.due_date}
-                    onChange={(e) => setNewFu((f) => ({ ...f, due_date: e.target.value }))}
-                    required
-                  />
-                  <input
-                    style={{ ...inp, flex: 1 }}
-                    placeholder="Callback reason (optional)"
-                    value={newFu.note}
-                    onChange={(e) => setNewFu((f) => ({ ...f, note: e.target.value }))}
-                  />
-                  <button
-                    type="submit" disabled={saving}
-                    style={{ padding: '9px 14px', background: theme.primary, color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}
-                  >
-                    + Schedule
-                  </button>
-                </form>
-              )}
-
-              {completed.length > 0 && (
-                <details style={{ marginTop: 14 }}>
-                  <summary style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5, cursor: 'pointer', userSelect: 'none' }}>
-                    History ({completed.length})
-                  </summary>
-                  <div style={{ marginTop: 8 }}>
-                    {completed.map(f => (
-                      <div key={f.id} style={{ padding: '7px 10px', borderRadius: 5, marginBottom: 4, background: '#f9fafb', display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#6b7280' }}>
-                        <span>{fmtDue(f.due_date)}{f.note ? ` — ${f.note}` : ''}</span>
-                        <span style={{ color: '#16a34a', fontWeight: 600 }}>✓</span>
-                      </div>
-                    ))}
-                  </div>
-                </details>
-              )}
-            </div>
-          );
-        })()}
+        {tab === 'followups' && (
+          <LeadFollowupsPanel
+            lead={lead}
+            followups={followups}
+            decision={decision}
+            theme={theme}
+            inp={inp}
+            newFu={newFu}
+            setNewFu={setNewFu}
+            saving={saving}
+            onAddFollowUp={addFollowUp}
+            onCompleteManual={completeFu}
+            mode={crmMode}
+          />
+        )}
 
         {tab === 'chat' && (
           <div>

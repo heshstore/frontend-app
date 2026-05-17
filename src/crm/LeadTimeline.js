@@ -125,7 +125,7 @@ function TimelineItem({ icon, title, sub, time, color, isAuto, msgType, author, 
           {sub && (
             <p style={{
               margin: '0 0 4px',
-              fontSize: isInbound ? 13 : 12,
+              fontSize: isInbound ? 14 : 12,
               color: isInbound ? '#1e3a5f' : theme.text,
               lineHeight: 1.6, whiteSpace: 'pre-wrap',
               fontWeight: isInbound ? 500 : 400,
@@ -300,7 +300,27 @@ export default function LeadTimeline({ lead, notes, followups, chatMessages, use
       });
     }
 
-    // Sort oldest → newest
+    for (const ev of all) {
+      if (ev.type === 'milestone') {
+        ev.group = 'STATUS';
+      } else if (ev.variant === 'call') {
+        ev.group = 'CALL';
+      } else if (ev.variant === 'inbound' || ev.variant === 'outbound') {
+        ev.group = 'WHATSAPP';
+      } else if (ev.title?.toLowerCase().includes('follow-up') || ev.title?.toLowerCase().includes('follow up')) {
+        ev.group = 'FOLLOW_UP';
+      } else if (/quotation|quote|proforma/i.test(`${ev.title} ${ev.sub || ''}`)) {
+        ev.group = 'QUOTATION';
+      } else if (/objection|not interested|negotiat/i.test(`${ev.title} ${ev.sub || ''}`)) {
+        ev.group = 'CALL';
+        ev.title = ev.title?.includes('Objection') ? ev.title : `Objection · ${ev.title}`;
+      } else if (ev.variant === 'operational') {
+        ev.group = 'FOLLOW_UP';
+      } else {
+        ev.group = 'CALL';
+      }
+    }
+
     all.sort((a, b) => new Date(a.ts) - new Date(b.ts));
     return all;
   }, [lead, notes, followups, chatMessages, userMap]);
@@ -314,37 +334,59 @@ export default function LeadTimeline({ lead, notes, followups, chatMessages, use
     );
   }
 
+  const GROUP_LABELS = {
+    CALL: '📞 Call events',
+    WHATSAPP: '💬 WhatsApp events',
+    QUOTATION: '📄 Quotation events',
+    STATUS: '🔄 Status events',
+    FOLLOW_UP: '📅 Follow-up events',
+  };
+  const GROUP_ORDER = ['CALL', 'WHATSAPP', 'QUOTATION', 'STATUS', 'FOLLOW_UP'];
+  let globalIdx = 0;
+
   return (
     <div style={{ paddingTop: 4 }}>
-      {events.map((ev, i) => {
-        const isLast = i === events.length - 1;
-        if (ev.type === 'milestone') {
-          return (
-            <MilestoneItem
-              key={i}
-              fromStatus={ev.fromStatus}
-              toStatus={ev.toStatus}
-              time={fmtTime(ev.ts)}
-              isAuto={ev.isAuto}
-              isLast={isLast}
-            />
-          );
-        }
+      {GROUP_ORDER.map((groupKey) => {
+        const groupEvents = events.filter((e) => e.group === groupKey);
+        if (!groupEvents.length) return null;
         return (
-          <TimelineItem
-            key={i}
-            icon={ev.icon}
-            title={ev.title}
-            sub={ev.sub || null}
-            time={fmtTime(ev.ts)}
-            color={ev.color}
-            isAuto={ev.isAuto}
-            msgType={ev.msgType || null}
-            author={ev.author || null}
-            noClamp={ev.noClamp || false}
-            variant={ev.variant || 'default'}
-            isLast={isLast}
-          />
+          <div key={groupKey} style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 10, fontWeight: 800, color: '#94a3b8', letterSpacing: 0.5, marginBottom: 8, textTransform: 'uppercase' }}>
+              {GROUP_LABELS[groupKey]}
+            </div>
+            {groupEvents.map((ev) => {
+              const isLast = globalIdx === events.length - 1;
+              const key = globalIdx++;
+              if (ev.type === 'milestone') {
+                return (
+                  <MilestoneItem
+                    key={key}
+                    fromStatus={ev.fromStatus}
+                    toStatus={ev.toStatus}
+                    time={fmtTime(ev.ts)}
+                    isAuto={ev.isAuto}
+                    isLast={isLast}
+                  />
+                );
+              }
+              return (
+                <TimelineItem
+                  key={key}
+                  icon={ev.icon}
+                  title={ev.title}
+                  sub={ev.sub || null}
+                  time={fmtTime(ev.ts)}
+                  color={ev.color}
+                  isAuto={ev.isAuto}
+                  msgType={ev.msgType || null}
+                  author={ev.author || null}
+                  noClamp={ev.noClamp || false}
+                  variant={ev.variant || 'default'}
+                  isLast={isLast}
+                />
+              );
+            })}
+          </div>
         );
       })}
     </div>

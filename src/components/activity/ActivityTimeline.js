@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { apiFetch } from '../../utils/api';
+import { isOperationalLog } from '../../crm/crmCockpit';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -254,6 +255,7 @@ export default function ActivityTimeline({
   items: externalItems,
   maxHeight = '440px',
   compact = false,
+  operationalOnly = false,
 }) {
   const [items,    setItems]    = useState(externalItems ?? []);
   const [total,    setTotal]    = useState(0);
@@ -310,7 +312,7 @@ export default function ActivityTimeline({
     fetchPage(next);
   }
 
-  const displayItems = items;
+  const displayItems = operationalOnly ? items.filter(isOperationalLog) : items;
 
   if (loading && displayItems.length === 0) {
     return (
@@ -330,7 +332,7 @@ export default function ActivityTimeline({
     return (
       <div style={{ padding: 32, textAlign: 'center', color: '#9ca3af' }}>
         <div style={{ fontSize: 28, marginBottom: 8 }}>📋</div>
-        <div style={{ fontSize: 13 }}>No activity recorded yet</div>
+        <div style={{ fontSize: 13 }}>{operationalOnly ? 'No operational events recorded' : 'No activity recorded yet'}</div>
       </div>
     );
   }

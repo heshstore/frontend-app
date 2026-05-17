@@ -5,23 +5,63 @@ import { apiFetch } from '../utils/api';
 import { normalizePhoneForWhatsApp } from '../utils/phone';
 import { theme } from '../theme';
 import WorkMode from './WorkMode';
-import { HOT_LEAD_WINDOWS, WAITING_L2_MINS, WAITING_L3_MINS, OVERDUE_MINS } from './crmConstants';
+import { WAITING_L2_MINS, WAITING_L3_MINS, OVERDUE_MINS } from './crmConstants';
+import PriorityBadges from './components/PriorityBadges';
+import TelecallerScorecard from './components/TelecallerScorecard';
+import { useCurrentUser } from '../utils/useCurrentUser';
+import {
+  getCrmVisibilityMode,
+  isTelecallerMode,
+  isManagerMode,
+  isAdminMode,
+  queueTierSections,
+  wfStateLabel,
+  humanizeNextAction,
+} from './crmVisibility';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 const NOTE_TYPES = ['CALL', 'GENERAL', 'WHATSAPP', 'EMAIL'];
 
-const STATUS_COLOR = {
-  NEW:       { bg: '#fff3cd', text: '#856404' },
-  CONTACTED: { bg: '#cfe2ff', text: '#0a3372' },
-  INTERESTED:{ bg: '#d1e7dd', text: '#0f5132' },
-  QUOTATION: { bg: '#e2d9f3', text: '#432874' },
-  CONVERTED: { bg: '#d1e7dd', text: '#0f5132' },
-  LOST:      { bg: '#f8d7da', text: '#842029' },
-};
-
 const SCORE_COLOR = (s) => s >= 60 ? '#16a34a' : s >= 30 ? '#d97706' : '#dc2626';
 const SCORE_BG    = (s) => s >= 60 ? '#dcfce7' : s >= 30 ? '#fef3c7' : '#fee2e2';
+
+// ── SLA helpers — derive from backend-authoritative next_action_due_at ─────────
+
+function slaCountdown(nextActionDueAt) {
+  if (!nextActionDueAt) return null;
+  const diffMs = new Date(nextActionDueAt) - Date.now();
+  const absMins = Math.abs(Math.round(diffMs / 60_000));
+  const absHours = Math.floor(absMins / 60);
+  const absDays  = Math.floor(absHours / 24);
+  if (diffMs > 0) {
+    if (absMins < 60)   return `Due in ${absMins}m`;
+    if (absMins < 1440) return `Due in ${absHours}h`;
+    return `Due in ${absDays}d`;
+  }
+  if (absMins < 60)   return `Overdue ${absMins}m`;
+  if (absMins < 1440) return `Overdue ${absHours}h`;
+  return `Overdue ${absDays}d`;
+}
+
+// Card styling by tier — tiers 1/2 get elevated treatment, 3/4 get accent strips
+function tierCardBorder(tier) {
+  switch (tier) {
+    case 1: return { borderLeft: '5px solid #dc2626', background: '#fff9f9', boxShadow: '0 2px 8px rgba(220,38,38,0.12)' };
+    case 2: return { borderLeft: '5px solid #ea580c', background: '#fff9f5', boxShadow: '0 2px 8px rgba(234,88,12,0.12)' };
+    case 3: return { borderLeft: '4px solid #d97706', background: '#fff'   };
+    case 4: return { borderLeft: '4px solid #7c3aed', background: '#fff'   };
+    case 5: return { borderLeft: '3px solid #0369a1', background: '#fff'   };
+    case 6: return { borderLeft: '3px solid #d1d5db', background: '#fafaf9' };
+    default:return { borderLeft: '3px solid #e5e7eb', background: '#fff'   };
+  }
+}
+
+function TierAccentStrip({ tier }) {
+  if (tier === 3) return <div style={{ height: 3, background: '#ef4444' }} />;
+  if (tier === 4) return <div style={{ height: 3, background: '#7c3aed' }} />;
+  return null;
+}
 
 function phoneDigits(phone) {
   return normalizePhoneForWhatsApp(phone);
@@ -86,9 +126,12 @@ function SectionHeader({ label, count, color }) {
 
 // ── Lead card ────────────────────────────────────────────────────────────────
 
-function LeadCard({ item, onRefresh }) {
+function LeadCard({ item, onRefresh, mode }) {
   const navigate = useNavigate();
-  const { lead, score, nextAction, isOverdue, ageHours } = item;
+  const { user } = useCurrentUser();
+  const { lead, score, nextAction, ageHours, queueTier = 5, slaStatus = 'NONE' } = item;
+  const countdown = slaCountdown(lead.next_action_due_at);
+  const cs = tierCardBorder(queueTier);
 
   const [panel, setPanel]           = useState(null); // null | 'note' | 'followup' | 'script'
   const [callState, setCallState]   = useState(null); // null | 'confirming'
@@ -101,7 +144,6 @@ function LeadCard({ item, onRefresh }) {
   const [localStatus, setLocalStatus] = useState(lead.status);
   const [removed] = useState(false);
 
-  const sc      = STATUS_COLOR[localStatus] || { bg: '#f3f4f6', text: '#374151' };
   const d       = phoneDigits(lead.phone);
   const pType   = getPrimaryActionType(nextAction);
   const pBtn    = PRIMARY_BTN[pType];
@@ -220,15 +262,15 @@ function LeadCard({ item, onRefresh }) {
     boxSizing: 'border-box', background: '#fff', outline: 'none',
   };
 
-  const borderColor = isOverdue ? '#ef4444' : lead.lead_priority === 'HIGH' ? '#f97316' : (score >= 60 ? '#16a34a' : '#e5e7eb');
-
   return (
     <div style={{
-      background: '#fff',
-      border: `1px solid ${isOverdue ? '#fca5a5' : theme.border}`,
-      borderLeft: `4px solid ${borderColor}`,
+      border: `1px solid ${queueTier <= 2 ? (queueTier === 1 ? '#fca5a5' : '#fed7aa') : theme.border}`,
+      borderLeft: cs.borderLeft,
+      background: cs.background,
+      boxShadow: cs.boxShadow,
       borderRadius: 8, marginBottom: 8, overflow: 'hidden',
     }}>
+      {isManagerMode(mode) && <TierAccentStrip tier={queueTier} />}
       {/* ── Card body ── */}
       <div style={{ padding: '12px 14px 10px' }}>
 
@@ -238,7 +280,7 @@ function LeadCard({ item, onRefresh }) {
             <span style={{ fontWeight: 800, fontSize: 16, color: theme.text }}>{lead.name || '—'}</span>
           </div>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0, marginLeft: 8 }}>
-            {score != null && (
+            {score != null && isManagerMode(mode) && (
               <span style={{
                 fontSize: 12, fontWeight: 800,
                 color: SCORE_COLOR(score),
@@ -248,7 +290,9 @@ function LeadCard({ item, onRefresh }) {
                 {score}
               </span>
             )}
-            <span style={{ fontSize: 11, color: theme.textMuted }}>{ageLabel(ageHours)}</span>
+            {!isTelecallerMode(mode) && (
+              <span style={{ fontSize: 11, color: theme.textMuted }}>{ageLabel(ageHours)}</span>
+            )}
           </div>
         </div>
 
@@ -273,35 +317,46 @@ function LeadCard({ item, onRefresh }) {
           </div>
         )}
 
-        {/* Row 4: context + city */}
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-          {lead.context && <span style={{ fontSize: 11, color: theme.textMuted }}>🌐 {lead.context}</span>}
-          {lead.city    && <span style={{ fontSize: 11, color: theme.textMuted }}>📍 {lead.city}</span>}
-        </div>
+        {!isTelecallerMode(mode) && (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+            {lead.context && <span style={{ fontSize: 11, color: theme.textMuted }}>🌐 {lead.context}</span>}
+            {lead.city && <span style={{ fontSize: 11, color: theme.textMuted }}>📍 {lead.city}</span>}
+          </div>
+        )}
 
-        {/* Row 5: badges */}
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: sc.bg, color: sc.text }}>
-            {localStatus}
-          </span>
-          {lead.lead_priority === 'HIGH' && (
-            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: '#fff7ed', color: '#c2410c', border: '1px solid #fed7aa' }}>
-              HIGH
+        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 10, alignItems: 'center' }}>
+          <PriorityBadges
+            lead={lead}
+            mode={mode}
+            slaStatus={slaStatus}
+            lockInfo={lead.lockInfo}
+            currentUserId={user?.id}
+            queueTier={queueTier}
+            showCountdown={isManagerMode(mode)}
+          />
+          {isManagerMode(mode) && lead.workflow_state && isAdminMode(mode) && (
+            <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#64748b' }}>{lead.workflow_state}</span>
+          )}
+          {isManagerMode(mode) && !isAdminMode(mode) && lead.workflow_state && (
+            <span style={{ fontSize: 10, fontWeight: 600, color: '#475569' }}>
+              {wfStateLabel(lead.workflow_state, mode)}
             </span>
           )}
-          {isOverdue && (
-            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}>
-              ⚠ Overdue
+          {isTelecallerMode(mode) && countdown && (
+            <span style={{ fontSize: 11, fontWeight: 600, color: ['OVERDUE', 'CRITICAL'].includes(slaStatus) ? '#b91c1c' : '#6b7280' }}>
+              {countdown.replace(/^Overdue /, '').replace(/^Due in /, '')}
             </span>
           )}
-          {wBadge && (
-            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: wBadge.bg, color: wBadge.color, border: `1px solid ${wBadge.border}` }}>
+          {isTelecallerMode(mode) && lead.status && (
+            <span style={{ fontSize: 10, fontWeight: 600, color: '#64748b' }}>{lead.status}</span>
+          )}
+          {isManagerMode(mode) && wBadge && (
+            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: wBadge.bg, color: wBadge.color, border: `1px solid ${wBadge.border}` }}>
               💬 {wBadge.text}
             </span>
           )}
-          {/* Existing customer badge — no extra API call, uses customer_id already in lead */}
-          {lead.customer_id && (
-            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: '#dcfce7', color: '#15803d', border: '1px solid #86efac' }}>
+          {lead.customer_id && !isTelecallerMode(mode) && (
+            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: '#dcfce7', color: '#15803d', border: '1px solid #86efac' }}>
               🏢 Existing
             </span>
           )}
@@ -318,7 +373,9 @@ function LeadCard({ item, onRefresh }) {
             letterSpacing: '0.01em',
           }}
         >
-          {pBtn.label}
+          {isTelecallerMode(mode) && nextAction?.label
+            ? humanizeNextAction(nextAction.label, mode) || pBtn.label
+            : pBtn.label}
         </button>
 
         {/* ── Secondary action row ── */}
@@ -488,6 +545,9 @@ function LeadCard({ item, onRefresh }) {
 // ── Main queue page ──────────────────────────────────────────────────────────
 
 export default function LeadQueue() {
+  const { user, hasPermission } = useCurrentUser();
+  const crmMode = getCrmVisibilityMode(user, hasPermission);
+  const tierSections = queueTierSections(crmMode);
   const [items, setItems]           = useState([]);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState(false);
@@ -540,38 +600,10 @@ export default function LeadQueue() {
     );
   }
 
-  // Defense-in-depth: backend already excludes these, but filter client-side too
-  // in case cached data or older backend versions include non-operational leads.
+  // Backend already returns only operational leads (tier > 0, no CONVERTED/LOST).
+  // Client-side guard for stale cached data with non-operational quality flags.
   const NON_OPERATIONAL = new Set(['TRACKING_ONLY', 'JUNK', 'DUPLICATE']);
   const displayItems = items.filter(i => !NON_OPERATIONAL.has(i.lead?.lead_quality));
-
-  const now = Date.now();
-
-  // HOT: NEW status + high-intent source (META/GOOGLE/INDIAMART/LINKEDIN) within urgency window
-  const hot = displayItems.filter(i => {
-    const w = HOT_LEAD_WINDOWS[i.lead.source];
-    if (!w || i.lead.status !== 'NEW') return false;
-    const ageMins = i.ageHours * 60;
-    return ageMins >= w.minMins && ageMins < w.maxMins;
-  });
-  const hotIds = new Set(hot.map(i => i.lead.id));
-
-  // OVERDUE: follow-up date is past (excludes HOT leads — HOT takes precedence)
-  const overdue = displayItems.filter(i => i.isOverdue && !hotIds.has(i.lead.id));
-
-  // WAITING: customer replied 30+ min ago, salesman hasn't responded (excludes HOT + OVERDUE)
-  const waiting = displayItems.filter(i => {
-    if (hotIds.has(i.lead.id) || i.isOverdue) return false;
-    const replyAt = i.lead.last_customer_reply_at ? +new Date(i.lead.last_customer_reply_at) : null;
-    const salesAt = i.lead.last_salesman_reply_at ? +new Date(i.lead.last_salesman_reply_at) : null;
-    if (!replyAt) return false;
-    if (salesAt && salesAt >= replyAt) return false;
-    return (now - replyAt) / 60000 >= WAITING_L2_MINS;
-  });
-  const waitingIds = new Set(waiting.map(i => i.lead.id));
-
-  const high   = displayItems.filter(i => !hotIds.has(i.lead.id) && !waitingIds.has(i.lead.id) && !i.isOverdue && i.lead.lead_priority === 'HIGH');
-  const normal = displayItems.filter(i => !hotIds.has(i.lead.id) && !waitingIds.has(i.lead.id) && !i.isOverdue && i.lead.lead_priority !== 'HIGH');
 
   return (
     <>
@@ -614,6 +646,10 @@ export default function LeadQueue() {
           </div>
         </div>
 
+        {displayItems.length > 0 && isManagerMode(crmMode) && (
+          <TelecallerScorecard items={displayItems} userId={user?.id} />
+        )}
+
         {/* ── Empty state ── */}
         {displayItems.length === 0 && (
           <div style={{ textAlign: 'center', padding: '60px 20px' }}>
@@ -629,41 +665,17 @@ export default function LeadQueue() {
           </div>
         )}
 
-        {/* ── Sections (priority order: HOT → OVERDUE → WAITING → HIGH → ACTIVE) ── */}
-        {hot.length > 0 && (
-          <>
-            <SectionHeader label="🔥 Hot — Respond Now" count={hot.length} color="#dc2626" />
-            {hot.map(item => <LeadCard key={item.lead.id} item={item} onRefresh={refresh} />)}
-          </>
-        )}
-
-        {overdue.length > 0 && (
-          <>
-            <SectionHeader label="⚠ Overdue Follow-ups" count={overdue.length} color="#ef4444" />
-            {overdue.map(item => <LeadCard key={item.lead.id} item={item} onRefresh={refresh} />)}
-          </>
-        )}
-
-        {waiting.length > 0 && (
-          <>
-            <SectionHeader label="💬 Customer Waiting" count={waiting.length} color="#d97706" />
-            {waiting.map(item => <LeadCard key={item.lead.id} item={item} onRefresh={refresh} />)}
-          </>
-        )}
-
-        {high.length > 0 && (
-          <>
-            <SectionHeader label="🟠 High Priority" count={high.length} color="#f97316" />
-            {high.map(item => <LeadCard key={item.lead.id} item={item} onRefresh={refresh} />)}
-          </>
-        )}
-
-        {normal.length > 0 && (
-          <>
-            <SectionHeader label="🟢 Active" count={normal.length} color="#16a34a" />
-            {normal.map(item => <LeadCard key={item.lead.id} item={item} onRefresh={refresh} />)}
-          </>
-        )}
+        {/* ── Tier-based sections — backend queueTier is authoritative, no heuristics ── */}
+        {tierSections.map(({ tier, label, color }) => {
+          const tierItems = displayItems.filter(i => (i.queueTier || 0) === tier);
+          if (tierItems.length === 0) return null;
+          return (
+            <React.Fragment key={tier}>
+              <SectionHeader label={label} count={tierItems.length} color={color} />
+              {tierItems.map(item => <LeadCard key={item.lead.id} item={item} onRefresh={refresh} mode={crmMode} />)}
+            </React.Fragment>
+          );
+        })}
       </PageLayout>
     </>
   );
