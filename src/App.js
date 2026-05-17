@@ -30,6 +30,7 @@ import LeadForm from "./crm/LeadForm";
 import LeadDetail from "./crm/LeadDetail";
 import CrmAnalytics from "./crm/CrmAnalytics";
 import LeadQueue from "./crm/LeadQueue";
+import AllLeadsView from "./crm/AllLeadsView";
 import FollowUpView from "./crm/FollowUpView";
 import AutomationSettings from "./crm/AutomationSettings";
 import WhatsAppQR from "./whatsapp/WhatsAppQR";
@@ -180,6 +181,7 @@ function App() {
               <Route path="/crm/leads/:id/edit" element={<PermissionRoute permission="lead.edit"><LeadForm /></PermissionRoute>} />
               <Route path="/crm/leads/:id" element={<PermissionRoute permission="lead.view"><LeadDetail /></PermissionRoute>} />
               <Route path="/crm/queue" element={<PermissionRoute permission="lead.view"><LeadQueue /></PermissionRoute>} />
+              <Route path="/crm/all-leads" element={<PermissionRoute permission="lead.view"><AllLeadsView /></PermissionRoute>} />
               <Route path="/crm/analytics" element={<PermissionRoute permission={["crm.analytics.self", "crm.analytics.team", "crm.analytics.all"]}><CrmAnalytics /></PermissionRoute>} />
               <Route path="/crm/followups" element={<PermissionRoute permission="lead.view"><FollowUpView /></PermissionRoute>} />
               <Route path="/crm/automation-settings" element={<PermissionRoute permission="lead.edit"><AutomationSettings /></PermissionRoute>} />

@@ -4,7 +4,7 @@
  * Uses same DocumentActionBar as QuotationView.
  */
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { apiFetch } from './utils/api';
 import OrderTemplate from './OrderTemplate';
 import DocumentActionBar from './components/DocumentActionBar';
@@ -14,6 +14,7 @@ const EDITABLE_STATUSES = ['PENDING_APPROVAL', 'APPROVED'];
 export default function OrderView() {
   const { id }    = useParams();
   const navigate  = useNavigate();
+  const location  = useLocation();
   const [data,    setData]    = useState(null);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
@@ -53,7 +54,7 @@ export default function OrderView() {
         customerName={data.customer_name}
         customerEmail={data.customer_email}
         publicPdfUrl=""
-        onBack={() => navigate(-1)}
+        onBack={() => navigate(location.state?.from || '/orders')}
         onEdit={isEdit ? () => navigate(`/edit-order/${id}`) : null}
         isEditable={isEdit}
         isConvertible={false}

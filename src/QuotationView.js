@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { apiFetch } from './utils/api';
 import { API_URL } from './config';
 import QuotationTemplate from './QuotationTemplate';
@@ -11,6 +11,7 @@ const CONVERTIBLE_STATUSES = ['GENERATED'];
 export default function QuotationView() {
   const { id }  = useParams();
   const navigate  = useNavigate();
+  const location  = useLocation();
   const [data,    setData]    = useState(null);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
@@ -51,7 +52,7 @@ export default function QuotationView() {
         customerName={data.customer_name}
         customerEmail={data.customer_email}
         publicPdfUrl={publicPdfUrl}
-        onBack={() => navigate(-1)}
+        onBack={() => navigate(location.state?.from || '/quotations')}
         onEdit={EDITABLE_STATUSES.includes(data.status) ? () => navigate(`/quotation?id=${id}`) : null}
         isEditable={EDITABLE_STATUSES.includes(data.status)}
         isConvertible={CONVERTIBLE_STATUSES.includes(data.status)}

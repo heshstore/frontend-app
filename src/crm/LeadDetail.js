@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import PageLayout from '../components/layout/PageLayout';
 import { apiFetch } from '../utils/api';
 import { normalizePhoneForWhatsApp } from '../utils/phone';
@@ -120,6 +120,8 @@ const CRITICAL_WF_STATES = new Set(['CALLBACK_WAIT', 'SEND_QUOTATION', 'CHASE_QU
 export default function LeadDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const backTo = () => navigate(location.state?.from || '/crm/leads');
   const { hasPermission, user: currentUser } = useCurrentUser();
   const [lead, setLead] = useState(null);
   const [notes, setNotes] = useState([]);
@@ -565,11 +567,18 @@ export default function LeadDetail() {
     borderBottom: tab === t ? `2px solid ${theme.primary}` : '2px solid transparent',
   });
 
-  if (loading) return <PageLayout title="Lead Detail"><p style={{ color: theme.textMuted, padding: 20 }}>Loading...</p></PageLayout>;
+  if (loading) return <PageLayout title="Lead Detail" onBack={backTo}><p style={{ color: theme.textMuted, padding: 20 }}>Loading...</p></PageLayout>;
   if (!lead) return null;
 
+  // Defensive guard: TRK-* records are analytics-only — never show call/workflow/SLA/outcome controls.
+  // Checked against both lead_ref prefix AND lead_quality to handle inconsistent backend data.
+  const isTrackingRecord =
+    (lead.lead_ref?.startsWith('TRK-') === true) ||
+    (lead.lead_quality === 'TRACKING_ONLY') ||
+    (lead.lead_quality === 'JUNK');
+
   const wInfo = waitingInfo(lead);
-  const canConvert = hasPermission('lead.convert') && lead.status !== 'CONVERTED' && lead.status !== 'LOST';
+  const canConvert = !isTrackingRecord && hasPermission('lead.convert') && lead.status !== 'CONVERTED' && lead.status !== 'LOST';
   const canEdit = hasPermission('lead.edit');
   const crmMode = getCrmVisibilityMode(currentUser, hasPermission);
   const phoneDigits = normalizePhoneForWhatsApp(lead.phone);
@@ -593,7 +602,7 @@ export default function LeadDetail() {
   };
 
   return (
-    <PageLayout title={`Lead: ${lead.name}`}>
+    <PageLayout title={`Lead: ${lead.name}`} onBack={backTo}>
       {showConvert && convertData && (
         <ConvertToCustomerModal
           lead={lead}
@@ -606,8 +615,24 @@ export default function LeadDetail() {
         <CustomerIntelPanel match={customerMatch} leadId={id} />
       </CollapsibleSection>
 
+      {/* ── Tracking-only notice (replaces workspace for TRK-* records) ───────── */}
+      {isTrackingRecord && (
+        <div style={{
+          background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10,
+          padding: '14px 18px', marginBottom: 14,
+        }}>
+          <div style={{ fontWeight: 700, fontSize: 13, color: '#6b7280', marginBottom: 4 }}>
+            Analytics-only record
+          </div>
+          <div style={{ fontSize: 12, color: '#9ca3af' }}>
+            This is a tracking event ({lead.lead_quality ?? 'TRACKING_ONLY'}) with no contact identity.
+            Call controls, workflow actions, SLA tracking, and outcome logging are not available.
+          </div>
+        </div>
+      )}
+
       {/* ── Unified Telecaller Workspace ─────────────────────────────────────── */}
-      <div style={{
+      {!isTrackingRecord && <div style={{
         background: '#fff',
         border: `1.5px solid ${
           wInfo ? wInfo.border :
@@ -909,7 +934,7 @@ export default function LeadDetail() {
             )}
             {canEdit && (
               <button
-                onClick={() => navigate(`/crm/leads/${id}/edit`)}
+                onClick={() => navigate(`/crm/leads/${id}/edit`, { state: { from: `/crm/leads/${id}` } })}
                 style={{ marginLeft: 10, fontSize: 11, color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
               >
                 Edit
@@ -967,7 +992,7 @@ export default function LeadDetail() {
                 {lead.journey.quotations.map((q) => (
                   <span
                     key={q.id}
-                    onClick={() => navigate(`/quotations/${q.id}`)}
+                    onClick={() => navigate(`/quotations/${q.id}`, { state: { from: `/crm/leads/${id}` } })}
                     style={{ cursor: 'pointer', textDecoration: 'underline', marginRight: 6, color: '#6f42c1' }}
                   >
                     {q.quotation_no || `Q-${q.id}`}
@@ -981,7 +1006,7 @@ export default function LeadDetail() {
                 {lead.journey.orders.map((o) => (
                   <span
                     key={o.id}
-                    onClick={() => navigate(`/orders/${o.id}`)}
+                    onClick={() => navigate(`/orders/${o.id}`, { state: { from: `/crm/leads/${id}` } })}
                     style={{ cursor: 'pointer', textDecoration: 'underline', marginRight: 6, color: '#0369a1' }}
                   >
                     {o.order_no || `O-${o.id}`}
@@ -994,6 +1019,70 @@ export default function LeadDetail() {
                 <strong>Revenue:</strong> ₹{Number(lead.journey.totalRevenue).toLocaleString('en-IN')}
               </span>
             )}
+          </div>
+        )}
+
+        {/* ── Previous Opportunities — other CRM leads from the same customer identity ── */}
+        {lead.journey?.previousOpportunities?.length > 0 && (
+          <div style={{
+            padding: '10px 16px', background: '#fafafa',
+            borderBottom: `1px solid ${theme.border}`,
+          }}>
+            <div style={{
+              fontSize: 11, fontWeight: 700, color: '#6b7280',
+              textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8,
+            }}>
+              Customer Lifetime — {lead.journey.previousOpportunities.length} other opportunit{lead.journey.previousOpportunities.length === 1 ? 'y' : 'ies'}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              {lead.journey.previousOpportunities.map((opp) => {
+                const sc = { NEW: '#ffc107', CONTACTED: '#0d6efd', INTERESTED: '#198754', QUOTATION: '#6f42c1', CONVERTED: '#198754', LOST: '#dc3545' }[opp.status] || '#9ca3af';
+                const isActive = opp.is_active;
+                return (
+                  <div
+                    key={opp.id}
+                    onClick={() => navigate(`/crm/leads/${opp.id}`)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap',
+                      cursor: 'pointer', padding: '6px 8px', borderRadius: 6,
+                      border: `1px solid ${theme.border}`,
+                      background: isActive ? '#fff' : '#f3f4f6',
+                      opacity: isActive ? 1 : 0.75,
+                    }}
+                  >
+                    {opp.lead_ref && (
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, fontFamily: "'Courier New', Courier, monospace",
+                        background: '#e8edf5', color: '#1e3a5f', border: '1px solid #c3cfe2',
+                        borderRadius: 4, padding: '1px 6px', flexShrink: 0,
+                      }}>
+                        {opp.lead_ref}
+                      </span>
+                    )}
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 8,
+                      background: `${sc}1a`, color: sc, flexShrink: 0,
+                    }}>
+                      {opp.status}
+                    </span>
+                    <span style={{ fontSize: 11, color: '#6b7280', flexShrink: 0 }}>
+                      {SOURCE_LABELS[opp.source] || opp.source}
+                    </span>
+                    {opp.product_interest && (
+                      <span style={{
+                        fontSize: 11, color: '#374151', fontStyle: 'italic',
+                        flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {opp.product_interest}
+                      </span>
+                    )}
+                    <span style={{ fontSize: 10, color: '#9ca3af', marginLeft: 'auto', flexShrink: 0 }}>
+                      {new Date(opp.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 
@@ -1327,10 +1416,10 @@ export default function LeadDetail() {
             </div>
           )}
         </div>
-      </div>
+      </div>}
 
-      {/* Automation control bar (manager / admin) */}
-      {!isTelecallerMode(crmMode) && !['CONVERTED', 'LOST'].includes(lead.status) && (() => {
+      {/* Automation control bar (manager / admin) — hidden for tracking records */}
+      {!isTrackingRecord && !isTelecallerMode(crmMode) && !['CONVERTED', 'LOST'].includes(lead.status) && (() => {
         const isSnoozed  = !!lead.automation_snooze_until && new Date(lead.automation_snooze_until) > new Date();
         const isPaused   = Array.isArray(lead.tags) && lead.tags.includes('automation_off');
         const isActive   = !isPaused;

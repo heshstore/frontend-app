@@ -41,3 +41,19 @@ export const VALID_TRANSITIONS = {
   CONVERTED:  [],
   LOST:       ['CONTACTED'],
 };
+
+/**
+ * Canonical status badge colors shared across all CRM list views.
+ * Format: { bg: background color, text: foreground color }
+ *
+ * Used by: AllLeadsView.js, LeadList.js
+ * NOT used by LeadDetail.js (progression strip uses hex-only STATUS_COLORS — different format).
+ */
+export const STATUS_BADGE_COLORS = {
+  NEW:        { bg: '#fff3cd', text: '#856404' },
+  CONTACTED:  { bg: '#cfe2ff', text: '#0a3372' },
+  INTERESTED: { bg: '#d1e7dd', text: '#0f5132' },
+  QUOTATION:  { bg: '#e2d9f3', text: '#432874' },
+  CONVERTED:  { bg: '#d1e7dd', text: '#0f5132' },
+  LOST:       { bg: '#f8d7da', text: '#842029' },
+};

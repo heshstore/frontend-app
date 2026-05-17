@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { apiFetch } from './utils/api';
 import { normalizePhoneForWhatsApp } from './utils/phone';
 import { ORDER_STATUS_LABELS } from './constants/orderStatus';
@@ -175,6 +175,8 @@ function ActionBtn({ label, bg, color = '#fff', onClick, href, target }) {
 export default function OrderDetail({ orderId: propId }) {
   const params      = useParams();
   const navigate    = useNavigate();
+  const location    = useLocation();
+  const backTo      = () => navigate(location.state?.from || '/orders');
 
   const id          = propId ?? params.id;
   const isPanelMode = Boolean(propId);
@@ -234,7 +236,7 @@ export default function OrderDetail({ orderId: propId }) {
         <ErrorState
           message="Could not load order."
           onRetry={retry}
-          onBack={!isPanelMode ? () => navigate(-1) : null}
+          onBack={!isPanelMode ? backTo : null}
         />
       </div>
     );
@@ -262,7 +264,7 @@ export default function OrderDetail({ orderId: propId }) {
           position: 'sticky', top: 0, zIndex: 10,
         }}>
           <button
-            onClick={() => navigate(-1)}
+            onClick={backTo}
             style={{
               background: '#f1f5f9', border: 'none', borderRadius: 8,
               padding: '8px 12px', fontSize: 14, color: '#374151', cursor: 'pointer', fontWeight: 600,

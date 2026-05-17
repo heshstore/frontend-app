@@ -1,11 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import PageLayout from '../components/layout/PageLayout';
 import { apiFetch } from '../utils/api';
 import { normalizePhoneForWhatsApp } from '../utils/phone';
 import { theme } from '../theme';
-import WorkMode from './WorkMode';
-import { WAITING_L2_MINS, WAITING_L3_MINS, OVERDUE_MINS } from './crmConstants';
+import { getWaitingBadge } from './crmUtils';
 import PriorityBadges from './components/PriorityBadges';
 import TelecallerScorecard from './components/TelecallerScorecard';
 import { useCurrentUser } from '../utils/useCurrentUser';
@@ -87,24 +86,6 @@ const PRIMARY_BTN = {
   FOLLOW_UP: { label: '📅 Schedule Follow-up', bg: '#f97316' },
 };
 
-// Returns a WAITING badge descriptor if the customer is waiting for a salesman reply,
-// or null if no badge should be shown. Escalates by wait time using crmConstants thresholds.
-function waitingBadge(lead) {
-  const replyAt  = lead.last_customer_reply_at ? +new Date(lead.last_customer_reply_at) : null;
-  const salesAt  = lead.last_salesman_reply_at ? +new Date(lead.last_salesman_reply_at) : null;
-  if (!replyAt || ['CONVERTED', 'LOST'].includes(lead.status)) return null;
-  if (salesAt && salesAt >= replyAt) return null;
-  const waitMs   = Date.now() - replyAt;
-  if (waitMs <= 0) return null;
-  const waitMins = Math.floor(waitMs / 60000);
-  if (waitMins < WAITING_L2_MINS) return null;
-  const age = waitMins >= 60
-    ? `${Math.floor(waitMins / 60)}h ${waitMins % 60}m`
-    : `${waitMins}m`;
-  if (waitMins >= OVERDUE_MINS) return { text: `WAITING · ${age}`, bg: '#fee2e2', color: '#991b1b', border: '#fca5a5' };
-  if (waitMins >= WAITING_L3_MINS) return { text: `WAITING · ${age}`, bg: '#ffedd5', color: '#9a3412', border: '#fb923c' };
-  return { text: `WAITING · ${age}`, bg: '#fef9c3', color: '#854d0e', border: '#fde047' };
-}
 
 // ── Section header ───────────────────────────────────────────────────────────
 
@@ -128,6 +109,7 @@ function SectionHeader({ label, count, color }) {
 
 function LeadCard({ item, onRefresh, mode }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useCurrentUser();
   const { lead, score, nextAction, ageHours, queueTier = 5, slaStatus = 'NONE' } = item;
   const countdown = slaCountdown(lead.next_action_due_at);
@@ -147,7 +129,7 @@ function LeadCard({ item, onRefresh, mode }) {
   const d       = phoneDigits(lead.phone);
   const pType   = getPrimaryActionType(nextAction);
   const pBtn    = PRIMARY_BTN[pType];
-  const wBadge  = waitingBadge(lead);
+  const wBadge  = getWaitingBadge(lead);
 
   const togglePanel = (name) => {
     setCallState(null);
@@ -409,7 +391,7 @@ function LeadCard({ item, onRefresh, mode }) {
               color: panel === 'script' ? '#fff' : theme.text,
             }}>📋 Script</button>
           )}
-          <button onClick={() => navigate(`/crm/leads/${lead.id}`)} style={{
+          <button onClick={() => navigate(`/crm/leads/${lead.id}`, { state: { from: location.pathname + location.search } })} style={{
             border: 'none', borderRadius: 6, padding: '7px 11px',
             fontSize: 12, fontWeight: 600, cursor: 'pointer',
             background: '#f3f4f6', color: '#0066B3', marginLeft: 'auto',
@@ -552,7 +534,6 @@ export default function LeadQueue() {
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [workMode, setWorkMode]     = useState(false);
   const navigate = useNavigate();
 
   const load = useCallback(async (silent = false) => {
@@ -578,7 +559,7 @@ export default function LeadQueue() {
 
   if (loading) {
     return (
-      <PageLayout title="Priority Queue">
+      <PageLayout title="Today Tasks">
         {[1, 2, 3].map(i => (
           <div key={i} style={{ height: 100, background: '#f3f4f6', borderRadius: 8, marginBottom: 8, animation: 'pulse 1.4s ease-in-out infinite' }} />
         ))}
@@ -589,7 +570,7 @@ export default function LeadQueue() {
 
   if (error) {
     return (
-      <PageLayout title="Priority Queue">
+      <PageLayout title="Today Tasks">
         <div style={{ textAlign: 'center', padding: 40 }}>
           <div style={{ fontSize: 14, color: '#dc2626', marginBottom: 12 }}>Failed to load queue.</div>
           <button onClick={() => load()} style={{ padding: '8px 18px', background: '#0066B3', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>
@@ -606,31 +587,13 @@ export default function LeadQueue() {
   const displayItems = items.filter(i => !NON_OPERATIONAL.has(i.lead?.lead_quality));
 
   return (
-    <>
-      {/* Work Mode overlay */}
-      {workMode && (
-        <WorkMode
-          items={displayItems}
-          onExit={() => setWorkMode(false)}
-          onRefresh={refresh}
-        />
-      )}
-
-      <PageLayout title="Priority Queue">
+    <PageLayout title="Today Tasks">
         {/* ── Top bar ── */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 13, color: theme.textMuted }}>
             {refreshing ? 'Refreshing…' : `${displayItems.length} lead${displayItems.length !== 1 ? 's' : ''} in queue`}
           </span>
           <div style={{ display: 'flex', gap: 8 }}>
-            {displayItems.length > 0 && (
-              <button onClick={() => setWorkMode(true)} style={{
-                padding: '8px 14px', background: '#f97316', color: '#fff',
-                border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 700, cursor: 'pointer',
-              }}>
-                ⚡ Start Calling Mode
-              </button>
-            )}
             <button onClick={() => navigate('/crm/leads/new')} style={{
               padding: '8px 12px', background: '#0066B3', color: '#fff',
               border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer',
@@ -677,6 +640,5 @@ export default function LeadQueue() {
           );
         })}
       </PageLayout>
-    </>
   );
 }

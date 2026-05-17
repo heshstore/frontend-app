@@ -497,10 +497,10 @@ export default function Sidebar({ onClose }) {
                   {canSeeCrm && (
                     <>
                       <SideLabel>CRM</SideLabel>
-                      <NavItem label="All Leads"  href="/crm/leads"     icon="👥" />
-                      <NavItem label="Queue"      href="/crm/queue"     icon="🔥" />
-                      <NavItem label="Follow-ups" href="/crm/followups" icon="📅" />
-                      <NavItem label="Analytics"  href="/crm/analytics" icon="📊" />
+                      <NavItem label="Today Tasks"      href="/crm/queue"     icon="🔥" />
+                      <NavItem label="Available Leads"  href="/crm/leads"     icon="👥" />
+                      <NavItem label="All Leads"        href="/crm/all-leads" icon="📚" />
+                      <NavItem label="Analytics"        href="/crm/analytics" icon="📊" />
                       {canSeeWhatsApp && <NavItem label="WhatsApp" href="/whatsapp" icon="💬" />}
                     </>
                   )}

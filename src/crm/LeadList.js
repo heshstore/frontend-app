@@ -1,20 +1,15 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import PageLayout from '../components/layout/PageLayout';
 import { apiFetch } from '../utils/api';
 import { theme } from '../theme';
-import { HOT_LEAD_WINDOWS, WAITING_L2_MINS, WAITING_L3_MINS, OVERDUE_MINS } from './crmConstants';
+import { HOT_LEAD_WINDOWS, STATUS_BADGE_COLORS } from './crmConstants';
 import { SOURCE_LABELS } from './crmSourceLabels';
+import { compactAge, getWaitingBadge } from './crmUtils';
 import './LeadList.css';
 
-const STATUS_COLORS = {
-  NEW:       { bg: '#fff3cd', text: '#856404' },
-  CONTACTED: { bg: '#cfe2ff', text: '#0a3372' },
-  INTERESTED:{ bg: '#d1e7dd', text: '#0f5132' },
-  QUOTATION: { bg: '#e2d9f3', text: '#432874' },
-  CONVERTED: { bg: '#d1e7dd', text: '#0f5132' },
-  LOST:      { bg: '#f8d7da', text: '#842029' },
-};
+// STATUS_BADGE_COLORS imported from crmConstants — shared with AllLeadsView.js
+const STATUS_COLORS = STATUS_BADGE_COLORS;
 
 const QUALITY_STYLE = {
   QUALIFIED:     { bg: '#dcfce7', text: '#15803d', label: 'Qualified' },
@@ -33,19 +28,6 @@ const MANUAL_SOURCE_SET = new Set([
 
 const PRIORITY_COLORS = { HIGH: '#dc3545', MEDIUM: '#ffc107', LOW: '#198754' };
 
-function compactAge(ms) {
-  const mins = Math.floor(ms / 60000);
-  if (mins < 60)  return `${mins}m`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) {
-    const rem = mins % 60;
-    return rem > 0 ? `${hrs}h ${rem}m` : `${hrs}h`;
-  }
-  const days    = Math.floor(hrs / 24);
-  const remHrs  = hrs % 24;
-  return remHrs > 0 ? `${days}d ${remHrs}h` : `${days}d`;
-}
-
 function ageLabel(createdAt) {
   const mins = Math.floor((Date.now() - new Date(createdAt)) / 60000);
   if (mins < 60) return `${mins}m ago`;
@@ -54,54 +36,17 @@ function ageLabel(createdAt) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-/**
- * Single badge per lead row. Priority: OVERDUE > WAITING(3) > WAITING(2) > WAITING(1) > HOT.
- *
- * WAITING/OVERDUE conditions (all must hold):
- *   • last_customer_reply_at exists
- *   • status not CONVERTED or LOST
- *   • last_salesman_reply_at IS NULL OR < last_customer_reply_at  (strict <)
- *     Same-second timestamps: treated as "salesman replied" — no false WAITING.
- *
- * OVERDUE: unanswered ≥ OVERDUE_MINS. No expiry — stays until salesman replies.
- * WAITING: unanswered < OVERDUE_MINS. Three escalation levels from crmConstants.
- *
- * HOT: only when WAITING/OVERDUE are absent.
- *   • status === 'NEW' (clears automatically on first status change)
- *   • source in HOT_LEAD_WINDOWS
- *   • age < maxMins for that source
- */
+// Single badge per lead row. Priority: OVERDUE > WAITING(3) > WAITING(2) > WAITING(1) > HOT.
+// WAITING/OVERDUE logic lives in crmUtils.getWaitingBadge().
+// HOT: only shown when no WAITING/OVERDUE badge is present.
 function leadBadge(lead) {
-  const now        = Date.now();
-  const replyAt    = lead.last_customer_reply_at  ? +new Date(lead.last_customer_reply_at)  : null;
-  const salesmanAt = lead.last_salesman_reply_at  ? +new Date(lead.last_salesman_reply_at)  : null;
-
-  if (replyAt && !['CONVERTED', 'LOST'].includes(lead.status)) {
-    // Strict <: if salesmanAt === replyAt (same second), treat as "replied" — no badge
-    const unanswered = !salesmanAt || salesmanAt < replyAt;
-    if (unanswered) {
-      const waitMs = now - replyAt;
-      if (waitMs <= 0) return null;  // server clock ahead of browser — suppress badge
-      const waitMins = Math.floor(waitMs / 60000);
-      const age      = compactAge(waitMs);
-
-      if (waitMins >= OVERDUE_MINS) {
-        return { text: `OVERDUE · ${age}`, bg: '#dc2626', color: '#fff', border: 'transparent', cardBorder: '#dc2626' };
-      }
-      if (waitMins >= WAITING_L3_MINS) {
-        return { text: `WAITING · ${age}`, bg: '#fee2e2', color: '#991b1b', border: '#fca5a5', cardBorder: '#f87171' };
-      }
-      if (waitMins >= WAITING_L2_MINS) {
-        return { text: `WAITING · ${age}`, bg: '#ffedd5', color: '#9a3412', border: '#fb923c', cardBorder: '#fb923c' };
-      }
-      return { text: `WAITING · ${age}`, bg: '#fef9c3', color: '#854d0e', border: '#fde047', cardBorder: '#fde047' };
-    }
-  }
+  const waiting = getWaitingBadge(lead);
+  if (waiting) return waiting;
 
   if (lead.status === 'NEW') {
     const w = HOT_LEAD_WINDOWS[lead.source];
     if (w) {
-      const ageMs   = now - +new Date(lead.created_at);
+      const ageMs   = Date.now() - +new Date(lead.created_at);
       const ageMins = Math.floor(ageMs / 60000);
       if (ageMins < w.maxMins) {
         return { text: `HOT · ${w.shortLabel} · ${compactAge(ageMs)}`, bg: '#dc3545', color: '#fff', border: 'transparent', cardBorder: '#dc3545' };
@@ -116,12 +61,12 @@ const PAGE_SIZE = 50;
 
 export default function LeadList() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [sourceFilter, setSourceFilter] = useState('');
-  const [activeTab, setActiveTab] = useState('crm'); // crm | tracking | duplicates | junk
   const [expanded, setExpanded] = useState(null);
   const [page, setPage] = useState(0);
 
@@ -132,10 +77,7 @@ export default function LeadList() {
       if (statusFilter) p.set('status', statusFilter);
       if (sourceFilter) p.set('source', sourceFilter);
       if (search) p.set('search', search);
-      if (activeTab === 'crm')        p.set('operationalOnly', 'true');
-      else if (activeTab === 'tracking')  p.set('quality', 'TRACKING_ONLY');
-      else if (activeTab === 'duplicates') p.set('quality', 'DUPLICATE');
-      else if (activeTab === 'junk')   p.set('quality', 'JUNK');
+      p.set('operationalOnly', 'true');
       const res = await apiFetch(`/crm/leads?${p}`);
       const data = await res.json();
       setLeads(Array.isArray(data) ? data : []);
@@ -145,7 +87,7 @@ export default function LeadList() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, sourceFilter, search, activeTab]);
+  }, [statusFilter, sourceFilter, search]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -164,39 +106,15 @@ export default function LeadList() {
   });
 
   return (
-    <PageLayout title="Leads">
+    <PageLayout title="Available Leads">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-        <h2 style={{ margin: 0 }}>Leads</h2>
+        <h2 style={{ margin: 0 }}>Available Leads</h2>
         <button
           onClick={() => navigate('/crm/queue')}
           style={{ background: '#ff9800', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
         >
-          ⚡ Priority Queue
+          ⚡ Today Tasks
         </button>
-      </div>
-
-      {/* Tab bar */}
-      <div style={{ display: 'flex', gap: 2, marginBottom: 14, borderBottom: `2px solid ${theme.border}`, paddingBottom: 0 }}>
-        {[
-          { key: 'crm',        label: 'CRM Leads',  color: '#0066B3' },
-          { key: 'tracking',   label: 'Tracking',   color: '#6b7280' },
-          { key: 'duplicates', label: 'Duplicates', color: '#d97706' },
-          { key: 'junk',       label: 'Junk',       color: '#dc2626' },
-        ].map(tab => (
-          <button
-            key={tab.key}
-            onClick={() => { setActiveTab(tab.key); setPage(0); }}
-            style={{
-              padding: '8px 16px', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
-              borderRadius: '6px 6px 0 0', marginBottom: -2,
-              background: activeTab === tab.key ? '#fff' : 'transparent',
-              color: activeTab === tab.key ? tab.color : theme.textMuted,
-              borderBottom: activeTab === tab.key ? `2px solid ${tab.color}` : '2px solid transparent',
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
       </div>
 
       {/* Filters */}
@@ -207,27 +125,23 @@ export default function LeadList() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        {activeTab === 'crm' && (
-          <>
-            <select style={{ ...inp }} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option value="">All Statuses</option>
-              {Object.keys(STATUS_COLORS).map((s) => <option key={s}>{s}</option>)}
-            </select>
-            <select style={{ ...inp }} value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}>
-              <option value="">All Sources</option>
-              <optgroup label="Manual / High Trust">
-                {['WALK_IN','REFERRAL','OLD_CUSTOMER','EXHIBITION','FIELD_VISIT','DEALER_REFERENCE','BUSINESS_CARD','DIRECT','IMPORTED'].map(s => (
-                  <option key={s} value={s}>{SOURCE_LABELS[s]}</option>
-                ))}
-              </optgroup>
-              <optgroup label="Digital / Auto-Captured">
-                {['INDIAMART','META','GOOGLE','WHATSAPP','SHOPIFY','LINKEDIN'].map(s => (
-                  <option key={s} value={s}>{SOURCE_LABELS[s]}</option>
-                ))}
-              </optgroup>
-            </select>
-          </>
-        )}
+        <select style={{ ...inp }} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+          <option value="">All Statuses</option>
+          {Object.keys(STATUS_COLORS).map((s) => <option key={s}>{s}</option>)}
+        </select>
+        <select style={{ ...inp }} value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}>
+          <option value="">All Sources</option>
+          <optgroup label="Manual / High Trust">
+            {['WALK_IN','REFERRAL','OLD_CUSTOMER','EXHIBITION','FIELD_VISIT','DEALER_REFERENCE','BUSINESS_CARD','DIRECT','IMPORTED'].map(s => (
+              <option key={s} value={s}>{SOURCE_LABELS[s]}</option>
+            ))}
+          </optgroup>
+          <optgroup label="Digital / Auto-Captured">
+            {['INDIAMART','META','GOOGLE','WHATSAPP','SHOPIFY','LINKEDIN'].map(s => (
+              <option key={s} value={s}>{SOURCE_LABELS[s]}</option>
+            ))}
+          </optgroup>
+        </select>
         <button
           onClick={() => navigate('/crm/leads/new')}
           style={{ ...inp, background: theme.primary, color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 600 }}
@@ -236,43 +150,11 @@ export default function LeadList() {
         </button>
       </div>
 
-      {/* Tracking Intelligence banner */}
-      {activeTab === 'tracking' && (
-        <div style={{
-          background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8,
-          padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#6b7280',
-        }}>
-          <strong style={{ color: '#374151' }}>Tracking Intelligence</strong> — Anonymous visitors and product-view-only events.
-          These are not actionable leads. No phone, no email. Read-only view for analytics.
-        </div>
-      )}
-
-      {activeTab === 'duplicates' && (
-        <div style={{
-          background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8,
-          padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#92400e',
-        }}>
-          <strong>Duplicate leads</strong> — Same phone number already exists in CRM. Review and merge or discard.
-        </div>
-      )}
-
-      {activeTab === 'junk' && (
-        <div style={{
-          background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8,
-          padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#991b1b',
-        }}>
-          <strong>Junk leads</strong> — No contact info, no product interest. Digital tracking events with nothing actionable.
-        </div>
-      )}
-
       {loading && <p style={{ color: theme.textMuted, fontSize: 13 }}>Loading...</p>}
 
       {!loading && leads.length === 0 && (
         <p style={{ color: theme.textMuted, textAlign: 'center', marginTop: 40 }}>
-          {activeTab === 'crm'        && 'No active leads. Create your first lead or wait for incoming webhooks.'}
-          {activeTab === 'tracking'   && 'No tracking events yet. Anonymous Shopify visitors will appear here.'}
-          {activeTab === 'duplicates' && 'No duplicate leads found.'}
-          {activeTab === 'junk'       && 'No junk leads found.'}
+          No active leads. Create your first lead or wait for incoming webhooks.
         </p>
       )}
 
@@ -286,19 +168,17 @@ export default function LeadList() {
           ? new Date(lead.follow_up_date).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
           : null;
         const isWaiting   = badge?.text?.startsWith('WAITING');
-        const isMuted     = activeTab === 'tracking' || activeTab === 'junk';
 
         return (
           <div
             key={lead.id}
-            onClick={() => navigate(`/crm/leads/${lead.id}`)}
+            onClick={() => navigate(`/crm/leads/${lead.id}`, { state: { from: location.pathname + location.search } })}
             style={{
-              border: `1px solid ${badge?.cardBorder ?? (isMuted ? '#e5e7eb' : theme.border)}`,
+              border: `1px solid ${badge?.cardBorder ?? theme.border}`,
               borderRadius: 8,
               marginBottom: 8,
-              background: isMuted ? '#f9fafb' : (lead.duplicate_flag ? '#fff8e1' : '#fff'),
+              background: lead.duplicate_flag ? '#fff8e1' : '#fff',
               overflow: 'hidden',
-              opacity: isMuted ? 0.85 : 1,
               cursor: 'pointer',
               userSelect: 'none',
             }}

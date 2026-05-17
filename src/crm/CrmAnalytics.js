@@ -146,6 +146,8 @@ export default function CrmAnalytics() {
   const [quotationPerf, setQuotationPerf] = useState(null);
   const [productConv, setProductConv] = useState([]);
   const [pipelineLeaks, setPipelineLeaks] = useState([]);
+  // ── Source health state ───────────────────────────────────────────────────────
+  const [sourceHealth, setSourceHealth] = useState(null);
 
   const canTeam = hasPermission('crm.analytics.team');
   const canAll = hasPermission('crm.analytics.all');
@@ -167,6 +169,7 @@ export default function CrmAnalytics() {
     if (canTeam) fetches.push(apiFetch('/crm/analytics/quotation-performance').then((r) => r.json()).then(setQuotationPerf).catch(() => {}));
     if (canTeam) fetches.push(apiFetch('/crm/analytics/product-conversion').then((r) => r.json()).then(setProductConv).catch(() => {}));
     if (canTeam) fetches.push(apiFetch('/crm/analytics/pipeline-leaks').then((r) => r.json()).then(setPipelineLeaks).catch(() => {}));
+    if (canAll) fetches.push(apiFetch('/crm/analytics/source-health').then((r) => r.json()).then(setSourceHealth).catch(() => {}));
     fetches.push(apiFetch('/crm/analytics/my').then((r) => r.json()).then(setMyStats).catch(() => {}));
     Promise.all(fetches).finally(() => setLoading(false));
   }, [canTeam, canAll, dailyDays]);
@@ -651,6 +654,158 @@ export default function CrmAnalytics() {
           </div>
         </div>
       )}
+      {/* ── Lead Source Reliability ────────────────────────────────────────────── */}
+      {canAll && sourceHealth && (
+        <div style={card}>
+          <h4 style={{ margin: '0 0 4px', fontSize: 14, color: theme.textMuted, textTransform: 'uppercase' }}>
+            Lead Source Reliability
+          </h4>
+          <p style={{ margin: '0 0 14px', fontSize: 12, color: theme.textMuted }}>
+            Ingestion quality across all platforms — covers active, archived, and historical leads.
+            Identity rate = leads with phone or email. Noise rate = tracking-only + junk.
+          </p>
+
+          {/* Issues list */}
+          {sourceHealth.issues && sourceHealth.issues.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Integration Issues
+              </div>
+              {sourceHealth.issues.map((issue, i) => {
+                const s = SEVERITY_STYLE[issue.severity] || SEVERITY_STYLE.LOW;
+                return (
+                  <div key={i} style={{
+                    background: s.bg, border: `1px solid ${s.border}`, borderRadius: 6,
+                    padding: '8px 12px', marginBottom: 6, fontSize: 12, color: s.color,
+                    display: 'flex', alignItems: 'flex-start', gap: 8,
+                  }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: s.dot, flexShrink: 0, marginTop: 3 }} />
+                    <span>{issue.message}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Per-source cards grid */}
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {(sourceHealth.sources || []).map((s) => {
+              const rel = s.reliability;
+              const relStyle = rel === 'CRITICAL'
+                ? { bg: '#fff1f2', border: '#fca5a5', badge: '#b91c1c', badgeBg: '#fee2e2' }
+                : rel === 'WARNING'
+                ? { bg: '#fffbeb', border: '#fde68a', badge: '#92400e', badgeBg: '#fef3c7' }
+                : { bg: '#f0fdf4', border: '#86efac', badge: '#15803d', badgeBg: '#dcfce7' };
+
+              return (
+                <div key={s.source} style={{
+                  flex: '1 1 200px', minWidth: 180, maxWidth: 280,
+                  border: `1px solid ${relStyle.border}`,
+                  background: relStyle.bg, borderRadius: 8, padding: '12px 14px',
+                }}>
+                  {/* Header */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <span style={{ fontWeight: 700, fontSize: 13, color: '#111827' }}>
+                      {SOURCE_LABELS[s.source] || s.source}
+                    </span>
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 10,
+                      background: relStyle.badgeBg, color: relStyle.badge,
+                    }}>
+                      {rel}
+                    </span>
+                  </div>
+
+                  {/* Metrics */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 8px', fontSize: 12 }}>
+                    <span style={{ color: theme.textMuted }}>Total</span>
+                    <span style={{ fontWeight: 600, textAlign: 'right' }}>{s.totalLeadCount}</span>
+
+                    <span style={{ color: theme.textMuted }}>Identity</span>
+                    <span style={{
+                      fontWeight: 700, textAlign: 'right',
+                      color: s.identityRate >= 60 ? '#15803d' : s.identityRate >= 30 ? '#92400e' : '#b91c1c',
+                    }}>
+                      {s.identityRate}%
+                    </span>
+
+                    <span style={{ color: theme.textMuted }}>Converted</span>
+                    <span style={{ fontWeight: 600, textAlign: 'right', color: '#15803d' }}>{s.conversionRate}%</span>
+
+                    <span style={{ color: theme.textMuted }}>Noise</span>
+                    <span style={{
+                      fontWeight: 600, textAlign: 'right',
+                      color: s.noiseRate > 50 ? '#b91c1c' : s.noiseRate > 20 ? '#92400e' : theme.textMuted,
+                    }}>
+                      {s.noiseRate}%
+                    </span>
+
+                    {s.archivedInvalidCount > 0 && (
+                      <>
+                        <span style={{ color: '#b91c1c', fontSize: 11 }}>Archived</span>
+                        <span style={{ fontWeight: 700, textAlign: 'right', color: '#b91c1c', fontSize: 11 }}>
+                          {s.archivedInvalidCount}
+                        </span>
+                      </>
+                    )}
+
+                    {s.avgResponseMinutes !== null && (
+                      <>
+                        <span style={{ color: theme.textMuted }}>Avg Response</span>
+                        <span style={{ textAlign: 'right', color: theme.textMuted, fontSize: 11 }}>
+                          {s.avgResponseMinutes < 60
+                            ? `${s.avgResponseMinutes}m`
+                            : `${Math.round(s.avgResponseMinutes / 60)}h`}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Duplicate phone patterns */}
+          {sourceHealth.duplicatePatterns && sourceHealth.duplicatePatterns.suspectedDuplicateCount > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Duplicate Phone Patterns ({sourceHealth.duplicatePatterns.suspectedDuplicateCount} phones with multiple leads)
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr>
+                      <th style={th}>Phone</th>
+                      <th style={{ ...th, textAlign: 'right' }}>Count</th>
+                      <th style={{ ...th, textAlign: 'right' }}>Sources</th>
+                      <th style={th}>First Seen</th>
+                      <th style={th}>Last Seen</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sourceHealth.duplicatePatterns.patterns.slice(0, 10).map((p, i) => (
+                      <tr key={i}>
+                        <td style={{ ...td, fontFamily: 'monospace', fontSize: 12 }}>{p.phone}</td>
+                        <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: p.occurrenceCount >= 5 ? '#b91c1c' : '#92400e' }}>
+                          {p.occurrenceCount}
+                        </td>
+                        <td style={{ ...td, textAlign: 'right', color: theme.textMuted }}>{p.sourceCount}</td>
+                        <td style={{ ...td, fontSize: 11, color: theme.textMuted }}>
+                          {new Date(p.firstSeen).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' })}
+                        </td>
+                        <td style={{ ...td, fontSize: 11, color: theme.textMuted }}>
+                          {new Date(p.lastSeen).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
     </PageLayout>
   );
 }
