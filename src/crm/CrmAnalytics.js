@@ -177,7 +177,27 @@ export default function CrmAnalytics() {
     if (canTeam) fetches.push(apiFetch('/crm/analytics/pipeline-leaks').then((r) => r.json()).then(setPipelineLeaks).catch(() => {}));
     if (canAll) fetches.push(apiFetch('/crm/analytics/source-health').then((r) => r.json()).then(setSourceHealth).catch(() => {}));
     if (canAll) fetches.push(apiFetch('/crm/analytics/today-by-source').then((r) => r.json()).then(setTodayBySource).catch(() => {}));
-    if (canAll) fetches.push(apiFetch('/leads/webhook/health').then((r) => r.json()).then(setWebhookHealth).catch(() => {}));
+    if (canAll) fetches.push(
+      apiFetch('/leads/webhook/health')
+        .then((r) => r.json())
+        .then((data) => {
+          console.log('[WebhookHealth]', data);
+          if (
+            !data ||
+            typeof data !== 'object' ||
+            Array.isArray(data) ||
+            data.success === false ||
+            data.errorCode ||
+            data.statusCode
+          ) {
+            console.error('[WebhookHealth] Invalid response', data);
+            setWebhookHealth({});
+            return;
+          }
+          setWebhookHealth(data);
+        })
+        .catch(() => {})
+    );
     if (canTeam) fetches.push(apiFetch('/crm/analytics/top-campaigns').then((r) => r.json()).then(setTopCampaigns).catch(() => {}));
     if (canTeam) fetches.push(apiFetch('/crm/analytics/conversion-funnel').then((r) => r.json()).then(setConversionFunnel).catch(() => {}));
     fetches.push(apiFetch('/crm/analytics/my').then((r) => r.json()).then(setMyStats).catch(() => {}));
@@ -291,32 +311,41 @@ export default function CrmAnalytics() {
             Last webhook received per source this session. Resets on server restart.
             Amber = no webhook received since restart. Red = received but &gt; 24 h ago.
           </p>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            {Object.entries(webhookHealth).map(([src, info]) => {
-              const h = info;
-              const dot = h.last_received_at === null
-                ? '#f59e0b'                                // never seen this session — amber/unknown
-                : h.healthy ? '#22c55e' : '#ef4444';      // green or red
-              const label = h.last_received_at === null
-                ? 'No data this session'
-                : h.healthy
-                  ? `${h.minutes_ago}m ago`
-                  : `${h.minutes_ago}m ago — stale`;
-              return (
-                <div key={src} style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  background: '#f8fafc', border: `1px solid ${theme.border}`,
-                  borderRadius: 7, padding: '8px 14px', flex: '1 1 160px',
-                }}>
-                  <div style={{ width: 10, height: 10, borderRadius: '50%', background: dot, flexShrink: 0 }} />
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: 13 }}>{SOURCE_LABELS[src] || src}</div>
-                    <div style={{ fontSize: 11, color: theme.textMuted }}>{label}</div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          {(() => {
+            const ALLOWED_SOURCES = ['META', 'GOOGLE', 'SHOPIFY', 'INDIAMART'];
+            const entries = Object.entries(webhookHealth).filter(([key]) => ALLOWED_SOURCES.includes(key));
+            if (entries.length === 0) {
+              return <p style={{ fontSize: 13, color: theme.textMuted, margin: 0 }}>No webhook activity yet</p>;
+            }
+            return (
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                {entries.map(([src, info]) => {
+                  const h = info;
+                  const dot = h.last_received_at === null
+                    ? '#f59e0b'
+                    : h.healthy ? '#22c55e' : '#ef4444';
+                  const label = h.last_received_at === null
+                    ? 'No data this session'
+                    : h.healthy
+                      ? `${h.minutes_ago}m ago`
+                      : `${h.minutes_ago}m ago — stale`;
+                  return (
+                    <div key={src} style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      background: '#f8fafc', border: `1px solid ${theme.border}`,
+                      borderRadius: 7, padding: '8px 14px', flex: '1 1 160px',
+                    }}>
+                      <div style={{ width: 10, height: 10, borderRadius: '50%', background: dot, flexShrink: 0 }} />
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 13 }}>{SOURCE_LABELS[src] || src}</div>
+                        <div style={{ fontSize: 11, color: theme.textMuted }}>{label}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
       )}
 
