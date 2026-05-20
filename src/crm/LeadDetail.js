@@ -1136,6 +1136,53 @@ export default function LeadDetail() {
           </div>
         )}
 
+        {/* ── LEAD ORIGIN (attribution) ── */}
+        {(lead.context || lead.external_id || lead.landing_page || lead.raw_payload?.utm_source || lead.raw_payload?.utm_campaign) && (
+          <div style={{ padding: '8px 16px 10px', background: '#f8fafc', borderBottom: `1px solid ${theme.border}` }}>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#9ca3af', marginBottom: 7 }}>
+              Lead Origin
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px' }}>
+              {lead.source && (
+                <div style={{ fontSize: 12, color: '#374151' }}>
+                  <span style={{ color: '#9ca3af', marginRight: 4 }}>Source</span>
+                  {SOURCE_LABELS[lead.source] || lead.source}
+                </div>
+              )}
+              {lead.context && (
+                <div style={{ fontSize: 12, color: '#374151' }}>
+                  <span style={{ color: '#9ca3af', marginRight: 4 }}>Origin</span>
+                  {lead.context}
+                </div>
+              )}
+              {lead.raw_payload?.utm_source && (
+                <div style={{ fontSize: 12, color: '#374151' }}>
+                  <span style={{ color: '#9ca3af', marginRight: 4 }}>UTM Source</span>
+                  {lead.raw_payload.utm_source}
+                </div>
+              )}
+              {lead.raw_payload?.utm_campaign && (
+                <div style={{ fontSize: 12, color: '#374151' }}>
+                  <span style={{ color: '#9ca3af', marginRight: 4 }}>Campaign</span>
+                  {lead.raw_payload.utm_campaign}
+                </div>
+              )}
+              {lead.external_id && (
+                <div style={{ fontSize: 11, color: '#9ca3af', fontFamily: 'monospace' }}>
+                  <span style={{ marginRight: 4 }}>ID</span>
+                  {lead.external_id}
+                </div>
+              )}
+              {lead.landing_page && (
+                <div style={{ fontSize: 11, color: '#9ca3af', wordBreak: 'break-all' }}>
+                  <span style={{ marginRight: 4 }}>Page</span>
+                  {lead.landing_page}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* ── PRODUCT / ITEM SEARCH ── */}
         <div style={{ borderBottom: `1px solid ${theme.border}` }}>
           <button

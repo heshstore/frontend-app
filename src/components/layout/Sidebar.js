@@ -261,6 +261,7 @@ export default function Sidebar({ onClose }) {
   const canViewWorkforce = usePermission('staff.view');
   const canSeeCrm        = hasAnyPermission('lead.view', 'crm.analytics.self');
   const canSeeWhatsApp   = usePermission('whatsapp.manage');
+  const canSeeMarketing  = hasAnyPermission('whatsapp.manage', 'lead.view');
   const canSeeItems      = usePermission('item.view');
   const canSeeCustomers  = usePermission('customer.view');
 
@@ -494,6 +495,18 @@ export default function Sidebar({ onClose }) {
 
               {moreOpen && (
                 <div style={{ animation: 'fadeIn 0.15s ease' }}>
+                  {canSeeMarketing && (
+                    <>
+                      <SideLabel>Marketing</SideLabel>
+                      <NavItem label="WA Engine"      href="/marketing/whatsapp-engine"          icon="🚀" />
+                      <NavItem label="Numbers"        href="/marketing/whatsapp-engine/numbers"  icon="📱" />
+                      <NavItem label="Queue Monitor"  href="/marketing/whatsapp-engine/queue"    icon="⏳" />
+                      <NavItem label="Message Logs"   href="/marketing/whatsapp-engine/logs"     icon="📋" />
+                      <NavItem label="Inbox"          href="/marketing/whatsapp-engine/inbox"    icon="📥" />
+                      <NavItem label="Analytics"      href="/marketing/whatsapp-engine/analytics" icon="📊" />
+                      <NavItem label="Validate"       href="/marketing/whatsapp-engine/validate"  icon="✅" />
+                    </>
+                  )}
                   {canSeeCrm && (
                     <>
                       <SideLabel>CRM</SideLabel>
@@ -501,7 +514,7 @@ export default function Sidebar({ onClose }) {
                       <NavItem label="Available Leads"  href="/crm/leads"     icon="👥" />
                       <NavItem label="All Leads"        href="/crm/all-leads" icon="📚" />
                       <NavItem label="Analytics"        href="/crm/analytics" icon="📊" />
-                      {canSeeWhatsApp && <NavItem label="WhatsApp" href="/whatsapp" icon="💬" />}
+                      {canSeeWhatsApp && <NavItem label="CRM WhatsApp" href="/whatsapp" icon="💬" />}
                     </>
                   )}
                   {canSeeCustomers && (

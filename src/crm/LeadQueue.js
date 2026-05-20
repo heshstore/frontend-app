@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import PageLayout from '../components/layout/PageLayout';
 import { apiFetch } from '../utils/api';
 import { normalizePhoneForWhatsApp } from '../utils/phone';
+import { trackWhatsAppClick } from '../lib/analytics';
 import { theme } from '../theme';
 import { getWaitingBadge } from './crmUtils';
 import PriorityBadges from './components/PriorityBadges';
@@ -142,6 +143,7 @@ function LeadCard({ item, onRefresh, mode }) {
       window.location.href = `tel:+91${d}`;
       setTimeout(() => setCallState('confirming'), 500);
     } else if (pType === 'WHATSAPP') {
+      trackWhatsAppClick({ context: 'crm_queue' });
       window.open(`https://wa.me/${d}`, '_blank');
     } else {
       togglePanel('followup');

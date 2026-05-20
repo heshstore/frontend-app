@@ -1,4 +1,5 @@
 import React from 'react';
+import { trackWhatsAppClick } from '../../lib/analytics';
 
 const GUIDES = {
   INTERESTED: {
@@ -68,7 +69,7 @@ export default function OutcomeNextSteps({
                 href={`https://wa.me/${phoneDigits}?text=${encodeURIComponent(waMessage)}`}
                 target="_blank"
                 rel="noreferrer"
-                onClick={onWaOpen}
+                onClick={() => { trackWhatsAppClick({ context: 'crm_outcome' }); if (onWaOpen) onWaOpen(); }}
                 style={stepBtn('#25D366')}
               >
                 {s.label}

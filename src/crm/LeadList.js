@@ -67,6 +67,7 @@ export default function LeadList() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [sourceFilter, setSourceFilter] = useState('');
+  const [contextFilter, setContextFilter] = useState('');
   const [expanded, setExpanded] = useState(null);
   const [page, setPage] = useState(0);
 
@@ -76,6 +77,7 @@ export default function LeadList() {
       const p = new URLSearchParams();
       if (statusFilter) p.set('status', statusFilter);
       if (sourceFilter) p.set('source', sourceFilter);
+      if (contextFilter) p.set('context', contextFilter);
       if (search) p.set('search', search);
       p.set('operationalOnly', 'true');
       const res = await apiFetch(`/crm/leads?${p}`);
@@ -87,7 +89,7 @@ export default function LeadList() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, sourceFilter, search]);
+  }, [statusFilter, sourceFilter, contextFilter, search]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -140,6 +142,27 @@ export default function LeadList() {
             {['INDIAMART','META','GOOGLE','WHATSAPP','SHOPIFY','LINKEDIN'].map(s => (
               <option key={s} value={s}>{SOURCE_LABELS[s]}</option>
             ))}
+          </optgroup>
+        </select>
+        <select style={{ ...inp }} value={contextFilter} onChange={(e) => setContextFilter(e.target.value)}>
+          <option value="">All Origins</option>
+          <optgroup label="Google">
+            <option value="GOOGLE – Ads">Google – Ads</option>
+            <option value="GOOGLE – Organic">Google – Organic</option>
+          </optgroup>
+          <optgroup label="Meta">
+            <option value="META – Lead Form">Meta – Lead Form</option>
+          </optgroup>
+          <optgroup label="Shopify">
+            <option value="SHOPIFY – Product Form">Shopify – Product Form</option>
+            <option value="SHOPIFY – WhatsApp Click">Shopify – WhatsApp Click</option>
+            <option value="SHOPIFY – Exit Popup">Shopify – Exit Popup</option>
+            <option value="SHOPIFY – Floating Button">Shopify – Floating Button</option>
+          </optgroup>
+          <optgroup label="Other">
+            <option value="WHATSAPP – Inbound">WhatsApp – Inbound</option>
+            <option value="INDIAMART – Query">IndiaMart – Query</option>
+            <option value="DIRECT – Manual">Direct – Manual Entry</option>
           </optgroup>
         </select>
         <button

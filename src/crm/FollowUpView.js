@@ -5,6 +5,7 @@ import { apiFetch } from '../utils/api';
 import { normalizePhoneForWhatsApp } from '../utils/phone';
 import { theme } from '../theme';
 import { toast } from '../utils/toast';
+import { trackWhatsAppClick } from '../lib/analytics';
 
 const STATUS_COLORS = {
   NEW: '#6c757d', CONTACTED: '#0d6efd', INTERESTED: '#0f5132',
@@ -175,7 +176,7 @@ function LeadCard({ lead, groupKey, groups, onRemove, cardRef }) {
 
         {/* Secondary actions */}
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <a href={`https://wa.me/${waPhone}`} target="_blank" rel="noreferrer" style={{
+          <a href={`https://wa.me/${waPhone}`} target="_blank" rel="noreferrer" onClick={() => trackWhatsAppClick({ context: 'crm_followup' })} style={{
             padding: '7px 11px', background: '#25D366', color: '#fff', textDecoration: 'none',
             borderRadius: 6, fontSize: 12, fontWeight: 700,
           }}>💬 WA</a>

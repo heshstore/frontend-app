@@ -1,5 +1,6 @@
-import React from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import React, { useEffect } from "react";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { initGA, initGTM, trackPageView } from "./lib/analytics";
 
 import Login from "./Login";
 import Dashboard from "./Dashboard";
@@ -72,6 +73,19 @@ import WorkforceProfilesPage      from "./pages/workforce/WorkforceProfilesPage"
 import AttendancePage             from "./pages/workforce/AttendancePage";
 import LeaveRequestsPage          from "./pages/workforce/LeaveRequestsPage";
 import ShiftMasterPage            from "./pages/workforce/ShiftMasterPage";
+import WaEngineDashboard          from "./pages/marketing/whatsapp/WaEngineDashboard";
+import WaNumbers                  from "./pages/marketing/whatsapp/WaNumbers";
+import WaQueue                    from "./pages/marketing/whatsapp/WaQueue";
+import WaLogs                     from "./pages/marketing/whatsapp/WaLogs";
+import WaInbox                    from "./pages/marketing/whatsapp/WaInbox";
+import WaAnalytics                from "./pages/marketing/whatsapp/WaAnalytics";
+import WaValidate                 from "./pages/marketing/whatsapp/WaValidate";
+
+function PageTracker() {
+  const location = useLocation();
+  useEffect(() => { trackPageView(location.pathname + location.search); }, [location]);
+  return null;
+}
 
 const BYPASS_AUTH = false;
 
@@ -111,10 +125,13 @@ const PermissionRoute = ({ children, permission }) => {
 };
 
 function App() {
+  useEffect(() => { initGA(); initGTM(); }, []);
+
   return (
     <AuthProvider>
       <NotificationProvider>
         <BrowserRouter>
+          <PageTracker />
           <GlobalNotifications />
           <NotificationPanel />
           <ToastContainer />
@@ -187,6 +204,14 @@ function App() {
               <Route path="/crm/automation-settings" element={<PermissionRoute permission="lead.edit"><AutomationSettings /></PermissionRoute>} />
               <Route path="/whatsapp" element={<PermissionRoute permission={["lead.view", "whatsapp.manage"]}><WhatsAppQR /></PermissionRoute>} />
               <Route path="/admin/whatsapp" element={<PermissionRoute permission="whatsapp.manage"><WhatsAppMonitor /></PermissionRoute>} />
+
+              <Route path="/marketing/whatsapp-engine" element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><WaEngineDashboard /></PermissionRoute>} />
+              <Route path="/marketing/whatsapp-engine/numbers" element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><WaNumbers /></PermissionRoute>} />
+              <Route path="/marketing/whatsapp-engine/queue" element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><WaQueue /></PermissionRoute>} />
+              <Route path="/marketing/whatsapp-engine/logs" element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><WaLogs /></PermissionRoute>} />
+              <Route path="/marketing/whatsapp-engine/inbox" element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><WaInbox /></PermissionRoute>} />
+              <Route path="/marketing/whatsapp-engine/analytics" element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><WaAnalytics /></PermissionRoute>} />
+              <Route path="/marketing/whatsapp-engine/validate" element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><WaValidate /></PermissionRoute>} />
 
               <Route path="/dispatch/orders/:id" element={<PermissionRoute permission="dispatch.view"><DispatchOrdersPage /></PermissionRoute>} />
               <Route path="/dispatch/orders" element={<PermissionRoute permission="dispatch.view"><DispatchOrdersPage /></PermissionRoute>} />

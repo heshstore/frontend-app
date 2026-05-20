@@ -4,6 +4,7 @@ import PageLayout from '../components/layout/PageLayout';
 import { apiFetch } from '../utils/api';
 import { theme } from '../theme';
 import { toast } from '../utils/toast';
+import { trackLeadSubmit } from '../lib/analytics';
 
 // Manual / high-trust sources — phone is optional for these
 const MANUAL_SOURCES = new Set([
@@ -260,6 +261,7 @@ export default function LeadForm() {
         return;
       }
       const lead = data?.lead ?? data;
+      trackLeadSubmit({ source: form.source || 'DIRECT', utm_source: form.utm_source, utm_campaign: form.utm_campaign });
       if (data?.warning === 'duplicate_phone') {
         toast.warn(`Lead created. Note: Another lead with phone ${phone} already exists — please check before contacting.`);
       }

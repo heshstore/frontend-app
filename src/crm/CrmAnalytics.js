@@ -148,6 +148,12 @@ export default function CrmAnalytics() {
   const [pipelineLeaks, setPipelineLeaks] = useState([]);
   // ── Source health state ───────────────────────────────────────────────────────
   const [sourceHealth, setSourceHealth] = useState(null);
+  // ── Today by source + webhook health ─────────────────────────────────────────
+  const [todayBySource, setTodayBySource] = useState(null);
+  const [webhookHealth, setWebhookHealth] = useState(null);
+  // ── Google stack analytics ────────────────────────────────────────────────────
+  const [topCampaigns, setTopCampaigns] = useState([]);
+  const [conversionFunnel, setConversionFunnel] = useState(null);
 
   const canTeam = hasPermission('crm.analytics.team');
   const canAll = hasPermission('crm.analytics.all');
@@ -170,6 +176,10 @@ export default function CrmAnalytics() {
     if (canTeam) fetches.push(apiFetch('/crm/analytics/product-conversion').then((r) => r.json()).then(setProductConv).catch(() => {}));
     if (canTeam) fetches.push(apiFetch('/crm/analytics/pipeline-leaks').then((r) => r.json()).then(setPipelineLeaks).catch(() => {}));
     if (canAll) fetches.push(apiFetch('/crm/analytics/source-health').then((r) => r.json()).then(setSourceHealth).catch(() => {}));
+    if (canAll) fetches.push(apiFetch('/crm/analytics/today-by-source').then((r) => r.json()).then(setTodayBySource).catch(() => {}));
+    if (canAll) fetches.push(apiFetch('/leads/webhook/health').then((r) => r.json()).then(setWebhookHealth).catch(() => {}));
+    if (canTeam) fetches.push(apiFetch('/crm/analytics/top-campaigns').then((r) => r.json()).then(setTopCampaigns).catch(() => {}));
+    if (canTeam) fetches.push(apiFetch('/crm/analytics/conversion-funnel').then((r) => r.json()).then(setConversionFunnel).catch(() => {}));
     fetches.push(apiFetch('/crm/analytics/my').then((r) => r.json()).then(setMyStats).catch(() => {}));
     Promise.all(fetches).finally(() => setLoading(false));
   }, [canTeam, canAll, dailyDays]);
@@ -237,6 +247,129 @@ export default function CrmAnalytics() {
             </select>
           </div>
           <DailyChart data={daily} />
+        </div>
+      )}
+
+      {/* Lead Sources Today */}
+      {canAll && todayBySource && (
+        <div style={card}>
+          <h4 style={{ margin: '0 0 4px', fontSize: 14, color: theme.textMuted, textTransform: 'uppercase' }}>Lead Sources Today</h4>
+          <p style={{ margin: '0 0 12px', fontSize: 12, color: theme.textMuted }}>Leads ingested today vs. last 7 days, by source.</p>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={th}>Source</th>
+                <th style={{ ...th, textAlign: 'right' }}>Today</th>
+                <th style={{ ...th, textAlign: 'right' }}>Last 7 Days</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Object.keys({ ...todayBySource.today, ...todayBySource.last7Days })
+                .sort((a, b) => (todayBySource.last7Days[b] || 0) - (todayBySource.last7Days[a] || 0))
+                .map((src) => (
+                  <tr key={src}>
+                    <td style={td}>{SOURCE_LABELS[src] || src}</td>
+                    <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: (todayBySource.today[src] || 0) > 0 ? '#0f5132' : theme.textMuted }}>
+                      {todayBySource.today[src] || 0}
+                    </td>
+                    <td style={{ ...td, textAlign: 'right' }}>{todayBySource.last7Days[src] || 0}</td>
+                  </tr>
+                ))}
+              {Object.keys({ ...todayBySource.today, ...todayBySource.last7Days }).length === 0 && (
+                <tr><td colSpan={3} style={{ ...td, color: theme.textMuted, textAlign: 'center' }}>No leads yet</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Webhook Health */}
+      {canAll && webhookHealth && (
+        <div style={card}>
+          <h4 style={{ margin: '0 0 4px', fontSize: 14, color: theme.textMuted, textTransform: 'uppercase' }}>Webhook Health</h4>
+          <p style={{ margin: '0 0 12px', fontSize: 12, color: theme.textMuted }}>
+            Last webhook received per source this session. Resets on server restart.
+            Amber = no webhook received since restart. Red = received but &gt; 24 h ago.
+          </p>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {Object.entries(webhookHealth).map(([src, info]) => {
+              const h = info;
+              const dot = h.last_received_at === null
+                ? '#f59e0b'                                // never seen this session — amber/unknown
+                : h.healthy ? '#22c55e' : '#ef4444';      // green or red
+              const label = h.last_received_at === null
+                ? 'No data this session'
+                : h.healthy
+                  ? `${h.minutes_ago}m ago`
+                  : `${h.minutes_ago}m ago — stale`;
+              return (
+                <div key={src} style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  background: '#f8fafc', border: `1px solid ${theme.border}`,
+                  borderRadius: 7, padding: '8px 14px', flex: '1 1 160px',
+                }}>
+                  <div style={{ width: 10, height: 10, borderRadius: '50%', background: dot, flexShrink: 0 }} />
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 13 }}>{SOURCE_LABELS[src] || src}</div>
+                    <div style={{ fontSize: 11, color: theme.textMuted }}>{label}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Conversion Funnel */}
+      {canTeam && conversionFunnel && (
+        <div style={card}>
+          <h4 style={{ margin: '0 0 4px', fontSize: 14, color: theme.textMuted, textTransform: 'uppercase' }}>Conversion Funnel</h4>
+          <p style={{ margin: '0 0 12px', fontSize: 12, color: theme.textMuted }}>Active leads → submitted quotations → live orders.</p>
+          {(() => {
+            const steps = [
+              { label: 'Active Leads',  value: conversionFunnel.leads,      color: theme.primary },
+              { label: 'Quotations',    value: conversionFunnel.quotations,  color: '#6f42c1'     },
+              { label: 'Orders',        value: conversionFunnel.orders,      color: '#198754'     },
+            ];
+            const top = conversionFunnel.leads || 1;
+            return steps.map((s) => (
+              <FunnelBar
+                key={s.label}
+                label={s.label}
+                count={s.value}
+                pct={Math.round((s.value / top) * 100)}
+                color={s.color}
+              />
+            ));
+          })()}
+        </div>
+      )}
+
+      {/* Top Campaigns */}
+      {canTeam && topCampaigns.length > 0 && (
+        <div style={card}>
+          <h4 style={{ margin: '0 0 4px', fontSize: 14, color: theme.textMuted, textTransform: 'uppercase' }}>Top Campaigns (Last 30 Days)</h4>
+          <p style={{ margin: '0 0 12px', fontSize: 12, color: theme.textMuted }}>Leads by UTM campaign + source from <code>raw_payload</code>.</p>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  <th style={th}>Campaign</th>
+                  <th style={th}>Source</th>
+                  <th style={{ ...th, textAlign: 'right' }}>Leads</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topCampaigns.map((c, i) => (
+                  <tr key={i}>
+                    <td style={{ ...td, fontFamily: 'monospace', fontSize: 12 }}>{c.campaign}</td>
+                    <td style={td}>{SOURCE_LABELS[c.source] || c.source}</td>
+                    <td style={{ ...td, textAlign: 'right', fontWeight: 700 }}>{c.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
