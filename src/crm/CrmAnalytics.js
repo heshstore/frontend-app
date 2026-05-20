@@ -91,17 +91,24 @@ function DailyChart({ data }) {
 }
 
 function FunnelBar({ label, count, pct, color }) {
+  const safePct = Number.isFinite(pct) ? Math.min(100, Math.max(0, pct)) : 0;
   return (
     <div style={{ marginBottom: 8 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 3 }}>
         <span style={{ color: theme.text, fontWeight: 500 }}>{label}</span>
-        <span style={{ color: theme.textMuted }}>{count} &nbsp;<strong style={{ color }}>{pct}%</strong></span>
+        <span style={{ color: theme.textMuted }}>{count} &nbsp;<strong style={{ color }}>{safePct}%</strong></span>
       </div>
       <div style={{ background: '#f3f4f6', borderRadius: 4, height: 8, overflow: 'hidden' }}>
-        <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 4, transition: 'width 0.4s' }} />
+        <div style={{ height: '100%', width: `${safePct}%`, background: color, borderRadius: 4, transition: 'width 0.4s' }} />
       </div>
     </div>
   );
+}
+
+function safePercent(numerator, denominator) {
+  if (!denominator || denominator <= 0) return 0;
+  const value = (numerator / denominator) * 100;
+  return Number.isFinite(value) ? Math.min(100, Math.max(0, Math.round(value))) : 0;
 }
 
 function inr(n) {
@@ -360,13 +367,12 @@ export default function CrmAnalytics() {
               { label: 'Quotations',    value: conversionFunnel.quotations,  color: '#6f42c1'     },
               { label: 'Orders',        value: conversionFunnel.orders,      color: '#198754'     },
             ];
-            const top = conversionFunnel.leads || 1;
             return steps.map((s) => (
               <FunnelBar
                 key={s.label}
                 label={s.label}
                 count={s.value}
-                pct={Math.round((s.value / top) * 100)}
+                pct={safePercent(s.value, conversionFunnel.leads)}
                 color={s.color}
               />
             ));
