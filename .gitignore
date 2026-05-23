@@ -21,3 +21,13 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+.wwebjs_auth/
+.wwebjs_auth_crm/
+.wwebjs_auth_marketing/
+.wwebjs_cache/
+sessions/
+uploads/
+dist/
+node_modules/
+.env
