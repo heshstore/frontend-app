@@ -81,6 +81,8 @@ import WaInbox                    from "./pages/marketing/whatsapp/WaInbox";
 import WaAnalytics                from "./pages/marketing/whatsapp/WaAnalytics";
 import WaValidate                 from "./pages/marketing/whatsapp/WaValidate";
 
+console.log('[FRONTEND_BUILD]', '2026-05-21-v2');
+
 function PageTracker() {
   const location = useLocation();
   useEffect(() => { trackPageView(location.pathname + location.search); }, [location]);

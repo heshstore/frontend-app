@@ -1,53 +1,100 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import PageLayout from '../components/layout/PageLayout';
 import { apiFetch } from '../utils/api';
 import { theme } from '../theme';
 import { useConfirm } from '../components/ui/ConfirmModal';
 
 const STATE_COLOR = {
-  ready:          '#198754',
-  qr_ready:       '#dc3545',
-  authenticating: '#ffc107',
-  initializing:   '#ffc107',
-  idle:           '#6c757d',
-  disconnected:   '#dc3545',
-  auth_failure:   '#dc3545',
+  CONNECTED:    '#198754',
+  QR_READY:     '#dc3545',
+  CONNECTING:   '#ffc107',
+  FAILED:       '#dc3545',
+  DISCONNECTED: '#dc3545',
+  IDLE:         '#6c757d',
 };
 
 const STATE_LABEL = {
-  ready:          (phone) => phone ? `Connected: +${phone}` : 'WhatsApp Connected',
-  qr_ready:       () => 'Waiting for QR Scan',
-  authenticating: () => 'Connecting to WhatsApp…',
-  initializing:   () => 'Starting…',
-  idle:           () => 'Not Connected',
-  disconnected:   () => 'Not Connected',
-  auth_failure:   () => 'Session Failed',
+  CONNECTED:    (phone) => phone ? `Connected: +${phone}` : 'WhatsApp Connected',
+  QR_READY:     () => 'Waiting for QR Scan',
+  CONNECTING:   () => 'Connecting to WhatsApp…',
+  FAILED:       () => 'Session Failed',
+  DISCONNECTED: () => 'Not Connected',
+  IDLE:         () => 'Not Connected',
 };
 
 const STATE_DESC = {
-  ready:          'WhatsApp is active. Leads and reminders are working.',
-  qr_ready:       'Scan the QR code with your WhatsApp to connect.',
-  authenticating: 'QR scanned — establishing session. Do NOT close WhatsApp.',
-  initializing:   'Browser is launching. QR will appear in 20–60 seconds.',
-  idle:           'Click Connect to start WhatsApp.',
-  disconnected:   'WhatsApp is disconnected. Click Connect to start a new session.',
-  auth_failure:   'Authentication failed. Click Reset to generate a fresh QR.',
+  CONNECTED:    'WhatsApp is active. Leads and reminders are working.',
+  QR_READY:     'Scan the QR code with your WhatsApp to connect.',
+  CONNECTING:   'QR scanned — establishing session. Do NOT close WhatsApp.',
+  FAILED:       'Authentication failed. Click Reset to generate a fresh QR.',
+  DISCONNECTED: 'WhatsApp is disconnected. Click Connect to start a new session.',
+  IDLE:         'Click Connect to start WhatsApp.',
 };
+
+const UNHEALTHY_THRESHOLD   = 3;
+const DISCONNECTED_HOLD_MS  = 90_000;
+
+function rawToMapped(waState) {
+  if (['ready', 'authenticated', 'recovering', 'reconnecting'].includes(waState)) return 'CONNECTED';
+  if (['booting', 'initializing', 'authenticating'].includes(waState)) return 'CONNECTING';
+  if (waState === 'qr_ready') return 'QR_READY';
+  if (['failed', 'auth_failure'].includes(waState)) return 'FAILED';
+  if (waState === 'disconnected') return 'DISCONNECTED';
+  return 'IDLE';
+}
+
+function deriveStableStatus(prevStable, raw, unhealthyCount, disconnectedSince) {
+  const rawMapped = rawToMapped(raw?.waState ?? 'idle');
+  if (prevStable !== 'CONNECTED') return rawMapped;
+  if (rawMapped === 'CONNECTED') return 'CONNECTED';
+  if (rawMapped === 'QR_READY' || rawMapped === 'FAILED') return rawMapped;
+  if (rawMapped === 'DISCONNECTED') {
+    if (disconnectedSince && Date.now() - disconnectedSince >= DISCONNECTED_HOLD_MS) return 'DISCONNECTED';
+    return 'CONNECTED';
+  }
+  if (unhealthyCount >= UNHEALTHY_THRESHOLD) return rawMapped;
+  return 'CONNECTED';
+}
 
 export default function WhatsAppQR() {
   const [confirm, confirmModal] = useConfirm();
-  const [status,       setStatus]       = useState(null);
-  const [connecting,   setConnecting]   = useState(false);
-  const [disconnecting,setDisconnecting]= useState(false);
-  const [resetting,    setResetting]    = useState(false);
-  const [error,        setError]        = useState('');
+  const [status,         setStatus]         = useState(null);
+  const [stableUiStatus, setStableUiStatus] = useState('IDLE');
+  const [connecting,     setConnecting]     = useState(false);
+  const [disconnecting,  setDisconnecting]  = useState(false);
+  const [resetting,      setResetting]      = useState(false);
+  const [error,          setError]          = useState('');
+  const prevStableRef        = useRef('IDLE');
+  const unhealthyCountRef    = useRef(0);
+  const disconnectedSinceRef = useRef(null);
 
   // ── Poll /whatsapp/status every 5 s ──────────────────────────────────────────
 
   const poll = useCallback(async () => {
     try {
       const res = await apiFetch('/whatsapp/status');
-      if (res.ok) setStatus(await res.json());
+      if (!res.ok) return;
+      const data = await res.json();
+      const rawMapped = rawToMapped(data?.waState ?? 'idle');
+
+      if (rawMapped === 'CONNECTED') {
+        unhealthyCountRef.current = 0;
+        disconnectedSinceRef.current = null;
+      } else if (prevStableRef.current === 'CONNECTED') {
+        unhealthyCountRef.current += 1;
+        if (rawMapped === 'DISCONNECTED' && !disconnectedSinceRef.current) {
+          disconnectedSinceRef.current = Date.now();
+        }
+      }
+
+      const newStable = deriveStableStatus(
+        prevStableRef.current, data,
+        unhealthyCountRef.current, disconnectedSinceRef.current,
+      );
+      console.log('[WA_STATUS]', { previousStableState: prevStableRef.current, backendState: data?.waState, derivedState: newStable });
+      prevStableRef.current = newStable;
+      setStatus(data);
+      setStableUiStatus(newStable);
     } catch { /* network hiccup — keep showing last status */ }
   }, []);
 
@@ -107,15 +154,15 @@ export default function WhatsAppQR() {
 
   // ── Derived display values ────────────────────────────────────────────────────
 
-  const waState   = status?.waState ?? 'idle';
-  const phone     = status?.phone;
-  const qr        = status?.qr;
-  const isReady   = waState === 'ready';
-  const showQR    = waState === 'qr_ready' && qr?.active && qr?.qr;
-  const dotColor  = STATE_COLOR[waState] ?? '#dc3545';
-  const labelFn   = STATE_LABEL[waState] ?? (() => waState);
-  const descText  = STATE_DESC[waState]  ?? '';
-  const canConnect = !['initializing', 'qr_ready', 'authenticating'].includes(waState);
+  const rawWaState = status?.waState ?? 'idle';
+  const phone      = status?.phone;
+  const qr         = status?.qr;
+  const isReady    = stableUiStatus === 'CONNECTED';
+  const showQR     = stableUiStatus === 'QR_READY' && qr?.active && qr?.qr;
+  const dotColor   = STATE_COLOR[stableUiStatus] ?? '#dc3545';
+  const labelFn    = STATE_LABEL[stableUiStatus] ?? (() => stableUiStatus);
+  const descText   = STATE_DESC[stableUiStatus]  ?? '';
+  const canConnect = !['CONNECTING', 'QR_READY'].includes(stableUiStatus);
 
   return (
     <>
@@ -167,7 +214,7 @@ export default function WhatsAppQR() {
           )}
 
           {/* ── Authenticating ── */}
-          {waState === 'authenticating' && (
+          {rawWaState === 'authenticating' && (
             <div style={{
               background: '#cfe2ff', border: '1px solid #9ec5fe',
               borderRadius: 8, padding: 24, textAlign: 'center', marginBottom: 16,
@@ -183,7 +230,7 @@ export default function WhatsAppQR() {
           )}
 
           {/* ── Initializing ── */}
-          {waState === 'initializing' && (
+          {rawWaState === 'initializing' && (
             <div style={{
               background: '#fff3cd', border: '1px solid #ffecb5',
               borderRadius: 8, padding: 24, textAlign: 'center', marginBottom: 16,

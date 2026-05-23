@@ -1,28 +1,51 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { apiFetch } from '../../utils/api';
 import { theme } from '../../theme';
 import PageLayout from '../../components/layout/PageLayout';
 import { useConfirm } from '../../components/ui/ConfirmModal';
 
 const STATE_COLOR = {
-  ready:          theme.success,
-  qr_ready:       theme.danger,
-  authenticating: theme.warning,
-  initializing:   '#0d6efd',
-  idle:           '#6c757d',
-  disconnected:   theme.danger,
-  auth_failure:   theme.danger,
+  CONNECTED:    theme.success,
+  QR_READY:     theme.danger,
+  CONNECTING:   theme.warning,
+  FAILED:       theme.danger,
+  DISCONNECTED: theme.danger,
+  IDLE:         '#6c757d',
 };
 
 const STATE_LABEL = {
-  ready:          'Connected',
-  qr_ready:       'QR Active',
-  authenticating: 'Authenticating',
-  initializing:   'Initializing',
-  idle:           'Not Connected',
-  disconnected:   'Disconnected',
-  auth_failure:   'Auth Failure',
+  CONNECTED:    'Connected',
+  QR_READY:     'QR Active',
+  CONNECTING:   'Connecting',
+  FAILED:       'Auth Failure',
+  DISCONNECTED: 'Disconnected',
+  IDLE:         'Not Connected',
 };
+
+const UNHEALTHY_THRESHOLD   = 3;
+const DISCONNECTED_HOLD_MS  = 90_000;
+
+function rawToMapped(waState) {
+  if (['ready', 'authenticated', 'recovering', 'reconnecting'].includes(waState)) return 'CONNECTED';
+  if (['booting', 'initializing', 'authenticating'].includes(waState)) return 'CONNECTING';
+  if (waState === 'qr_ready') return 'QR_READY';
+  if (['failed', 'auth_failure'].includes(waState)) return 'FAILED';
+  if (waState === 'disconnected') return 'DISCONNECTED';
+  return 'IDLE';
+}
+
+function deriveStableStatus(prevStable, raw, unhealthyCount, disconnectedSince) {
+  const rawMapped = rawToMapped(raw?.waState ?? 'idle');
+  if (prevStable !== 'CONNECTED') return rawMapped;
+  if (rawMapped === 'CONNECTED') return 'CONNECTED';
+  if (rawMapped === 'QR_READY' || rawMapped === 'FAILED') return rawMapped;
+  if (rawMapped === 'DISCONNECTED') {
+    if (disconnectedSince && Date.now() - disconnectedSince >= DISCONNECTED_HOLD_MS) return 'DISCONNECTED';
+    return 'CONNECTED';
+  }
+  if (unhealthyCount >= UNHEALTHY_THRESHOLD) return rawMapped;
+  return 'CONNECTED';
+}
 
 function Card({ children, style }) {
   return (
@@ -65,16 +88,41 @@ function Row({ label, value, valueColor }) {
 
 export default function WhatsAppMonitor() {
   const [confirm, confirmModal] = useConfirm();
-  const [status,       setStatus]       = useState(null);
-  const [connecting,   setConnecting]   = useState(false);
-  const [disconnecting,setDisconnecting]= useState(false);
-  const [resetting,    setResetting]    = useState(false);
-  const [error,        setError]        = useState('');
+  const [status,         setStatus]         = useState(null);
+  const [stableUiStatus, setStableUiStatus] = useState('IDLE');
+  const [connecting,     setConnecting]     = useState(false);
+  const [disconnecting,  setDisconnecting]  = useState(false);
+  const [resetting,      setResetting]      = useState(false);
+  const [error,          setError]          = useState('');
+  const prevStableRef        = useRef('IDLE');
+  const unhealthyCountRef    = useRef(0);
+  const disconnectedSinceRef = useRef(null);
 
   const poll = useCallback(async () => {
     try {
       const res = await apiFetch('/whatsapp/status');
-      if (res.ok) setStatus(await res.json());
+      if (!res.ok) return;
+      const data = await res.json();
+      const rawMapped = rawToMapped(data?.waState ?? 'idle');
+
+      if (rawMapped === 'CONNECTED') {
+        unhealthyCountRef.current = 0;
+        disconnectedSinceRef.current = null;
+      } else if (prevStableRef.current === 'CONNECTED') {
+        unhealthyCountRef.current += 1;
+        if (rawMapped === 'DISCONNECTED' && !disconnectedSinceRef.current) {
+          disconnectedSinceRef.current = Date.now();
+        }
+      }
+
+      const newStable = deriveStableStatus(
+        prevStableRef.current, data,
+        unhealthyCountRef.current, disconnectedSinceRef.current,
+      );
+      console.log('[WA_MONITOR]', { previousStableState: prevStableRef.current, backendState: data?.waState, derivedState: newStable });
+      prevStableRef.current = newStable;
+      setStatus(data);
+      setStableUiStatus(newStable);
     } catch { /* non-fatal */ }
   }, []);
 
@@ -130,13 +178,13 @@ export default function WhatsAppMonitor() {
     }
   };
 
-  const waState   = status?.waState ?? 'idle';
-  const isReady   = waState === 'ready';
-  const stateColor = STATE_COLOR[waState] ?? theme.danger;
-  const stateLabel = STATE_LABEL[waState] ?? waState;
+  const rawWaState = status?.waState ?? 'idle';
+  const isReady    = stableUiStatus === 'CONNECTED';
+  const stateColor = STATE_COLOR[stableUiStatus] ?? theme.danger;
+  const stateLabel = STATE_LABEL[stableUiStatus] ?? stableUiStatus;
   const qr         = status?.qr;
-  const showQR     = waState === 'qr_ready' && qr?.active && qr?.qr;
-  const canConnect = !['initializing', 'qr_ready', 'authenticating'].includes(waState);
+  const showQR     = stableUiStatus === 'QR_READY' && qr?.active && qr?.qr;
+  const canConnect = !['CONNECTING', 'QR_READY'].includes(stableUiStatus);
 
   return (
     <>
@@ -156,7 +204,7 @@ export default function WhatsAppMonitor() {
               </span>
             </div>
             <SectionLabel>Details</SectionLabel>
-            <Row label="State"   value={waState} />
+            <Row label="State"   value={rawWaState} />
             <Row label="Phone"   value={status?.phone ? `+${status.phone}` : null} />
             <Row label="DB status" value={status?.status} />
             <Row

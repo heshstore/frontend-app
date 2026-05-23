@@ -37,6 +37,52 @@ const td = {
 
 const WARMUP_LABELS = { 1: 'COLD', 2: 'WARM', 3: 'HOT', 4: 'SEASONED' };
 
+// ── Stable status derivation ───────────────────────────────────────────────────
+
+const UNHEALTHY_THRESHOLD  = 3;
+const DISCONNECTED_HOLD_MS = 90_000;
+// Minimum time that must have elapsed since the first non-CONNECTED poll before we
+// will consider downgrading from CONNECTED. Guards against polling storms where
+// multiple rapid polls burn through UNHEALTHY_THRESHOLD in milliseconds.
+const DISCONNECT_GRACE_MS  = 15_000;
+
+function rawToMapped(waState) {
+  if (['ready', 'authenticated'].includes(waState)) return 'CONNECTED';
+  if (['booting', 'initializing', 'authenticating'].includes(waState)) return 'CONNECTING';
+  if (waState === 'qr_ready') return 'QR_READY';
+  if (['failed', 'auth_failure'].includes(waState)) return 'FAILED';
+  if (waState === 'disconnected') return 'DISCONNECTED';
+  return 'IDLE';
+}
+
+// graceSince: timestamp when we first saw a non-CONNECTED response from a CONNECTED state.
+function deriveStableStatus(prevStable, raw, unhealthyCount, disconnectedSince, graceSince) {
+  const rawMapped = rawToMapped(raw?.waState ?? 'idle');
+  if (prevStable !== 'CONNECTED') return rawMapped;
+  if (rawMapped === 'CONNECTED') return 'CONNECTED';
+  if (rawMapped === 'QR_READY' || rawMapped === 'FAILED') return rawMapped;
+
+  // Time gate: absorb transient backend states and polling storms.
+  // If we haven't been seeing non-CONNECTED for at least DISCONNECT_GRACE_MS, hold CONNECTED.
+  const graceExpired = graceSince !== null && (Date.now() - graceSince) >= DISCONNECT_GRACE_MS;
+  if (!graceExpired) return 'CONNECTED';
+
+  // Evidence gate: require positive proof that the session is truly gone before downgrading.
+  // A transient 'idle' response while the browser is still alive must NOT flip the UI.
+  const browserGone  = raw?.browserConnected === false;
+  const clientGone   = raw?.clientExists === false;
+  const lastReadyMs  = raw?.lastReadyAt ? new Date(raw.lastReadyAt).getTime() : null;
+  const readyStale   = lastReadyMs !== null && (Date.now() - lastReadyMs) > 2 * 60_000;
+  if (!browserGone && !clientGone && !readyStale) return 'CONNECTED';
+
+  if (rawMapped === 'DISCONNECTED') {
+    if (disconnectedSince && Date.now() - disconnectedSince >= DISCONNECTED_HOLD_MS) return 'DISCONNECTED';
+    return 'CONNECTED';
+  }
+  if (unhealthyCount >= UNHEALTHY_THRESHOLD) return rawMapped;
+  return 'CONNECTED';
+}
+
 function riskColor(score) {
   if (score > 60) return '#dc3545';
   if (score >= 30) return '#fd7e14';
@@ -50,23 +96,22 @@ function formatTime(ts) {
 
 // ── WA state badge ─────────────────────────────────────────────────────────────
 
-function WaStateBadge({ waState, connected }) {
-  if (connected) {
+function WaStateBadge({ stableStatus }) {
+  if (stableStatus === 'CONNECTED') {
     return (
       <span style={{ background: '#dcfce7', color: '#166534', padding: '2px 9px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>
         CONNECTED
       </span>
     );
   }
+  if (!stableStatus || stableStatus === 'IDLE') return null;
   const map = {
-    qr_ready:      { bg: '#fef9c3', color: '#854d0e', label: 'QR READY' },
-    authenticating:{ bg: '#dbeafe', color: '#1d4ed8', label: 'AUTHENTICATING' },
-    reconnecting:  { bg: '#dbeafe', color: '#1d4ed8', label: 'RECONNECTING' },
-    initializing:  { bg: '#e0f2fe', color: '#0369a1', label: 'INITIALIZING' },
-    disconnected:  { bg: '#f3f4f6', color: '#6b7280', label: 'DISCONNECTED' },
-    auth_failure:  { bg: '#fee2e2', color: '#991b1b', label: 'AUTH FAILED' },
+    CONNECTING:   { bg: '#e0f2fe', color: '#0369a1', label: 'CONNECTING' },
+    QR_READY:     { bg: '#fef9c3', color: '#854d0e', label: 'QR READY' },
+    DISCONNECTED: { bg: '#f3f4f6', color: '#6b7280', label: 'DISCONNECTED' },
+    FAILED:       { bg: '#fee2e2', color: '#991b1b', label: 'FAILED' },
   };
-  const c = map[waState] || { bg: '#f3f4f6', color: '#6b7280', label: (waState || 'UNKNOWN').toUpperCase() };
+  const c = map[stableStatus] || { bg: '#f3f4f6', color: '#6b7280', label: stableStatus };
   return (
     <span style={{ background: c.bg, color: c.color, padding: '2px 9px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>
       {c.label}
@@ -82,15 +127,25 @@ function QrModal({ numberId, numberPhone, onClose }) {
   const pollRef = useRef(null);
 
   const poll = useCallback(async () => {
+    // Skip poll when tab is hidden — avoids unnecessary network during reconnect loops
+    if (document.hidden) return;
+    console.log('[POLL_DEBUG] qr_modal', { numberId, intervalMs: 5000, hidden: document.hidden, timestamp: Date.now() });
     try {
       const [qrRes, statusRes] = await Promise.all([
         apiFetch(`/marketing/whatsapp-engine/numbers/${numberId}/qr`).then((r) => r.json()),
         apiFetch(`/marketing/whatsapp-engine/numbers/${numberId}/status`).then((r) => r.json()),
       ]);
+      if (qrRes?.qr) {
+        console.log('[FRONTEND_QR] receivedLength=' + qrRes.qr.length + ' active=' + qrRes.active);
+      } else {
+        console.log('[FRONTEND_QR] no_qr', { active: qrRes?.active, waState: statusRes?.waState });
+      }
       setQrData(qrRes);
       setWaStatus(statusRes);
-      // Auto-close once connected
-      if (statusRes?.connected) {
+      // Auto-close once connected (ready OR recovering — both mean session is live)
+      const stableConnected = statusRes?.connected ||
+        ['ready', 'authenticated'].includes(statusRes?.waState);
+      if (stableConnected) {
         clearInterval(pollRef.current);
         setTimeout(onClose, 1_500);
       }
@@ -99,11 +154,11 @@ function QrModal({ numberId, numberPhone, onClose }) {
 
   useEffect(() => {
     poll();
-    pollRef.current = setInterval(poll, 3_000);
+    pollRef.current = setInterval(poll, 5_000);
     return () => clearInterval(pollRef.current);
   }, [poll]);
 
-  const connected = waStatus?.connected;
+  const connected = waStatus?.connected || ['ready', 'authenticated'].includes(waStatus?.waState);
   const qrActive = qrData?.active && qrData?.qr;
 
   return (
@@ -137,16 +192,16 @@ function QrModal({ numberId, numberPhone, onClose }) {
               <strong>Linked Devices → Link a Device</strong>, then scan.
             </div>
             <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 8 }}>
-              QR refreshes automatically · Polling every 3s
+              QR refreshes automatically · Polling every 5s
             </div>
           </>
-        ) : waStatus?.initializing ? (
+        ) : waStatus?.booting || waStatus?.waState === 'booting' ? (
           <div style={{ padding: '24px 0', color: '#6b7280' }}>
             <div style={{ fontSize: 32, marginBottom: 10 }}>⏳</div>
             <div style={{ fontWeight: 600 }}>Starting WhatsApp…</div>
             <div style={{ fontSize: 12, marginTop: 4 }}>QR will appear shortly</div>
           </div>
-        ) : waStatus?.waState === 'auth_failure' ? (
+        ) : waStatus?.waState === 'failed' || waStatus?.waState === 'auth_failure' ? (
           <div style={{ padding: '20px 0' }}>
             <div style={{ fontSize: 32, marginBottom: 10 }}>❌</div>
             <div style={{ fontWeight: 700, color: '#991b1b' }}>Auth Failed</div>
@@ -231,24 +286,72 @@ function TrendPanel({ numberId, onClose }) {
 // ── Number Row ────────────────────────────────────────────────────────────────
 
 function NumberRow({ num, onAction, trendOpen, onToggleTrend }) {
-  const [waStatus, setWaStatus] = useState(null);
+  const [waStatus,       setWaStatus]       = useState(null);
+  const [stableUiStatus, setStableUiStatus] = useState('IDLE');
   const [busy, setBusy] = useState(false);
   const [limitEdit, setLimitEdit] = useState('');
   const [limitDirty, setLimitDirty] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
-  const statusPollRef = useRef(null);
+  const statusPollRef        = useRef(null);
+  const prevStableRef        = useRef('IDLE');
+  const unhealthyCountRef    = useRef(0);
+  const disconnectedSinceRef = useRef(null);
+  // Timestamp of the first non-CONNECTED poll after being CONNECTED.
+  // Used with DISCONNECT_GRACE_MS to prevent polling storms from downgrading the UI.
+  const disconnectGraceRef   = useRef(null);
 
-  // Poll live WA status for this number
   const pollStatus = useCallback(async () => {
+    if (document.hidden) return;
     try {
       const r = await apiFetch(`/marketing/whatsapp-engine/numbers/${num.id}/status`);
-      if (r.ok) setWaStatus(await r.json());
+      if (!r.ok) return;
+      const data = await r.json();
+      const rawMapped = rawToMapped(data?.waState ?? 'idle');
+
+      if (rawMapped === 'CONNECTED') {
+        unhealthyCountRef.current    = 0;
+        disconnectedSinceRef.current = null;
+        disconnectGraceRef.current   = null;
+      } else if (prevStableRef.current === 'CONNECTED') {
+        unhealthyCountRef.current += 1;
+        // Record the first moment we saw a non-CONNECTED response — grace timer starts here.
+        if (!disconnectGraceRef.current) disconnectGraceRef.current = Date.now();
+        if (rawMapped === 'DISCONNECTED' && !disconnectedSinceRef.current) {
+          disconnectedSinceRef.current = Date.now();
+        }
+      }
+
+      const newStable = deriveStableStatus(
+        prevStableRef.current, data,
+        unhealthyCountRef.current, disconnectedSinceRef.current,
+        disconnectGraceRef.current,
+      );
+
+      // Temporary diagnostics — remove once synchronization is confirmed stable.
+      console.log('[WA_UI_STATE]', {
+        numberId:          num.id,
+        previousState:     prevStableRef.current,
+        polledState:       data?.waState,
+        finalRenderedState: newStable,
+        clientExists:      data?.clientExists,
+        browserConnected:  data?.browserConnected,
+        unhealthyCount:    unhealthyCountRef.current,
+        graceMs:           disconnectGraceRef.current ? Date.now() - disconnectGraceRef.current : null,
+      });
+
+      prevStableRef.current = newStable;
+      setWaStatus(data);
+      setStableUiStatus(newStable);
     } catch { /* silent */ }
   }, [num.id]);
 
+  // Stable 15s polling interval — must NOT depend on waStatus?.waState.
+  // A dependency on waState caused the interval to restart on every state change,
+  // creating rapid-fire polls that exhausted the UNHEALTHY_THRESHOLD grace in
+  // milliseconds and instantly showed "Connect" on any transient backend response.
   useEffect(() => {
     pollStatus();
-    statusPollRef.current = setInterval(pollStatus, 5_000);
+    statusPollRef.current = setInterval(pollStatus, 15_000);
     return () => clearInterval(statusPollRef.current);
   }, [pollStatus]);
 
@@ -280,9 +383,10 @@ function NumberRow({ num, onAction, trendOpen, onToggleTrend }) {
     }
   };
 
-  const connected = waStatus?.connected;
-  const initializing = waStatus?.initializing;
-  const qrActive = waStatus?.qrActive;
+  const connected = stableUiStatus === 'CONNECTED';
+  const booting   = waStatus?.booting || waStatus?.waState === 'booting';
+  const qrActive  = waStatus?.qrActive;
+  const canConnect = !connected && !['CONNECTING', 'QR_READY'].includes(stableUiStatus);
 
   return (
     <>
@@ -303,7 +407,7 @@ function NumberRow({ num, onAction, trendOpen, onToggleTrend }) {
 
           {/* Live WA Connection State */}
           <td style={td}>
-            <WaStateBadge waState={waStatus?.waState ?? num.wa_state} connected={connected} />
+            <WaStateBadge stableStatus={stableUiStatus} />
             {waStatus?.lastReadyAt && (
               <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 3 }}>
                 Since {formatTime(waStatus.lastReadyAt)}
@@ -366,7 +470,7 @@ function NumberRow({ num, onAction, trendOpen, onToggleTrend }) {
           <td style={td}>
             <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
               {/* Connect / QR */}
-              {!connected && !initializing && (
+              {canConnect && (
                 <button
                   style={btn('#0d6efd', '#fff', busy)}
                   disabled={busy}
@@ -375,7 +479,7 @@ function NumberRow({ num, onAction, trendOpen, onToggleTrend }) {
                   Connect
                 </button>
               )}
-              {(connected || qrActive || initializing) && (
+              {(connected || qrActive || booting) && (
                 <button
                   style={btn('#6366f1', '#fff', busy)}
                   disabled={busy}
@@ -589,7 +693,7 @@ export default function WaNumbers() {
         )}
 
         <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 12 }}>
-          WA Session status polls every 5s per row. Edit limit inline (Enter to save). Reset wipes LocalAuth — phone must re-scan QR.
+          Sessions are manual-only — click Connect to start. Status polls every 15s per row. Pauses when tab is hidden. Edit limit inline (Enter to save). Reset wipes LocalAuth — phone must re-scan QR.
         </div>
       </div>
     </PageLayout>

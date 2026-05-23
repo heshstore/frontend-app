@@ -180,13 +180,23 @@ export default function WaValidate() {
           </div>
         )}
 
+        {/* Campaign Setup */}
+        <Section title="Campaign Setup">
+          <div style={card()}>
+            <Row label="Active templates"    value={r.catalog?.active_templates ?? '—'}   ok={(r.catalog?.active_templates ?? 0) > 0} />
+            <Row label="Active campaigns"    value={r.catalog?.active_campaigns ?? '—'}   ok={null} neutral />
+            <Row label="Pending queue items" value={r.catalog?.pending_queue_items ?? '—'} ok={(r.catalog?.pending_queue_items ?? 0) > 0} />
+          </div>
+        </Section>
+
         {/* Environment */}
         <Section title="Environment Config">
           <div style={card()}>
-            <Row label="Engine enabled"   value={String(r.env.engine_enabled)}  ok={r.env.engine_enabled} />
-            <Row label="Dry run mode"     value={String(r.env.dry_run_mode)}    ok={r.env.dry_run_mode} />
-            <Row label="Pilot mode"       value={String(r.env.pilot_mode)}      ok={null} neutral />
-            <Row label="Test-only mode"   value={String(r.env.test_only_mode)}  ok={null} neutral />
+            <Row label="Engine enabled"          value={String(r.env.engine_enabled)}           ok={r.env.engine_enabled} />
+            <Row label="Dry run mode"            value={String(r.env.dry_run_mode)}             ok={r.env.dry_run_mode} />
+            <Row label="Pilot mode"              value={String(r.env.pilot_mode)}               ok={null} neutral />
+            <Row label="Test-only mode"          value={String(r.env.test_only_mode)}           ok={null} neutral />
+            <Row label="Test send-window bypass" value={String(r.env.test_bypass_send_window)}  ok={null} neutral />
           </div>
         </Section>
 
