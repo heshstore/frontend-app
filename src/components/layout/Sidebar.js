@@ -6,11 +6,13 @@ import { getUserCapabilities } from '../../config/roleCapabilities';
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
 
-const NAV_BG    = '#0f172a';
-const NAV_TEXT  = 'rgba(255,255,255,0.82)';
-const NAV_MUTED = 'rgba(255,255,255,0.38)';
-const GRP_BG    = 'rgba(255,255,255,0.055)';  // section header tint
-const GRP_MT    = 8;                           // margin above each section header
+const NAV_BG     = '#0f172a';
+const NAV_TEXT   = 'rgba(255,255,255,0.70)';   // muted — so active items visually pop
+const NAV_MUTED  = 'rgba(255,255,255,0.32)';
+const GRP_BG     = '#162340';                  // clearly distinct from NAV_BG
+const GRP_DIV    = 'rgba(255,255,255,0.07)';   // divider line above each section header
+const ACTIVE_BG  = 'rgba(96,165,250,0.20)';   // strong active highlight
+const ACTIVE_CLR = '#ddeeff';                  // active item text — brighter than normal
 
 const CloseCtx = createContext(() => {});
 
@@ -177,11 +179,11 @@ function PipelineItem({ item, count, priority, microText, active }) {
       style={{
         display: 'flex', alignItems: 'center', gap: 8,
         width: '100%', padding: microText ? '7px 10px' : '8px 10px',
-        background: active ? 'rgba(255,255,255,0.11)' : hov ? 'rgba(255,255,255,0.05)' : 'transparent',
+        background: active ? ACTIVE_BG : hov ? 'rgba(255,255,255,0.05)' : 'transparent',
         borderLeft: `3px solid ${active ? item.color : isHigh ? '#ef4444' : isMedium ? '#f59e0b' : 'transparent'}`,
         borderTop: 'none', borderBottom: 'none', borderRight: 'none',
         boxShadow: isHigh && !active ? '2px 0 8px rgba(239,68,68,0.15)' : 'none',
-        color: active ? '#fff' : NAV_TEXT,
+        color: active ? ACTIVE_CLR : NAV_TEXT,
         fontSize: 13, fontWeight: active ? 700 : isHigh ? 600 : 400,
         cursor: 'pointer', textAlign: 'left',
         transition: 'background 0.1s',
@@ -240,15 +242,15 @@ function NavItem({ label, href, icon }) {
       onMouseLeave={() => setHov(false)}
       style={{
         display: 'flex', alignItems: 'center', gap: 8,
-        width: '100%', padding: '7px 10px',
-        background: active ? 'rgba(255,255,255,0.09)' : hov ? 'rgba(255,255,255,0.04)' : 'transparent',
+        width: '100%', padding: '8px 10px 8px 12px',
+        background: active ? ACTIVE_BG : hov ? 'rgba(255,255,255,0.04)' : 'transparent',
         border: 'none',
         borderLeft: `3px solid ${active ? '#60a5fa' : 'transparent'}`,
-        color: active ? '#fff' : NAV_TEXT,
-        fontSize: 12, fontWeight: active ? 600 : 400,
+        color: active ? ACTIVE_CLR : NAV_TEXT,
+        fontSize: 12, fontWeight: active ? 700 : 400,
         cursor: 'pointer', textAlign: 'left',
         transition: 'background 0.1s', minHeight: 36,
-        borderRadius: '0 7px 7px 0', marginBottom: 1,
+        borderRadius: '0 6px 6px 0', marginBottom: 1,
       }}
     >
       {icon && (
@@ -281,18 +283,18 @@ function PinnableItem({ label, href, icon, pins, onTogglePin }) {
         onClick={() => { navigate(href); onClose(); }}
         style={{
           display: 'flex', alignItems: 'center', gap: 8,
-          width: '100%', padding: '7px 10px', paddingRight: 28,
-          background: active ? 'rgba(255,255,255,0.09)' : hov ? 'rgba(255,255,255,0.04)' : 'transparent',
+          width: '100%', padding: '8px 10px 8px 12px', paddingRight: 28,
+          background: active ? ACTIVE_BG : hov ? 'rgba(255,255,255,0.04)' : 'transparent',
           border: 'none',
           borderLeft: `3px solid ${active ? '#60a5fa' : 'transparent'}`,
-          color: active ? '#fff' : NAV_TEXT,
-          fontSize: 12, fontWeight: active ? 600 : 400,
+          color: active ? ACTIVE_CLR : NAV_TEXT,
+          fontSize: 12, fontWeight: active ? 700 : 400,
           cursor: 'pointer', textAlign: 'left',
           transition: 'background 0.1s', minHeight: 36,
-          borderRadius: '0 7px 7px 0', marginBottom: 1,
+          borderRadius: '0 6px 6px 0', marginBottom: 1,
         }}
       >
-        <span style={{ width: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <span style={{ width: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
           <Ic name={icon} size={13} />
         </span>
         <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{label}</span>
@@ -321,36 +323,36 @@ function SectionGroup({ id, label, icon, sections, onToggle, children }) {
   const isOpen = sections[id] ?? false;
 
   return (
-    <div style={{ marginBottom: 1 }}>
+    <div style={{ marginTop: 4 }}>
       <button
         onClick={() => onToggle(id)}
         style={{
-          display: 'flex', alignItems: 'center', gap: 7,
-          width: '100%', padding: '5px 10px',
+          display: 'flex', alignItems: 'center', gap: 8,
+          width: '100%', padding: '8px 12px',
           background: GRP_BG,
           border: 'none',
+          borderTop: `1px solid ${GRP_DIV}`,
           cursor: 'pointer',
-          marginTop: GRP_MT,
         }}
       >
-        <span style={{ width: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <span style={{ width: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, opacity: 0.55 }}>
           <Ic name={icon} size={11} />
         </span>
         <span style={{
           flex: 1, textAlign: 'left',
-          fontSize: 10, fontWeight: 700,
-          color: NAV_MUTED,
-          textTransform: 'uppercase', letterSpacing: 1.2,
+          fontSize: 10, fontWeight: 500,
+          color: 'rgba(255,255,255,0.42)',
+          textTransform: 'uppercase', letterSpacing: 1.5,
         }}>{label}</span>
         <span style={{
-          fontSize: 9, color: NAV_MUTED, flexShrink: 0,
+          fontSize: 9, color: 'rgba(255,255,255,0.28)', flexShrink: 0,
           display: 'inline-block',
           transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-          transition: 'transform 0.2s',
+          transition: 'transform 0.18s',
         }}>▾</span>
       </button>
       {isOpen && (
-        <div style={{ animation: 'fadeIn 0.15s ease' }}>{children}</div>
+        <div style={{ paddingBottom: 3 }}>{children}</div>
       )}
     </div>
   );
@@ -418,18 +420,18 @@ function ShopifyNavItem({ pins, onTogglePin }) {
         onClick={() => { navigate('/shopify-items'); onClose(); }}
         style={{
           display: 'flex', alignItems: 'center', gap: 8,
-          width: '100%', padding: '7px 10px', paddingRight: 28,
-          background: active ? 'rgba(255,255,255,0.09)' : hov ? 'rgba(255,255,255,0.04)' : 'transparent',
+          width: '100%', padding: '8px 10px 8px 12px', paddingRight: 28,
+          background: active ? ACTIVE_BG : hov ? 'rgba(255,255,255,0.04)' : 'transparent',
           border: 'none',
           borderLeft: `3px solid ${active ? '#60a5fa' : 'transparent'}`,
-          color: active ? '#fff' : NAV_TEXT,
-          fontSize: 12, fontWeight: active ? 600 : 400,
+          color: active ? ACTIVE_CLR : NAV_TEXT,
+          fontSize: 12, fontWeight: active ? 700 : 400,
           cursor: 'pointer', textAlign: 'left',
           transition: 'background 0.1s', minHeight: 36,
-          borderRadius: '0 7px 7px 0', marginBottom: 1,
+          borderRadius: '0 6px 6px 0', marginBottom: 1,
         }}
       >
-        <span style={{ width: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <span style={{ width: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
           <Ic name="bag" size={13} />
         </span>
         <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Shopify Catalog</span>
@@ -502,7 +504,9 @@ export default function Sidebar({ onClose }) {
   const [sections, setSections] = useState(loadSections);
   const toggleSection = useCallback((id) => {
     setSections(prev => {
-      const next = { ...prev, [id]: !prev[id] };
+      const wasOpen = prev[id];
+      const next = Object.fromEntries(Object.keys(prev).map(k => [k, false]));
+      if (!wasOpen) next[id] = true;
       saveSections(next);
       return next;
     });
@@ -514,15 +518,15 @@ export default function Sidebar({ onClose }) {
     if (pathname === prevPathRef.current) return;
     prevPathRef.current = pathname;
     setSections(prev => {
-      let changed = false;
-      const next = { ...prev };
       for (const [sectionId, prefixes] of Object.entries(SECTION_ROUTE_MAP)) {
-        if (!next[sectionId] && prefixes.some(p => pathname.startsWith(p))) {
+        if (prefixes.some(p => pathname.startsWith(p))) {
+          if (prev[sectionId]) return prev;
+          const next = Object.fromEntries(Object.keys(prev).map(k => [k, false]));
           next[sectionId] = true;
-          changed = true;
+          saveSections(next);
+          return next;
         }
       }
-      if (changed) { saveSections(next); return next; }
       return prev;
     });
   }, [pathname]);
@@ -698,7 +702,7 @@ export default function Sidebar({ onClose }) {
             </>
           )}
 
-          <div style={{ margin: '8px 12px', borderTop: '1px solid rgba(255,255,255,0.07)' }} />
+          <div style={{ height: 4 }} />
 
           {(canSeeCrm || canSeeCustomers) && (
             <SectionGroup id="crm" label="CRM" icon="users" sections={sections} onToggle={toggleSection}>
