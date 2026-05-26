@@ -2,7 +2,6 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { useNavigate, useLocation } from 'react-router-dom';
 import { apiFetch } from '../../utils/api';
 import { usePermission, hasAnyPermission } from '../../utils/usePermission';
-import { getUserCapabilities } from '../../config/roleCapabilities';
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
 
@@ -118,113 +117,6 @@ function loadSections() {
   catch { return { ...DEFAULT_SECTIONS }; }
 }
 function saveSections(s) { localStorage.setItem(SECTIONS_KEY, JSON.stringify(s)); }
-
-// ── Pipeline config ───────────────────────────────────────────────────────────
-
-const PIPELINE = [
-  { key: 'leads',      label: 'Leads',      icon: 'users',   href: '/crm/leads',           color: '#f97316', permKey: 'crm'             },
-  { key: 'quotations', label: 'Quotations', icon: 'doc',     href: '/quotations',           color: '#3b82f6', permKey: 'quotation.view'  },
-  { key: 'orders',     label: 'Orders',     icon: 'pkg',     href: '/orders',               color: '#6366f1', permKey: 'order.view'      },
-  { key: 'production', label: 'Production', icon: 'wrench',  href: '/production/execution', color: '#dc2626', permKey: 'production.view' },
-  { key: 'dispatch',   label: 'Dispatch',   icon: 'truck',   href: '/dispatch',             color: '#8b5cf6', permKey: 'dispatch.view'   },
-  { key: 'payments',   label: 'Payments',   icon: 'dollar',  href: '/accounts/outstanding', color: '#d97706', permKey: 'accounts'        },
-];
-
-const PRIORITY_ORDER = { HIGH: 0, MEDIUM: 1, LOW: 2 };
-
-function getPriority(key, count) {
-  if ((key === 'production' || key === 'leads') && count > 0)    return 'HIGH';
-  if ((key === 'payments'   || key === 'dispatch') && count > 0) return 'MEDIUM';
-  return 'LOW';
-}
-
-function getMicroText(key, count, rawAmount) {
-  if (!count && !rawAmount) return null;
-  switch (key) {
-    case 'leads':      return count ? `${count} hot lead${count !== 1 ? 's' : ''}` : null;
-    case 'production': return count ? `${count} delayed job${count !== 1 ? 's' : ''}` : null;
-    case 'payments': {
-      if (!rawAmount) return null;
-      const lakh = rawAmount / 100_000;
-      return lakh >= 1 ? `₹${lakh.toFixed(1)}L pending` : `₹${Math.round(rawAmount / 1000)}k pending`;
-    }
-    case 'dispatch':   return count ? `${count} pending` : null;
-    case 'orders':     return count ? `${count} active` : null;
-    case 'quotations': return count ? `${count} open` : null;
-    default: return null;
-  }
-}
-
-// ── Pipeline item ─────────────────────────────────────────────────────────────
-
-const BADGE_STYLE = {
-  HIGH:   { background: '#ef4444', color: '#fff' },
-  MEDIUM: { background: '#f59e0b', color: '#fff' },
-  LOW:    { background: 'rgba(255,255,255,0.13)', color: 'rgba(255,255,255,0.7)' },
-};
-
-function PipelineItem({ item, count, priority, microText, active }) {
-  const navigate = useNavigate();
-  const onClose  = useContext(CloseCtx);
-  const [hov, setHov] = useState(false);
-  const isHigh   = priority === 'HIGH';
-  const isMedium = priority === 'MEDIUM';
-  const showBadge = count != null && count !== 0;
-
-  return (
-    <button
-      onClick={() => { navigate(item.href); onClose(); }}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        width: '100%', padding: microText ? '7px 10px' : '8px 10px',
-        background: active ? ACTIVE_BG : hov ? 'rgba(255,255,255,0.05)' : 'transparent',
-        borderLeft: `3px solid ${active ? item.color : isHigh ? '#ef4444' : isMedium ? '#f59e0b' : 'transparent'}`,
-        borderTop: 'none', borderBottom: 'none', borderRight: 'none',
-        boxShadow: isHigh && !active ? '2px 0 8px rgba(239,68,68,0.15)' : 'none',
-        color: active ? ACTIVE_CLR : NAV_TEXT,
-        fontSize: 13, fontWeight: active ? 700 : isHigh ? 600 : 400,
-        cursor: 'pointer', textAlign: 'left',
-        transition: 'background 0.1s',
-        minHeight: microText ? 44 : 40,
-        borderRadius: '0 7px 7px 0', marginBottom: 2,
-        animation: isHigh && !active ? 'sidebarPulse 2.5s ease-in-out infinite' : 'none',
-      }}
-    >
-      <span style={{ width: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-        <Ic name={item.icon} size={14} />
-      </span>
-      <span style={{ flex: 1, minWidth: 0 }}>
-        <span style={{ display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.label}</span>
-        {microText && (
-          <span style={{
-            display: 'block', fontSize: 10,
-            color: isHigh ? 'rgba(252,165,165,0.9)' : isMedium ? 'rgba(253,211,77,0.85)' : NAV_MUTED,
-            marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-          }}>{microText}</span>
-        )}
-      </span>
-      {showBadge && (
-        <span style={{ fontSize: 10, fontWeight: 800, padding: '1px 6px', borderRadius: 99, flexShrink: 0, ...BADGE_STYLE[priority] }}>
-          {count > 999 ? '999+' : count}
-        </span>
-      )}
-    </button>
-  );
-}
-
-// ── SideLabel ─────────────────────────────────────────────────────────────────
-
-function SideLabel({ children }) {
-  return (
-    <div style={{
-      fontSize: 10, fontWeight: 700, color: NAV_MUTED,
-      textTransform: 'uppercase', letterSpacing: 1.1,
-      padding: '6px 12px 2px',
-    }}>{children}</div>
-  );
-}
 
 // ── NavItem ───────────────────────────────────────────────────────────────────
 
@@ -479,15 +371,6 @@ export default function Sidebar({ onClose }) {
   const canSeeItems      = usePermission('item.view');
   const canSeeCustomers  = usePermission('customer.view');
 
-  const permMap = {
-    crm:              canSeeCrm,
-    'quotation.view': canSeeQuotations,
-    'order.view':     canSeeOrders,
-    'production.view':canSeeProduction,
-    'dispatch.view':  canSeeDispatch,
-    accounts:         canSeeAccounts,
-  };
-
   let user = {};
   try { user = JSON.parse(localStorage.getItem('user') || '{}'); } catch {}
 
@@ -531,88 +414,6 @@ export default function Sidebar({ onClose }) {
     });
   }, [pathname]);
 
-  // Pipeline counts
-  const [counts,     setCounts]     = useState({});
-  const [rawAmounts, setRawAmounts] = useState({});
-  const [sortedKeys, setSortedKeys] = useState(null);
-  const initialLoadDone = useRef(false);
-  const fetchInFlight   = useRef(false);
-
-  const fetchCounts = useCallback(async () => {
-    if (fetchInFlight.current) return;
-    fetchInFlight.current = true;
-    const next    = {};
-    const amounts = {};
-    const safe    = async (key, fn) => { try { const v = await fn(); next[key] = v; } catch {} };
-    const caps    = getUserCapabilities();
-
-    const tasks = [
-      caps.canViewCrm && safe('leads', async () => {
-        const r = await apiFetch('/crm/leads?filter=hot&limit=1');
-        if (!r.ok) return 0;
-        const d = await r.json();
-        return d.total ?? (Array.isArray(d) ? d.length : 0);
-      }),
-      caps.canViewQuotations && safe('quotations', async () => {
-        const r = await apiFetch('/quotations?limit=1');
-        if (!r.ok) return 0;
-        const d = await r.json();
-        return d.total ?? (Array.isArray(d) ? d.length : 0);
-      }),
-      caps.canViewOrders && safe('orders', async () => {
-        const r = await apiFetch('/orders?limit=1');
-        if (!r.ok) return 0;
-        const d = await r.json();
-        return d.total ?? (Array.isArray(d) ? d.length : 0);
-      }),
-      caps.canViewProduction && safe('production', async () => {
-        const r = await apiFetch('/production/execution/jobs');
-        if (!r.ok) return 0;
-        const d = await r.json();
-        return d.total ?? (Array.isArray(d) ? d.length : 0);
-      }),
-      caps.canViewDispatch && safe('dispatch', async () => {
-        const r = await apiFetch('/dispatch?limit=1');
-        if (!r.ok) return 0;
-        const d = await r.json();
-        return d.total ?? (Array.isArray(d) ? d.length : 0);
-      }),
-      caps.canViewAccounts && safe('payments', async () => {
-        const r = await apiFetch('/accounts/pending-summary');
-        if (!r.ok) return 0;
-        const d = await r.json();
-        const amt = d.total_amount ?? d.amount ?? 0;
-        amounts.payments = amt;
-        return amt > 0 ? 1 : 0;
-      }),
-    ].filter(Boolean);
-
-    await Promise.allSettled(tasks);
-    setCounts(prev => ({ ...prev, ...next }));
-    if (Object.keys(amounts).length) setRawAmounts(prev => ({ ...prev, ...amounts }));
-
-    if (!initialLoadDone.current) {
-      initialLoadDone.current = true;
-      const withPriority = PIPELINE.map(item => ({
-        key: item.key, priority: getPriority(item.key, next[item.key] ?? 0),
-      }));
-      withPriority.sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]);
-      setSortedKeys(withPriority.map(x => x.key));
-    }
-    fetchInFlight.current = false;
-  }, []);
-
-  useEffect(() => {
-    fetchCounts();
-    const id = setInterval(fetchCounts, 60_000);
-    return () => clearInterval(id);
-  }, [fetchCounts]);
-
-  const visiblePipeline = (sortedKeys ?? PIPELINE.map(p => p.key))
-    .map(key => PIPELINE.find(p => p.key === key))
-    .filter(Boolean)
-    .filter(p => permMap[p.permKey]);
-
   const handleLogout = () => {
     ['isLoggedIn','access_token','user','permissions'].forEach(k => localStorage.removeItem(k));
     navigate('/');
@@ -637,37 +438,17 @@ export default function Sidebar({ onClose }) {
         }}
       >
 
-        {/* ── Brand ── */}
-        <div style={{
-          padding: '12px 14px', flexShrink: 0,
-          borderBottom: '1px solid rgba(255,255,255,0.07)',
-          display: 'flex', alignItems: 'center', gap: 10,
-        }}>
-          <div style={{
-            width: 28, height: 28, borderRadius: 7, background: '#1d4ed8',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 14, fontWeight: 800, color: '#fff', flexShrink: 0,
-          }}>S</div>
-          <span style={{ fontSize: 15, fontWeight: 800, color: '#fff', flex: 1 }}>Saachu</span>
-          {isMobileDrawer && (
-            <button onClick={onClose} style={{
-              background: 'rgba(255,255,255,0.09)', border: 'none', borderRadius: 6,
-              padding: '4px 8px', color: '#fff', fontSize: 15, cursor: 'pointer', lineHeight: 1,
-            }}>✕</button>
-          )}
-        </div>
-
         {/* ── User row ── */}
         <div style={{
-          padding: '8px 12px', flexShrink: 0,
-          borderBottom: '1px solid rgba(255,255,255,0.05)',
+          padding: '10px 12px', flexShrink: 0,
+          borderBottom: '1px solid rgba(255,255,255,0.07)',
           display: 'flex', alignItems: 'center', gap: 8,
         }}>
           <div style={{
-            width: 26, height: 26, borderRadius: 99, flexShrink: 0,
+            width: 28, height: 28, borderRadius: 99, flexShrink: 0,
             background: 'linear-gradient(135deg,#3b82f6,#1d4ed8)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 11, fontWeight: 800, color: '#fff',
+            fontSize: 12, fontWeight: 800, color: '#fff',
           }}>
             {(user.name || 'U').charAt(0).toUpperCase()}
           </div>
@@ -677,6 +458,12 @@ export default function Sidebar({ onClose }) {
             </div>
             <div style={{ fontSize: 10, color: NAV_MUTED }}>{user.role || 'Staff'}</div>
           </div>
+          {isMobileDrawer && (
+            <button onClick={onClose} style={{
+              background: 'rgba(255,255,255,0.09)', border: 'none', borderRadius: 6,
+              padding: '4px 8px', color: '#fff', fontSize: 15, cursor: 'pointer', lineHeight: 1, flexShrink: 0,
+            }}>✕</button>
+          )}
         </div>
 
         {/* ── Navigation ── */}
@@ -686,23 +473,6 @@ export default function Sidebar({ onClose }) {
           {canSeeOrders && <NavItem label="Daily Ops" href="/daily-ops" icon="bolt" />}
 
           <QuickAccessSection pins={pins} onTogglePin={togglePin} />
-
-          {visiblePipeline.length > 0 && (
-            <>
-              <SideLabel>Pipeline</SideLabel>
-              {visiblePipeline.map(item => {
-                const count    = counts[item.key] ?? null;
-                const priority = getPriority(item.key, count ?? 0);
-                const micro    = getMicroText(item.key, count, rawAmounts[item.key]);
-                const active   = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
-                return (
-                  <PipelineItem key={item.key} item={item} count={count} priority={priority} microText={micro} active={active} />
-                );
-              })}
-            </>
-          )}
-
-          <div style={{ height: 4 }} />
 
           {(canSeeCrm || canSeeCustomers) && (
             <SectionGroup id="crm" label="CRM" icon="users" sections={sections} onToggle={toggleSection}>
