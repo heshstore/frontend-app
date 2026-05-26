@@ -1,9 +1,36 @@
 /* ===== GLOBAL ===== */
+
+/* Prevent padding from adding to element width — critical for mobile layouts */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+/* Full-height propagation so Layout can use 100% instead of 100vh */
+html {
+  height: 100%;
+  overflow-x: hidden;
+}
+
 body {
+  height: 100%;
   font-family: Arial, sans-serif;
   background: #f5f6fa;
   margin: 0;
   padding: 0;
+  overflow-x: hidden;
+}
+
+#root {
+  height: 100%;
+}
+
+/* Mobile-safe full-height shell.
+   100dvh = dynamic viewport height: excludes iOS Safari address bar,
+   preventing bottom buttons from being clipped under browser chrome.
+   Falls back to 100vh on older browsers. */
+.app-shell {
+  height: 100vh;
+  height: 100dvh;
 }
 
 /* ===== HEADER STYLES ===== */
@@ -180,7 +207,6 @@ body {
 /* ===== INPUT ===== */
 input {
   padding: 8px;
-  margin: 5px;
   border: 1px solid #ddd;
 }
 
@@ -189,17 +215,16 @@ input {
   border: 1px solid #D1D5DB;
   padding: 10px;
   border-radius: 6px;
-  min-width: 180px;
+  width: 100%;
+  max-width: 100%;
 }
 
 /* ===== BUTTON ===== */
+/* Minimal safe global reset — all color/size overridden per-component */
 button {
-  padding: 8px 12px;
-  margin: 5px;
-  background: blue;
-  color: white;
-  border: none;
   cursor: pointer;
+  font-family: inherit;
+  border: none;
 }
 
 /* New primary button style */
@@ -219,4 +244,34 @@ button {
 .card {
   max-width: 600px;
   margin: 0 auto;
+}
+
+/* ===== MOBILE RESPONSIVE ===== */
+@media (max-width: 768px) {
+  /* Horizontally scrollable tables — never force page width wider than screen */
+  .table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Invoice/document layouts collapse to single column on mobile */
+  .invoice-header {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .bottom-section {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  /* Ensure no card exceeds viewport */
+  .card {
+    max-width: 100%;
+  }
+
+  /* Form inputs should never overflow their container */
+  .input {
+    width: 100%;
+  }
 }

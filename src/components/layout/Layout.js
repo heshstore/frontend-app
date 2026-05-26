@@ -61,9 +61,11 @@ export default function Layout() {
       <NotificationPanel />
       <div style={{
         display: 'flex',
-        height: '100vh',
         background: '#f4f6f9',
-      }}>
+        // height handled by .app-shell CSS class (100dvh with 100vh fallback)
+      }}
+        className="app-shell"
+      >
 
         {/* ── Desktop: permanent sidebar ── */}
         {!isMobile && <Sidebar />}
@@ -97,6 +99,7 @@ export default function Layout() {
           display: 'flex',
           flexDirection: 'column',
           minWidth: 0,
+          overflowX: 'hidden',
           background: '#f4f6f9',
         }}>
           {/* ── Header bar ── */}
@@ -141,10 +144,11 @@ export default function Layout() {
           <main style={{
             flex: 1,
             minHeight: 0,
-            padding: '20px',
-            overflowY: 'auto',
-            background: '#f4f6f9',
+            padding: isMobile ? '12px' : '20px',
             paddingBottom: isMobile ? '80px' : '20px',
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            background: '#f4f6f9',
           }}>
             <Outlet />
           </main>

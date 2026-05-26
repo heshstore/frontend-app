@@ -28,12 +28,16 @@ export default function PageLayout({
               background: 'transparent',
               border: '1px solid #d1d5db',
               borderRadius: 6,
-              padding: '6px 12px',
+              padding: '0 14px',
               cursor: 'pointer',
               fontSize: 13,
               color: '#374151',
               fontWeight: 500,
               flexShrink: 0,
+              minHeight: 40,        // touch-safe tap target (≥40px)
+              minWidth: 60,
+              display: 'flex',
+              alignItems: 'center',
             }}
           >
             ← Back
@@ -57,6 +61,7 @@ export default function PageLayout({
               borderRadius: 6,
               fontSize: 13,
               width: 220,
+              maxWidth: '100%',
               outline: 'none',
             }}
           />
