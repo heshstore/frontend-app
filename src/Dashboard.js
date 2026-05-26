@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from './utils/api';
 import { toast } from './utils/toast';
-import { useRightPanel } from './components/layout/RightPanel';
 import { getUserCapabilities } from './config/roleCapabilities';
 import KpiCard from './components/dashboard/KpiCard';
 import KpiGrid from './components/dashboard/KpiGrid';
@@ -303,8 +302,6 @@ function DelayedRow({ job, onView }) {
 export default function Dashboard() {
   const navigate   = useNavigate();
   const isMobile   = useIsMobile();
-  const rightPanel = useRightPanel();
-  const openPanel  = rightPanel?.openPanel;
   const mountedRef = useRef(true);
 
   const caps = useMemo(() => getUserCapabilities(), []);

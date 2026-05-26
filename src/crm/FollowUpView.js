@@ -25,6 +25,17 @@ function isToday(iso) {
   return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
 }
 
+function quickReschedulePresets() {
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const fmt = (d) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+  const inHours = (h) => { const d = new Date(now); d.setHours(d.getHours() + h); return { label: `+${h}h`, value: fmt(d) }; };
+  const tomorrow10am = () => { const d = new Date(now); d.setDate(d.getDate()+1); d.setHours(10,0,0,0); return { label: 'Tomorrow 10am', value: fmt(d) }; };
+  const nextWeekMon = () => { const d = new Date(now); const dow = d.getDay(); d.setDate(d.getDate() + ((8 - dow) % 7 || 7)); d.setHours(10,0,0,0); return { label: 'Mon 10am', value: fmt(d) }; };
+  return [inHours(1), inHours(2), tomorrow10am(), nextWeekMon()];
+}
+
 function groupLeads(leads) {
   const now = new Date();
   const overdue = [], today = [], upcoming = [];
@@ -237,8 +248,19 @@ function LeadCard({ lead, groupKey, groups, onRemove, cardRef }) {
       {/* Reschedule panel */}
       {panel === 'reschedule' && (
         <div style={{ borderTop: `1px solid ${theme.border}`, padding: '12px 14px', background: '#f9fafb' }}>
+          {/* Quick presets */}
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+            {quickReschedulePresets().map((p) => (
+              <button key={p.label} onClick={() => setRescheduleDate(p.value)} style={{
+                border: `1px solid ${rescheduleDate === p.value ? '#f97316' : theme.border}`,
+                borderRadius: 6, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                background: rescheduleDate === p.value ? '#fff7ed' : '#fff',
+                color: rescheduleDate === p.value ? '#c2410c' : theme.text,
+              }}>{p.label}</button>
+            ))}
+          </div>
           <input type="datetime-local" value={rescheduleDate} onChange={e => setRescheduleDate(e.target.value)}
-            autoFocus style={{ ...inp, marginBottom: 8 }} />
+            style={{ ...inp, marginBottom: 8 }} />
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={submitReschedule} disabled={!rescheduleDate || submitting} style={{
               border: 'none', borderRadius: 6, padding: '8px 16px',
@@ -258,10 +280,10 @@ function LeadCard({ lead, groupKey, groups, onRemove, cardRef }) {
 
 // ── Section ───────────────────────────────────────────────────────────────────
 
-function Section({ label, color, leads, groupKey, groups, onRemove, cardRefs }) {
+function Section({ label, color, leads, groupKey, groups, onRemove, cardRefs, sectionRef }) {
   if (leads.length === 0) return null;
   return (
-    <div style={{ marginBottom: 6 }}>
+    <div style={{ marginBottom: 6 }} ref={sectionRef}>
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8,
         margin: '16px 0 8px', padding: '6px 10px',
@@ -295,6 +317,7 @@ export default function FollowUpView() {
   const [error, setError]           = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const cardRefs                    = useRef({});
+  const sectionRefs                 = useRef({ overdue: null, today: null, upcoming: null });
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -375,9 +398,9 @@ export default function FollowUpView() {
         </div>
       )}
 
-      <Section label="⚠ Overdue"   color="#ef4444" groupKey="overdue"   leads={groups.overdue}   groups={groups} onRemove={onRemove} cardRefs={cardRefs} />
-      <Section label="📅 Today"    color="#f59e0b" groupKey="today"     leads={groups.today}     groups={groups} onRemove={onRemove} cardRefs={cardRefs} />
-      <Section label="🗓 Upcoming" color="#16a34a" groupKey="upcoming"  leads={groups.upcoming}  groups={groups} onRemove={onRemove} cardRefs={cardRefs} />
+      <Section label="⚠ Overdue"   color="#ef4444" groupKey="overdue"   leads={groups.overdue}   groups={groups} onRemove={onRemove} cardRefs={cardRefs} sectionRef={el => { sectionRefs.current.overdue  = el; }} />
+      <Section label="📅 Today"    color="#f59e0b" groupKey="today"     leads={groups.today}     groups={groups} onRemove={onRemove} cardRefs={cardRefs} sectionRef={el => { sectionRefs.current.today    = el; }} />
+      <Section label="🗓 Upcoming" color="#16a34a" groupKey="upcoming"  leads={groups.upcoming}  groups={groups} onRemove={onRemove} cardRefs={cardRefs} sectionRef={el => { sectionRefs.current.upcoming = el; }} />
 
       {/* Empty state */}
       {total === 0 && !error && (
@@ -388,24 +411,41 @@ export default function FollowUpView() {
         </div>
       )}
 
-      {/* Sticky bottom summary bar */}
+      {/* Sticky bottom summary bar — clickable to jump to section */}
       {total > 0 && (
         <div style={{
           position: 'sticky', bottom: 0,
           background: '#fff', borderTop: `1px solid ${theme.border}`,
           padding: '10px 16px',
-          display: 'flex', gap: 16, justifyContent: 'center',
+          display: 'flex', gap: 0, justifyContent: 'center',
           fontSize: 12, color: theme.textMuted,
           margin: '8px -16px -16px',
         }}>
           {groups.overdue.length > 0 && (
-            <span style={{ color: '#dc2626', fontWeight: 700 }}>⚠ {groups.overdue.length} overdue</span>
+            <button onClick={() => sectionRefs.current.overdue?.scrollIntoView({ behavior: 'smooth', block: 'start' })} style={{
+              background: 'none', border: 'none', cursor: 'pointer', padding: '2px 12px',
+              color: '#dc2626', fontWeight: 700, fontSize: 12,
+              borderRight: `1px solid ${theme.border}`,
+            }}>
+              ⚠ {groups.overdue.length} overdue
+            </button>
           )}
           {groups.today.length > 0 && (
-            <span style={{ color: '#b45309', fontWeight: 600 }}>📅 {groups.today.length} today</span>
+            <button onClick={() => sectionRefs.current.today?.scrollIntoView({ behavior: 'smooth', block: 'start' })} style={{
+              background: 'none', border: 'none', cursor: 'pointer', padding: '2px 12px',
+              color: '#b45309', fontWeight: 600, fontSize: 12,
+              borderRight: groups.upcoming.length > 0 ? `1px solid ${theme.border}` : 'none',
+            }}>
+              📅 {groups.today.length} today
+            </button>
           )}
           {groups.upcoming.length > 0 && (
-            <span>🗓 {groups.upcoming.length} upcoming</span>
+            <button onClick={() => sectionRefs.current.upcoming?.scrollIntoView({ behavior: 'smooth', block: 'start' })} style={{
+              background: 'none', border: 'none', cursor: 'pointer', padding: '2px 12px',
+              color: theme.textMuted, fontSize: 12,
+            }}>
+              🗓 {groups.upcoming.length} upcoming
+            </button>
           )}
         </div>
       )}
