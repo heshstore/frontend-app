@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import PageLayout from '../components/layout/PageLayout';
 import { apiFetch } from '../utils/api';
@@ -108,13 +108,14 @@ function SectionHeader({ label, count, color }) {
 
 // ── Lead card ────────────────────────────────────────────────────────────────
 
-function LeadCard({ item, onRefresh, mode }) {
+function LeadCard({ item, onRefresh, mode, keyboardFocused, registerActions }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useCurrentUser();
   const { lead, score, nextAction, ageHours, queueTier = 5, slaStatus = 'NONE' } = item;
   const countdown = slaCountdown(lead.next_action_due_at);
   const cs = tierCardBorder(queueTier);
+  const cardEl = useRef(null);
 
   const [panel, setPanel]           = useState(null); // null | 'note' | 'followup' | 'script'
   const [callState, setCallState]   = useState(null); // null | 'confirming'
@@ -131,6 +132,24 @@ function LeadCard({ item, onRefresh, mode }) {
   const pType   = getPrimaryActionType(nextAction);
   const pBtn    = PRIMARY_BTN[pType];
   const wBadge  = getWaitingBadge(lead);
+
+  // Register keyboard action callbacks with parent
+  useEffect(() => {
+    if (!registerActions) return;
+    registerActions({
+      call:     () => handlePrimary(),
+      note:     () => togglePanel('note'),
+      followup: () => togglePanel('followup'),
+      close:    () => { setPanel(null); setCallState(null); },
+    });
+  }); // re-register on every render so closures stay fresh
+
+  // Scroll keyboard-focused card into view
+  useEffect(() => {
+    if (keyboardFocused && cardEl.current) {
+      cardEl.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [keyboardFocused]);
 
   const togglePanel = (name) => {
     setCallState(null);
@@ -247,12 +266,13 @@ function LeadCard({ item, onRefresh, mode }) {
   };
 
   return (
-    <div style={{
-      border: `1px solid ${queueTier <= 2 ? (queueTier === 1 ? '#fca5a5' : '#fed7aa') : theme.border}`,
+    <div ref={cardEl} style={{
+      border: `1px solid ${keyboardFocused ? '#0066B3' : (queueTier <= 2 ? (queueTier === 1 ? '#fca5a5' : '#fed7aa') : theme.border)}`,
       borderLeft: cs.borderLeft,
       background: cs.background,
-      boxShadow: cs.boxShadow,
+      boxShadow: keyboardFocused ? '0 0 0 2px #0066B322' : cs.boxShadow,
       borderRadius: 8, marginBottom: 8, overflow: 'hidden',
+      outline: 'none',
     }}>
       {isManagerMode(mode) && <TierAccentStrip tier={queueTier} />}
       {/* ── Card body ── */}
@@ -327,8 +347,14 @@ function LeadCard({ item, onRefresh, mode }) {
             </span>
           )}
           {isTelecallerMode(mode) && countdown && (
-            <span style={{ fontSize: 11, fontWeight: 600, color: ['OVERDUE', 'CRITICAL'].includes(slaStatus) ? '#b91c1c' : '#6b7280' }}>
-              {countdown.replace(/^Overdue /, '').replace(/^Due in /, '')}
+            <span style={{
+              fontSize: 11, fontWeight: 700,
+              color: ['OVERDUE', 'CRITICAL'].includes(slaStatus) ? '#b91c1c' : '#6b7280',
+              background: ['OVERDUE', 'CRITICAL'].includes(slaStatus) ? '#fff1f2' : 'transparent',
+              padding: ['OVERDUE', 'CRITICAL'].includes(slaStatus) ? '1px 6px' : '0',
+              borderRadius: 4,
+            }}>
+              ⏱ {countdown}
             </span>
           )}
           {isTelecallerMode(mode) && lead.status && (
@@ -526,6 +552,42 @@ function LeadCard({ item, onRefresh, mode }) {
   );
 }
 
+// ── Keyboard shortcut hint bar ────────────────────────────────────────────────
+
+const KB_TIP_KEY = 'lq_kb_tip_seen';
+
+function KeyHints() {
+  const [visible, setVisible] = useState(() => !localStorage.getItem(KB_TIP_KEY));
+
+  const dismiss = () => {
+    localStorage.setItem(KB_TIP_KEY, '1');
+    setVisible(false);
+  };
+
+  if (!visible) return null;
+
+  return (
+    <div style={{
+      display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8,
+      padding: '6px 10px', background: '#f8fafc', borderRadius: 6,
+      border: '1px solid #e2e8f0', fontSize: 11, color: '#6b7280',
+    }}>
+      <span style={{ fontWeight: 600, color: '#374151' }}>Keyboard shortcuts:</span>
+      {[['J/K', 'Move'], ['C', 'Call'], ['N', 'Note'], ['F', 'Follow-up'], ['Esc', 'Close']].map(([key, label]) => (
+        <span key={key}>
+          <kbd style={{ background: '#fff', border: '1px solid #d1d5db', borderRadius: 3, padding: '1px 5px', fontFamily: 'monospace', fontSize: 11 }}>{key}</kbd>
+          {' '}{label}
+        </span>
+      ))}
+      <button
+        onClick={dismiss}
+        style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#9ca3af', padding: 0, lineHeight: 1 }}
+        title="Dismiss — won't show again"
+      >✕</button>
+    </div>
+  );
+}
+
 // ── Main queue page ──────────────────────────────────────────────────────────
 
 export default function LeadQueue() {
@@ -537,6 +599,8 @@ export default function LeadQueue() {
   const [error, setError]           = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const navigate = useNavigate();
+  const [focusedIdx, setFocusedIdx] = useState(0);
+  const cardActionRefs              = useRef({});
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -558,6 +622,31 @@ export default function LeadQueue() {
   useEffect(() => { load(); }, [load]);
 
   const refresh = useCallback(() => load(true), [load]);
+
+  // Keyboard shortcuts — only when no input/textarea is focused
+  useEffect(() => {
+    const handler = (e) => {
+      const tag = document.activeElement?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (e.key === 'j' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        setFocusedIdx(i => Math.min(i + 1, items.length - 1));
+      } else if (e.key === 'k' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        setFocusedIdx(i => Math.max(i - 1, 0));
+      } else if (e.key === 'c' || e.key === 'C') {
+        cardActionRefs.current[focusedIdx]?.call?.();
+      } else if (e.key === 'n' || e.key === 'N') {
+        cardActionRefs.current[focusedIdx]?.note?.();
+      } else if (e.key === 'f' || e.key === 'F') {
+        cardActionRefs.current[focusedIdx]?.followup?.();
+      } else if (e.key === 'Escape') {
+        cardActionRefs.current[focusedIdx]?.close?.();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [items.length, focusedIdx]);
 
   if (loading) {
     return (
@@ -591,7 +680,7 @@ export default function LeadQueue() {
   return (
     <PageLayout title="Today Tasks">
         {/* ── Top bar ── */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 8, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 13, color: theme.textMuted }}>
             {refreshing ? 'Refreshing…' : `${displayItems.length} lead${displayItems.length !== 1 ? 's' : ''} in queue`}
           </span>
@@ -610,6 +699,8 @@ export default function LeadQueue() {
             </button>
           </div>
         </div>
+
+        {displayItems.length > 0 && <KeyHints />}
 
         {displayItems.length > 0 && isManagerMode(crmMode) && (
           <TelecallerScorecard items={displayItems} userId={user?.id} />
@@ -631,16 +722,31 @@ export default function LeadQueue() {
         )}
 
         {/* ── Tier-based sections — backend queueTier is authoritative, no heuristics ── */}
-        {tierSections.map(({ tier, label, color }) => {
-          const tierItems = displayItems.filter(i => (i.queueTier || 0) === tier);
-          if (tierItems.length === 0) return null;
-          return (
-            <React.Fragment key={tier}>
-              <SectionHeader label={label} count={tierItems.length} color={color} />
-              {tierItems.map(item => <LeadCard key={item.lead.id} item={item} onRefresh={refresh} mode={crmMode} />)}
-            </React.Fragment>
-          );
-        })}
+        {(() => {
+          let globalIdx = 0;
+          return tierSections.map(({ tier, label, color }) => {
+            const tierItems = displayItems.filter(i => (i.queueTier || 0) === tier);
+            if (tierItems.length === 0) return null;
+            return (
+              <React.Fragment key={tier}>
+                <SectionHeader label={label} count={tierItems.length} color={color} />
+                {tierItems.map(item => {
+                  const idx = globalIdx++;
+                  return (
+                    <LeadCard
+                      key={item.lead.id}
+                      item={item}
+                      onRefresh={refresh}
+                      mode={crmMode}
+                      keyboardFocused={focusedIdx === idx}
+                      registerActions={(fns) => { cardActionRefs.current[idx] = fns; }}
+                    />
+                  );
+                })}
+              </React.Fragment>
+            );
+          });
+        })()}
       </PageLayout>
   );
 }

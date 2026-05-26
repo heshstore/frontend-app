@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import PageLayout from '../../../components/layout/PageLayout';
 import { apiFetch } from '../../../utils/api';
 
@@ -38,6 +39,7 @@ const FILTER_OPTIONS = [
 ];
 
 export default function WaInbox() {
+  const navigate = useNavigate();
   const [replies, setReplies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -68,20 +70,30 @@ export default function WaInbox() {
     return () => clearInterval(t);
   }, [load]);
 
-  const createLead = async (item) => {
+  // FIX: navigate to CRM lead creation with phone pre-filled instead of sending leadId:0
+  const openInCrm = (item) => {
+    const phone = (item.customer_phone || '').replace(/^\+91/, '');
+    navigate(`/crm/leads/new?phone=${encodeURIComponent(phone)}`);
+  };
+
+  const markLinked = async (item) => {
     setCreatingLeadId(item.id);
     try {
+      const leadIdStr = window.prompt('Enter the CRM lead ID to link (or 0 to just mark as handled):');
+      if (leadIdStr === null) return;
+      const leadId = parseInt(leadIdStr, 10) || 0;
       const res = await apiFetch(`/marketing/whatsapp-engine/inbox/${item.id}/lead`, {
         method: 'PATCH',
-        body: JSON.stringify({ leadId: 0 }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leadId }),
       });
       if (!res.ok) throw new Error(`Server error ${res.status}`);
-      setFeedback((prev) => ({ ...prev, [item.id]: { ok: true, msg: 'Lead created in CRM' } }));
+      setFeedback((prev) => ({ ...prev, [item.id]: { ok: true, msg: leadId ? `Linked to Lead #${leadId}` : 'Marked as handled' } }));
       await load();
     } catch (e) {
       setFeedback((prev) => ({
         ...prev,
-        [item.id]: { ok: false, msg: e?.message || 'Failed to create lead' },
+        [item.id]: { ok: false, msg: e?.message || 'Failed to mark lead' },
       }));
     } finally {
       setCreatingLeadId(null);
@@ -302,15 +314,23 @@ export default function WaInbox() {
                     </div>
                   )}
 
-                  {/* Action */}
+                  {/* Actions */}
                   {!hasLead && (
-                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                       <button
-                        style={btn('#0d6efd')}
-                        onClick={() => createLead(item)}
-                        disabled={creatingLeadId === item.id}
+                        style={btn('#198754')}
+                        onClick={() => openInCrm(item)}
+                        title="Open CRM lead form with phone pre-filled"
                       >
-                        {creatingLeadId === item.id ? 'Creating…' : '+ Create Lead'}
+                        Open in CRM
+                      </button>
+                      <button
+                        style={btn('#f3f4f6', '#374151')}
+                        onClick={() => markLinked(item)}
+                        disabled={creatingLeadId === item.id}
+                        title="Mark as linked to an existing lead"
+                      >
+                        {creatingLeadId === item.id ? 'Saving…' : 'Mark Linked'}
                       </button>
                     </div>
                   )}

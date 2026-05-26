@@ -7,6 +7,7 @@ import { HOT_LEAD_WINDOWS, STATUS_BADGE_COLORS } from './crmConstants';
 import { SOURCE_LABELS } from './crmSourceLabels';
 import { compactAge, getWaitingBadge } from './crmUtils';
 import './LeadList.css';
+import { normalizePhoneForWhatsApp } from '../utils/phone';
 
 // STATUS_BADGE_COLORS imported from crmConstants — shared with AllLeadsView.js
 const STATUS_COLORS = STATUS_BADGE_COLORS;
@@ -59,6 +60,55 @@ function leadBadge(lead) {
 
 const PAGE_SIZE = 50;
 
+function quickFuPresets() {
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const fmt = (d) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const tomorrow10 = new Date(now); tomorrow10.setDate(tomorrow10.getDate()+1); tomorrow10.setHours(10,0,0,0);
+  const inTwoHours = new Date(now); inTwoHours.setHours(inTwoHours.getHours()+2);
+  return [
+    { label: '+2h', value: fmt(inTwoHours) },
+    { label: 'Tomorrow 10am', value: fmt(tomorrow10) },
+  ];
+}
+
+function InlineFollowUpForm({ leadId, onDone }) {
+  const [date, setDate] = useState('');
+  const [saving, setSaving] = useState(false);
+  const presets = quickFuPresets();
+  const inp = { padding: '6px 8px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 12, boxSizing: 'border-box' };
+
+  const save = async () => {
+    if (!date || saving) return;
+    setSaving(true);
+    try {
+      await apiFetch(`/crm/leads/${leadId}/followups`, {
+        method: 'POST',
+        body: JSON.stringify({ due_date: date }),
+      });
+      onDone();
+    } catch { /* silent */ } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}
+      onClick={(e) => e.stopPropagation()}>
+      {presets.map(p => (
+        <button key={p.label} onClick={() => setDate(p.value)} style={{
+          ...inp, background: date === p.value ? '#fff7ed' : '#fff', color: date === p.value ? '#c2410c' : '#374151',
+          border: `1px solid ${date === p.value ? '#f97316' : '#d1d5db'}`, cursor: 'pointer', fontWeight: 600,
+        }}>{p.label}</button>
+      ))}
+      <input type="datetime-local" value={date} onChange={e => setDate(e.target.value)} style={{ ...inp, minWidth: 160 }} />
+      <button onClick={save} disabled={!date || saving} style={{
+        ...inp, background: '#0066B3', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700,
+      }}>{saving ? '…' : 'Schedule'}</button>
+    </div>
+  );
+}
+
 export default function LeadList() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -69,6 +119,7 @@ export default function LeadList() {
   const [sourceFilter, setSourceFilter] = useState('');
   const [contextFilter, setContextFilter] = useState('');
   const [expanded, setExpanded] = useState(null);
+  const [inlineFu, setInlineFu] = useState(null); // leadId showing inline follow-up form
   const [page, setPage] = useState(0);
 
   const load = useCallback(async () => {
@@ -334,42 +385,60 @@ export default function LeadList() {
 
             {/* Expanded details */}
             {isOpen && (
-              <div style={{ padding: '10px 14px', borderTop: `1px solid ${theme.border}`, background: theme.surface }}>
-                {/* Quality score row */}
-                {lead.lead_quality && (
-                  <div style={{ marginBottom: 8, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                    {lead.quality_score != null && (
-                      <span style={{ fontSize: 12, color: '#6b7280' }}>
-                        Quality score: <strong style={{ color: lead.quality_score >= 60 ? '#16a34a' : lead.quality_score >= 30 ? '#d97706' : '#dc2626' }}>
-                          {lead.quality_score}/100
-                        </strong>
-                      </span>
-                    )}
-                    {lead.context_history && (
-                      <span style={{ fontSize: 11, color: '#9ca3af', fontStyle: 'italic' }}>
-                        {lead.context_history}
-                      </span>
-                    )}
+              <div
+                style={{ padding: '10px 14px', borderTop: `1px solid ${theme.border}`, background: theme.surface }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Quick actions */}
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+                  {lead.phone && (
+                    <a
+                      href={`tel:+91${normalizePhoneForWhatsApp(lead.phone)}`}
+                      style={{ padding: '7px 12px', background: '#0066B3', color: '#fff', textDecoration: 'none', borderRadius: 6, fontSize: 12, fontWeight: 700 }}
+                    >📞 Call</a>
+                  )}
+                  {lead.phone && (
+                    <a
+                      href={`https://wa.me/${normalizePhoneForWhatsApp(lead.phone)}`}
+                      target="_blank" rel="noreferrer"
+                      style={{ padding: '7px 12px', background: '#25D366', color: '#fff', textDecoration: 'none', borderRadius: 6, fontSize: 12, fontWeight: 700 }}
+                    >💬 WA</a>
+                  )}
+                  <button
+                    onClick={() => setInlineFu(inlineFu === lead.id ? null : lead.id)}
+                    style={{ padding: '7px 12px', background: inlineFu === lead.id ? '#0066B3' : '#f3f4f6', color: inlineFu === lead.id ? '#fff' : '#374151', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                  >📅 Follow-up</button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); navigate(`/crm/leads/${lead.id}`, { state: { from: location.pathname + location.search } }); }}
+                    style={{ padding: '7px 12px', background: '#f3f4f6', color: '#0066B3', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', marginLeft: 'auto' }}
+                  >→ Open</button>
+                </div>
+
+                {/* Inline follow-up form */}
+                {inlineFu === lead.id && (
+                  <InlineFollowUpForm leadId={lead.id} onDone={() => { setInlineFu(null); load(); }} />
+                )}
+
+                {/* Lead context */}
+                {lead.lead_quality && lead.quality_score != null && (
+                  <div style={{ marginBottom: 6, fontSize: 12, color: '#6b7280' }}>
+                    Quality score: <strong style={{ color: lead.quality_score >= 60 ? '#16a34a' : lead.quality_score >= 30 ? '#d97706' : '#dc2626' }}>
+                      {lead.quality_score}/100
+                    </strong>
+                    {lead.context_history && <span style={{ marginLeft: 8, fontStyle: 'italic', color: '#9ca3af' }}>{lead.context_history}</span>}
                   </div>
                 )}
                 {lead.notes && (
-                  <p style={{ margin: '0 0 6px', fontSize: 13 }}>
-                    <strong>Notes:</strong> {lead.notes}
-                  </p>
+                  <p style={{ margin: '0 0 4px', fontSize: 12 }}><strong>Notes:</strong> {lead.notes}</p>
                 )}
                 {lead.follow_up_date && (
-                  <p style={{ margin: '0 0 6px', fontSize: 13 }}>
-                    <strong>Follow-up:</strong> {new Date(lead.follow_up_date).toLocaleString('en-IN')}
-                  </p>
+                  <p style={{ margin: '0 0 4px', fontSize: 12 }}><strong>Follow-up:</strong> {new Date(lead.follow_up_date).toLocaleString('en-IN')}</p>
                 )}
                 {lead.last_customer_reply_at && (
-                  <p style={{ margin: '0 0 6px', fontSize: 13, color: isWaiting ? '#854d0e' : theme.textMuted }}>
+                  <p style={{ margin: '0 0 4px', fontSize: 12, color: isWaiting ? '#854d0e' : theme.textMuted }}>
                     <strong>Customer replied:</strong> {new Date(lead.last_customer_reply_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                   </p>
                 )}
-                <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 8, fontStyle: 'italic' }}>
-                  Tap card to open full detail
-                </div>
               </div>
             )}
           </div>

@@ -3,6 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import PageLayout from '../../../components/layout/PageLayout';
 import { apiFetch } from '../../../utils/api';
 
+const WORKFLOW = [
+  { label: 'Audience',   path: '/marketing/whatsapp-engine/audience',   icon: '👥', desc: 'Contact list' },
+  { label: 'Templates',  path: '/marketing/whatsapp-engine/templates',  icon: '📝', desc: 'Message templates' },
+  { label: 'Campaigns',  path: '/marketing/whatsapp-engine/campaigns',  icon: '📢', desc: 'Launch & manage' },
+  { label: 'Queue',      path: '/marketing/whatsapp-engine/queue',      icon: '⏳', desc: 'Pending sends' },
+  { label: 'Logs',       path: '/marketing/whatsapp-engine/logs',       icon: '📋', desc: 'Sent messages' },
+  { label: 'Inbox',      path: '/marketing/whatsapp-engine/inbox',      icon: '📥', desc: 'Replies & leads' },
+];
+
 const card = {
   background: '#fff',
   border: '1px solid #dee2e6',
@@ -23,36 +32,11 @@ const btn = (bg, color = '#fff') => ({
 });
 
 const QUICK_LINKS = [
-  {
-    emoji: '📱',
-    title: 'Connected Numbers',
-    desc: 'Manage WhatsApp numbers, limits, warmup levels and risk scores.',
-    path: '/marketing/whatsapp-engine/numbers',
-  },
-  {
-    emoji: '📋',
-    title: 'Queue Monitor',
-    desc: 'View pending message queue and real-time dispatch status.',
-    path: '/marketing/whatsapp-engine/queue',
-  },
-  {
-    emoji: '📄',
-    title: 'Message Logs',
-    desc: 'Search and filter sent messages by status, phone, or date.',
-    path: '/marketing/whatsapp-engine/logs',
-  },
-  {
-    emoji: '💬',
-    title: 'Inbox',
-    desc: 'Handle customer replies and create CRM leads from conversations.',
-    path: '/marketing/whatsapp-engine/inbox',
-  },
-  {
-    emoji: '📊',
-    title: 'Analytics',
-    desc: 'Delivery rates, campaign stats, and template performance.',
-    path: '/marketing/whatsapp-engine/analytics',
-  },
+  { emoji: '📱', title: 'Numbers', desc: 'Manage WhatsApp numbers, QR, limits and risk.', path: '/marketing/whatsapp-engine/numbers' },
+  { emoji: '🛡️', title: 'Governance', desc: 'Stability report, scale readiness, re-enable controls.', path: '/marketing/whatsapp-engine/governance' },
+  { emoji: '📊', title: 'Analytics', desc: 'Delivery rates, campaign stats, template performance.', path: '/marketing/whatsapp-engine/analytics' },
+  { emoji: '📅', title: 'Daily Report', desc: 'Morning ops review — funnel, audience, numbers.', path: '/marketing/whatsapp-engine/daily-report' },
+  { emoji: '✅', title: 'Validate', desc: 'Delivery flow diagnostics and test contacts.', path: '/marketing/whatsapp-engine/validate' },
 ];
 
 function SkeletonCard() {
@@ -183,6 +167,33 @@ export default function WaEngineDashboard() {
           </div>
         )}
 
+        {/* Campaign Workflow Strip */}
+        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 16px', marginBottom: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>Campaign Workflow</div>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            {WORKFLOW.map((step, i) => (
+              <React.Fragment key={step.path}>
+                <button
+                  onClick={() => navigate(step.path)}
+                  style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center',
+                    background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8,
+                    padding: '8px 14px', cursor: 'pointer', minWidth: 80,
+                    transition: 'box-shadow 0.15s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)'; e.currentTarget.style.borderColor = '#bfdbfe'; }}
+                  onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
+                >
+                  <span style={{ fontSize: 16 }}>{step.icon}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#111827', marginTop: 3 }}>{step.label}</span>
+                  <span style={{ fontSize: 10, color: '#94a3b8' }}>{step.desc}</span>
+                </button>
+                {i < WORKFLOW.length - 1 && <span style={{ color: '#cbd5e1', fontSize: 18, flexShrink: 0 }}>→</span>}
+              </React.Fragment>
+            ))}
+          </div>
+        </div>
+
         {/* Risk Alerts */}
         {hasRiskAlerts && (
           <div
@@ -254,8 +265,8 @@ export default function WaEngineDashboard() {
         )}
 
         {/* Section heading */}
-        <div style={{ fontSize: 14, fontWeight: 700, color: '#374151', marginBottom: 12, letterSpacing: 0.3 }}>
-          QUICK NAVIGATION
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>
+          Operations
         </div>
 
         {/* Quick links grid */}

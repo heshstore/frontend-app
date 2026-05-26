@@ -131,6 +131,10 @@ function DispatchOrderDetail({ id }) {
   };
 
   const confirmDispatch = async () => {
+    const ok = window.confirm(
+      `Confirm dispatch for ${doc?.dispatch_number ?? 'this order'}?\n\nThis will post stock OUT immediately. This cannot be undone.`
+    );
+    if (!ok) return;
     try {
       const res = await apiFetch(`/dispatch/orders/${id}/confirm-dispatch`, { method: "POST" });
       if (!res.ok) {
@@ -394,8 +398,10 @@ function DispatchOrderDetail({ id }) {
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 24 }}>
         {canConfirm && (
           <button type="button" onClick={confirmDispatch} style={{
-            background: "#7c3aed", color: "#fff", border: "none", borderRadius: 8, padding: "12px 18px", fontWeight: 800, cursor: "pointer",
-          }}>Confirm dispatch (stock OUT)</button>
+            background: "#7c3aed", color: "#fff", border: "2px solid #6d28d9", borderRadius: 8, padding: "12px 18px", fontWeight: 800, cursor: "pointer",
+          }} title="Posts stock OUT — requires confirmation">
+            ✓ Confirm dispatch (stock OUT)
+          </button>
         )}
         {canTransit && (
           <button type="button" onClick={inTransit} style={{

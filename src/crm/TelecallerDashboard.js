@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PageLayout from '../components/layout/PageLayout';
 import { apiFetch } from '../utils/api';
@@ -44,6 +44,22 @@ function ScoreDial({ score }) {
   );
 }
 
+function slaLabel(nextActionDueAt, isOverdue) {
+  if (!nextActionDueAt) return null;
+  const diffMs   = new Date(nextActionDueAt) - Date.now();
+  const absMins  = Math.abs(Math.round(diffMs / 60_000));
+  const absHours = Math.floor(absMins / 60);
+  const absDays  = Math.floor(absHours / 24);
+  if (diffMs > 0) {
+    if (absMins < 60)   return `Due ${absMins}m`;
+    if (absMins < 1440) return `Due ${absHours}h`;
+    return `Due ${absDays}d`;
+  }
+  if (absMins < 60)   return `${absMins}m overdue`;
+  if (absMins < 1440) return `${absHours}h overdue`;
+  return `${absDays}d overdue`;
+}
+
 function HotTimer({ ageHours }) {
   if (ageHours > 24) return null;
   const isHot = ageHours < 1;
@@ -66,6 +82,8 @@ function HotTimer({ ageHours }) {
 function LeadCard({ item, onOpen }) {
   const { lead, score, nextAction, isOverdue, ageHours } = item;
   const urgencyColor = URGENCY_COLORS[nextAction?.urgency] || theme.textMuted;
+  const sla = slaLabel(lead.next_action_due_at, isOverdue);
+  const slaIsUrgent = isOverdue || (lead.next_action_due_at && new Date(lead.next_action_due_at) - Date.now() < 3_600_000);
 
   return (
     <div
@@ -96,7 +114,7 @@ function LeadCard({ item, onOpen }) {
         <HotTimer ageHours={ageHours} />
       </div>
 
-      {/* Row 2: status + action label */}
+      {/* Row 2: status + action label + SLA */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <span
           style={{
@@ -116,8 +134,15 @@ function LeadCard({ item, onOpen }) {
             → {nextAction.label}
           </span>
         )}
-        {isOverdue && (
-          <span style={{ fontSize: 10, color: '#dc3545', fontWeight: 700 }}>OVERDUE</span>
+        {sla && (
+          <span style={{
+            fontSize: 10, fontWeight: 700, marginLeft: 'auto',
+            color: slaIsUrgent ? '#dc3545' : '#6b7280',
+            background: slaIsUrgent ? '#fff1f2' : '#f3f4f6',
+            padding: '2px 7px', borderRadius: 8,
+          }}>
+            ⏱ {sla}
+          </span>
         )}
       </div>
 
@@ -157,6 +182,7 @@ export default function TelecallerDashboard() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('ALL');
   const [refreshing, setRefreshing] = useState(false);
+  const listRef = useRef(null);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -188,7 +214,7 @@ export default function TelecallerDashboard() {
 
   return (
     <PageLayout title="My Queue">
-      {/* Summary bar */}
+      {/* Summary bar — clickable to filter + scroll */}
       <div
         style={{
           display: 'flex',
@@ -198,26 +224,35 @@ export default function TelecallerDashboard() {
         }}
       >
         {[
-          { label: 'Total', value: queue.length, color: theme.primary },
-          { label: 'Urgent', value: highCount, color: '#dc3545' },
-          { label: 'Overdue', value: overdueCount, color: '#fd7e14' },
-        ].map(({ label, value, color }) => (
-          <div
-            key={label}
-            style={{
-              flex: 1,
-              minWidth: 80,
-              background: '#fff',
-              border: `1px solid ${theme.border}`,
-              borderRadius: 8,
-              padding: '10px 12px',
-              textAlign: 'center',
-            }}
-          >
-            <div style={{ fontSize: 22, fontWeight: 700, color }}>{value}</div>
-            <div style={{ fontSize: 11, color: theme.textMuted, fontWeight: 600 }}>{label}</div>
-          </div>
-        ))}
+          { label: 'Total', value: queue.length, color: theme.primary, filterKey: 'ALL' },
+          { label: 'Urgent', value: highCount, color: '#dc3545', filterKey: 'HIGH' },
+          { label: 'Overdue', value: overdueCount, color: '#fd7e14', filterKey: 'OVERDUE' },
+        ].map(({ label, value, color, filterKey }) => {
+          const active = filter === filterKey;
+          return (
+            <div
+              key={label}
+              onClick={() => {
+                setFilter(filterKey === 'OVERDUE' ? 'ALL' : filterKey);
+                setTimeout(() => listRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+              }}
+              style={{
+                flex: 1,
+                minWidth: 80,
+                background: active ? color : '#fff',
+                border: `2px solid ${active ? color : theme.border}`,
+                borderRadius: 8,
+                padding: '10px 12px',
+                textAlign: 'center',
+                cursor: 'pointer',
+                transition: 'background 0.15s, border-color 0.15s',
+              }}
+            >
+              <div style={{ fontSize: 22, fontWeight: 700, color: active ? '#fff' : color }}>{value}</div>
+              <div style={{ fontSize: 11, color: active ? 'rgba(255,255,255,0.85)' : theme.textMuted, fontWeight: 600 }}>{label}</div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Filter pills */}
@@ -259,6 +294,9 @@ export default function TelecallerDashboard() {
           {refreshing ? '...' : '↻'}
         </button>
       </div>
+
+      {/* List anchor for scroll */}
+      <div ref={listRef} />
 
       {/* List */}
       {loading ? (
