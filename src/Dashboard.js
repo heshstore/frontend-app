@@ -5,7 +5,6 @@ import { toast } from './utils/toast';
 import { getUserCapabilities } from './config/roleCapabilities';
 import KpiCard from './components/dashboard/KpiCard';
 import KpiGrid from './components/dashboard/KpiGrid';
-import StatusWidget from './components/dashboard/StatusWidget';
 import ActivityTimeline from './components/dashboard/ActivityTimeline';
 
 // ── Palette ──────────────────────────────────────────────────────────────────
@@ -297,6 +296,83 @@ function DelayedRow({ job, onView }) {
   );
 }
 
+// ── Status panel (compact chips, top-right of dashboard) ─────────────────────
+
+function StatusDot({ status, pulse }) {
+  const colors = { ok: '#16a34a', warning: '#d97706', error: '#dc2626', unknown: '#9ca3af' };
+  const c = colors[status] || colors.unknown;
+  return (
+    <span style={{
+      width: 7, height: 7, borderRadius: '50%',
+      background: c, display: 'inline-block', flexShrink: 0,
+      boxShadow: pulse && status === 'ok' ? `0 0 0 2px ${c}44` : 'none',
+      animation: pulse && status === 'ok' ? 'pulseDot 2s infinite' : 'none',
+    }} />
+  );
+}
+
+function StatusChip({ label, status, detail, onClick }) {
+  const bgMap = { ok: '#f0fdf4', warning: '#fffbeb', error: '#fff1f2', unknown: '#f9fafb' };
+  const bdMap = { ok: '#bbf7d0', warning: '#fde68a', error: '#fecaca', unknown: '#e5e7eb' };
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 5,
+        background: bgMap[status] || bgMap.unknown,
+        border: `1px solid ${bdMap[status] || bdMap.unknown}`,
+        borderRadius: 6, padding: '4px 9px',
+        fontSize: 11, fontWeight: 600, color: '#374151',
+        whiteSpace: 'nowrap', cursor: onClick ? 'pointer' : 'default',
+        userSelect: 'none',
+      }}
+    >
+      <StatusDot status={status} pulse={status === 'ok'} />
+      <span>{label}</span>
+      {detail && <span style={{ color: '#9ca3af', fontWeight: 400 }}>{detail}</span>}
+    </div>
+  );
+}
+
+function StatusPanel({ kpis, waNumbers, navigate }) {
+  const crmWaStatus = !kpis ? 'unknown'
+    : (kpis.whatsapp_status === 'AUTHENTICATED' || kpis.whatsapp_status === 'CONNECTED') ? 'ok'
+    : kpis.whatsapp_status === 'NO_SESSION' ? 'warning'
+    : 'error';
+
+  const activeNums  = waNumbers.filter(n => n.is_active);
+  const connectedNums = activeNums.filter(n => n.wa_state === 'ready');
+  const engStatus = activeNums.length === 0 ? 'unknown'
+    : connectedNums.length === activeNums.length ? 'ok'
+    : connectedNums.length > 0 ? 'warning'
+    : 'error';
+
+  const shopifyStatus = !kpis || kpis.shopify_sync_minutes == null ? 'unknown'
+    : kpis.shopify_sync_minutes < 120 ? 'ok'
+    : kpis.shopify_sync_minutes < 720 ? 'warning'
+    : 'error';
+  const shopifyDetail = kpis?.shopify_sync_minutes != null
+    ? (kpis.shopify_sync_minutes < 60
+        ? `${kpis.shopify_sync_minutes}m ago`
+        : `${Math.round(kpis.shopify_sync_minutes / 60)}h ago`)
+    : null;
+
+  return (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+      <StatusChip label="CRM WA" status={crmWaStatus} onClick={() => navigate('/whatsapp')} />
+      {activeNums.length > 0 && (
+        <StatusChip
+          label={`Engine ${connectedNums.length}/${activeNums.length}`}
+          status={engStatus}
+          onClick={() => navigate('/marketing/whatsapp-engine/numbers')}
+        />
+      )}
+      <StatusChip label="Shopify" status={shopifyStatus} detail={shopifyDetail} onClick={() => navigate('/shopify-items')} />
+      <StatusChip label="DB" status="ok" />
+    </div>
+  );
+}
+
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
@@ -323,6 +399,8 @@ export default function Dashboard() {
   const [syncing,   setSyncing]   = useState(false);
   const [progress,  setProgress]  = useState(0);
   const [syncPhase, setSyncPhase] = useState('idle');
+
+  const [waNumbers, setWaNumbers] = useState([]);
 
   // ── Fetch — only APIs the current user is permitted to call ────────────────
 
@@ -396,6 +474,12 @@ export default function Dashboard() {
           .finally(() => { if (ok()) setLoadingPayments(false); })
       );
     }
+
+    // Marketing WA numbers — small fetch, no spinner needed
+    apiFetch('/marketing/whatsapp-engine/numbers')
+      .then(r => r.ok ? r.json() : [])
+      .then(d => { if (ok()) setWaNumbers(Array.isArray(d) ? d : []); })
+      .catch(() => {});
 
     await Promise.allSettled(tasks);
 
@@ -502,30 +586,32 @@ export default function Dashboard() {
   // ── Layout helpers ─────────────────────────────────────────────────────────
 
   const colSummary = isMobile ? '1fr 1fr' : `repeat(${Math.max(summaryCards.length, 1)}, 1fr)`;
-  const colBt      = isMobile ? '1fr' : (caps.canViewDelayedJobs ? '1fr 280px' : '280px');
 
   return (
     <div style={{ fontFamily: "'Inter','Segoe UI',Arial,sans-serif", background: C.bg, minHeight: '100%', paddingBottom: 32 }}>
       <div style={{ maxWidth: 960, margin: '0 auto' }}>
 
         {/* ── Header ── */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: C.text }}>Dashboard</h2>
-            <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
-              {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 8 }}>
+            <div>
+              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: C.text }}>Dashboard</h2>
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
+                {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+              </div>
             </div>
+            <button
+              onClick={fetchDashboard}
+              style={{
+                padding: '8px 14px', borderRadius: 8, border: `1px solid ${C.border}`,
+                background: C.card, color: C.muted,
+                fontSize: 12, fontWeight: 600, cursor: 'pointer', flexShrink: 0,
+              }}
+            >
+              ↻ Refresh
+            </button>
           </div>
-          <button
-            onClick={fetchDashboard}
-            style={{
-              padding: '8px 14px', borderRadius: 8, border: `1px solid ${C.border}`,
-              background: C.card, color: C.muted,
-              fontSize: 12, fontWeight: 600, cursor: 'pointer',
-            }}
-          >
-            ↻ Refresh
-          </button>
+          <StatusPanel kpis={kpis} waNumbers={waNumbers} navigate={navigate} />
         </div>
 
         {/* ── Priority Actions — only visible cards for this role ── */}
@@ -566,42 +652,39 @@ export default function Dashboard() {
 
         {caps.canViewProduction && summary?.manufacturing_intel && (
           <>
-            <SectionLabel>🏭 Operations exposure</SectionLabel>
+            <SectionLabel>🏭 Production</SectionLabel>
             <div style={{
               display: 'grid',
               gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)',
               gap: 10,
-              marginBottom: 20,
+              marginBottom: 10,
             }}>
               {[
-                { k: 'wip', label: 'WIP value', v: fmtCurrency(summary.manufacturing_intel.wip_order_value) },
-                { k: 'fg', label: 'FG stock (est.)', v: fmtCurrency(summary.manufacturing_intel.fg_stock_value) },
-                { k: 'pd', label: 'Pending dispatch', v: fmtCurrency(summary.manufacturing_intel.pending_dispatch_value) },
-                { k: 'pr', label: 'Procurement exp.', v: fmtCurrency(summary.manufacturing_intel.procurement_exposure) },
-                { k: 'ex', label: 'Active jobs', v: String(summary.manufacturing_intel.active_execution_jobs ?? '—') },
-                { k: 'dl', label: 'Delayed hints', v: String(summary.manufacturing_intel.delayed_execution_hints ?? '—') },
-                { k: 'lo', label: 'Loss orders (hint)', v: String(summary.manufacturing_intel.loss_making_orders ?? '—') },
-                { k: 'ef', label: 'Efficiency %', v: `${Number(summary.manufacturing_intel.production_efficiency_pct || 0).toFixed(0)}%` },
+                { k: 'wip', label: 'WIP value',        v: fmtCurrency(summary.manufacturing_intel.wip_order_value),           color: C.blue   },
+                { k: 'pd',  label: 'Pending dispatch',  v: fmtCurrency(summary.manufacturing_intel.pending_dispatch_value),     color: C.orange },
+                { k: 'ex',  label: 'Active jobs',       v: String(summary.manufacturing_intel.active_execution_jobs ?? '—'),   color: C.green  },
+                { k: 'dl',  label: 'Delayed',           v: String(summary.manufacturing_intel.delayed_execution_hints ?? '—'), color: summary.manufacturing_intel.delayed_execution_hints > 0 ? C.red : C.green },
               ].map((x) => (
-                <div key={x.k} style={{
+                <div key={x.k} onClick={() => navigate('/production/execution')} style={{
                   background: C.card, borderRadius: 12, border: `1px solid ${C.border}`,
-                  padding: '12px 14px',
+                  padding: '12px 14px', cursor: 'pointer',
+                  borderTop: `3px solid ${x.color}`,
                 }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.5 }}>{x.label}</div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: C.text, marginTop: 4 }}>{x.v}</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: x.color, marginTop: 4 }}>{x.v}</div>
                 </div>
               ))}
             </div>
-            <div style={{ marginBottom: 24 }}>
+            <div style={{ marginBottom: 20, textAlign: 'right' }}>
               <button
                 type="button"
                 onClick={() => navigate('/manufacturing/analytics')}
                 style={{
-                  padding: '10px 16px', borderRadius: 10, border: `1px solid ${C.border}`,
-                  background: C.card, fontWeight: 700, cursor: 'pointer', fontSize: 13,
+                  padding: '7px 14px', borderRadius: 8, border: `1px solid ${C.border}`,
+                  background: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 12, color: C.muted,
                 }}
               >
-                Manufacturing analytics →
+                Full analytics →
               </button>
             </div>
           </>
@@ -609,39 +692,36 @@ export default function Dashboard() {
 
         {caps.canViewAccounts && summary?.finance_ops && (
           <>
-            <SectionLabel>💹 Finance operations</SectionLabel>
+            <SectionLabel>💹 Finance</SectionLabel>
             <div style={{
               display: 'grid',
               gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)',
               gap: 10,
-              marginBottom: 12,
+              marginBottom: 10,
             }}>
               {[
-                { k: 'tro', label: 'Receivables outstanding', v: fmtCurrency(summary.finance_ops.total_receivables_outstanding) },
-                { k: 'tpo', label: 'Payables outstanding', v: fmtCurrency(summary.finance_ops.total_payables_outstanding) },
-                { k: 'orc', label: 'Overdue collections', v: fmtCurrency(summary.finance_ops.overdue_receivables_amount) },
-                { k: 'opv', label: 'Overdue vendor pay.', v: fmtCurrency(summary.finance_ops.overdue_payables_amount) },
-                { k: 'exi', label: 'Expected in (30d)', v: fmtCurrency(summary.finance_ops.expected_incoming_30d) },
-                { k: 'exo', label: 'Expected out (30d)', v: fmtCurrency(summary.finance_ops.expected_outgoing_30d) },
-                { k: 'ce', label: 'Customer exposure', v: fmtCurrency(summary.finance_ops.customer_exposure) },
-                { k: 've', label: 'Vendor exposure', v: fmtCurrency(summary.finance_ops.vendor_exposure) },
+                { k: 'tro', label: 'Receivables',      v: fmtCurrency(summary.finance_ops.total_receivables_outstanding), color: C.blue,   href: '/accounts/outstanding' },
+                { k: 'orc', label: 'Overdue',           v: fmtCurrency(summary.finance_ops.overdue_receivables_amount),    color: C.red,    href: '/accounts/outstanding' },
+                { k: 'exi', label: 'Expected in (30d)', v: fmtCurrency(summary.finance_ops.expected_incoming_30d),         color: C.green,  href: '/finance' },
+                { k: 'ce',  label: 'Customer exposure', v: fmtCurrency(summary.finance_ops.customer_exposure),             color: C.orange, href: '/finance' },
               ].map((x) => (
-                <div key={x.k} style={{
+                <div key={x.k} onClick={() => navigate(x.href)} style={{
                   background: C.card, borderRadius: 12, border: `1px solid ${C.border}`,
-                  padding: '12px 14px',
+                  padding: '12px 14px', cursor: 'pointer',
+                  borderTop: `3px solid ${x.color}`,
                 }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.5 }}>{x.label}</div>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: C.text, marginTop: 4 }}>{x.v}</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: x.color, marginTop: 4 }}>{x.v}</div>
                 </div>
               ))}
             </div>
-            <div style={{ marginBottom: 24 }}>
+            <div style={{ marginBottom: 20, textAlign: 'right' }}>
               <button
                 type="button"
                 onClick={() => navigate('/finance')}
                 style={{
-                  padding: '10px 16px', borderRadius: 10, border: `1px solid ${C.border}`,
-                  background: C.card, fontWeight: 700, cursor: 'pointer', fontSize: 13,
+                  padding: '7px 14px', borderRadius: 8, border: `1px solid ${C.border}`,
+                  background: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 12, color: C.muted,
                 }}
               >
                 Finance dashboard →
@@ -681,29 +761,6 @@ export default function Dashboard() {
               )}
             </KpiGrid>
 
-            {/* System health strip */}
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
-              <StatusWidget
-                label="WhatsApp"
-                status={
-                  !kpis ? 'unknown' :
-                  kpis.whatsapp_status === 'AUTHENTICATED' || kpis.whatsapp_status === 'CONNECTED' ? 'ok' :
-                  kpis.whatsapp_status === 'NO_SESSION' ? 'warning' : 'error'
-                }
-                detail={kpis?.whatsapp_status ?? '—'}
-                pulse
-              />
-              <StatusWidget
-                label="Shopify sync"
-                status={
-                  kpis?.shopify_sync_minutes == null ? 'unknown' :
-                  kpis.shopify_sync_minutes < 120 ? 'ok' :
-                  kpis.shopify_sync_minutes < 720 ? 'warning' : 'error'
-                }
-                detail={kpis?.shopify_sync_minutes != null ? `${kpis.shopify_sync_minutes}m ago` : 'Never synced'}
-              />
-              <StatusWidget label="Database" status="ok" detail="Connected" />
-            </div>
           </>
         )}
 
@@ -720,58 +777,34 @@ export default function Dashboard() {
           </>
         )}
 
-        {/* ── Bottom row ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: colBt, gap: 12, marginBottom: 20 }}>
-
-          {/* Delayed jobs list — production role only */}
-          {caps.canViewDelayedJobs && (
-            <Card style={{ padding: '16px 18px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                <SectionLabel>⚠ Needs Attention</SectionLabel>
-                <button
-                  onClick={() => navigate('/production/execution')}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: C.blue, fontWeight: 700, padding: 0 }}
-                >
-                  View All →
-                </button>
-              </div>
-
-              {loadingDelayed ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {[1, 2, 3].map(i => <Skeleton key={i} h={52} r={9} />)}
-                </div>
-              ) : delayedJobs.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '24px 0', color: C.green, fontSize: 13, fontWeight: 600 }}>
-                  ✅ No delayed jobs right now
-                </div>
-              ) : (
-                delayedJobs.map(j => (
-                  <DelayedRow key={j.id} job={j} onView={handleDelayedJobClick} />
-                ))
-              )}
-            </Card>
-          )}
-
-          {/* Top Performers — visible to all */}
-          <Card style={{ padding: '16px 18px' }}>
-            <SectionLabel>🏆 Top Performers</SectionLabel>
-            <div style={{ textAlign: 'center', padding: '20px 0', color: C.faint, fontSize: 12 }}>
-              Coming soon
+        {/* ── Delayed jobs list — production role only ── */}
+        {caps.canViewDelayedJobs && (
+          <Card style={{ padding: '16px 18px', marginBottom: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <SectionLabel>⚠ Needs Attention</SectionLabel>
+              <button
+                onClick={() => navigate('/production/execution')}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: C.blue, fontWeight: 700, padding: 0 }}
+              >
+                View All →
+              </button>
             </div>
-            <button
-              onClick={() => navigate('/staff')}
-              style={{
-                marginTop: 8, width: '100%', padding: '10px',
-                background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8,
-                color: C.muted, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                minHeight: 44,
-              }}
-            >
-              View All Staff →
-            </button>
-          </Card>
 
-        </div>
+            {loadingDelayed ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {[1, 2, 3].map(i => <Skeleton key={i} h={52} r={9} />)}
+              </div>
+            ) : delayedJobs.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '24px 0', color: C.green, fontSize: 13, fontWeight: 600 }}>
+                ✅ No delayed jobs right now
+              </div>
+            ) : (
+              delayedJobs.map(j => (
+                <DelayedRow key={j.id} job={j} onView={handleDelayedJobClick} />
+              ))
+            )}
+          </Card>
+        )}
 
         {/* ── Shopify sync — item managers only ── */}
         {caps.canSyncShopify && (

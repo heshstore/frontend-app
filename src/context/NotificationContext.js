@@ -6,6 +6,33 @@ import { useAuth } from './AuthContext';
 
 const NotificationContext = createContext(null);
 
+// Web Audio API beep — short 880Hz tone, ~350ms, fades out.
+// Module-level ref prevents calling more than once per 5 seconds across re-renders.
+const _lastSoundAt = { t: 0 };
+function playAlertTone() {
+  try {
+    const now = Date.now();
+    if (now - _lastSoundAt.t < 5000) return;
+    _lastSoundAt.t = now;
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx  = new AudioCtx();
+    const osc  = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.25, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.35);
+    osc.onended = () => ctx.close().catch(() => {});
+  } catch {
+    // Silently ignore — autoplay restrictions or missing API
+  }
+}
+
 const initialState = {
   notifications:  [],
   unreadCount:    0,
@@ -91,6 +118,9 @@ export function NotificationProvider({ children }) {
 
   const addNotification = useCallback((notif) => {
     dispatch({ type: 'ADD', payload: notif });
+    if (notif.priority === 'HIGH' || notif.priority === 'CRITICAL') {
+      playAlertTone();
+    }
   }, []);
 
   const fetchNotifications = useCallback(async () => {
