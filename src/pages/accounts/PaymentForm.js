@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { apiFetch } from '../../utils/api';
+import PageLayout from '../../components/layout/PageLayout';
 
 const MODES = [
   { value: 'cash', label: 'Cash',        icon: '💵' },
@@ -111,18 +112,8 @@ export default function PaymentForm() {
   };
 
   return (
-    <div style={{ maxWidth: 680, margin: '0 auto', padding: '16px 12px' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-        <button
-          onClick={() => navigate(-1)}
-          style={{
-            background: '#f1f5f9', color: '#374151', border: 'none', borderRadius: 8,
-            padding: '10px 16px', fontSize: 14, fontWeight: 600, cursor: 'pointer', minHeight: 44,
-          }}
-        >← Back</button>
-        <h3 style={{ margin: 0, fontSize: 17 }}>Add Payment</h3>
-      </div>
+    <PageLayout title="Add Payment" onBack={() => navigate(-1)}>
+    <div style={{ maxWidth: 680, margin: '0 auto' }}>
 
       {/* Order context card */}
       {order && (
@@ -256,5 +247,6 @@ export default function PaymentForm() {
         </button>
       </form>
     </div>
+    </PageLayout>
   );
 }

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../utils/api';
 import { toast } from '../../utils/toast';
 import { useConfirm } from '../../components/ui/ConfirmModal';
+import PageLayout from '../../components/layout/PageLayout';
 
 const STATUS_STYLE = {
   PENDING:    { bg: '#f1f5f9', color: '#475569', label: 'Pending'    },
@@ -86,15 +87,9 @@ export default function DispatchList() {
   const delivered = dispatches.filter(d => d.dispatch_status === 'DELIVERED');
 
   return (
-    <>
+    <PageLayout title="All Dispatches" onBack={() => navigate(-1)} actions={<button onClick={load} style={btn('#f1f5f9', '#374151')}>↻</button>}>
     {confirmModal}
-    <div style={{ maxWidth: 680, margin: '0 auto', padding: '16px 12px' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-        <button onClick={() => navigate(-1)} style={btn('#f1f5f9', '#374151')}>← Back</button>
-        <h3 style={{ margin: 0, flex: 1, fontSize: 17 }}>All Dispatches</h3>
-        <button onClick={load} style={btn('#f1f5f9', '#374151')}>↻</button>
-      </div>
+    <div style={{ maxWidth: 680, margin: '0 auto' }}>
 
       {/* Quick action */}
       <button
@@ -148,7 +143,7 @@ export default function DispatchList() {
         </div>
       )}
     </div>
-    </>
+    </PageLayout>
   );
 }
 

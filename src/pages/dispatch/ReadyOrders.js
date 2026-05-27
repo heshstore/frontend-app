@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../utils/api';
 import { toast } from '../../utils/toast';
+import PageLayout from '../../components/layout/PageLayout';
 
 const btn = (bg, color = '#fff') => ({
   background: bg, color, border: 'none', borderRadius: 8,
@@ -37,15 +38,16 @@ export default function ReadyOrders() {
 
   useEffect(() => { load(); }, [load]);
 
+  const headerActions = (
+    <>
+      <button type="button" onClick={() => navigate('/dispatch/orders')} style={btn('#e0e7ff', '#3730a3')}>Dispatch orders</button>
+      <button onClick={load} style={btn('#f1f5f9', '#374151')}>↻</button>
+    </>
+  );
+
   return (
-    <div style={{ maxWidth: 680, margin: '0 auto', padding: '16px 12px' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-        <button onClick={() => navigate(-1)} style={btn('#f1f5f9', '#374151')}>← Back</button>
-        <h3 style={{ margin: 0, flex: 1, fontSize: 17 }}>Ready for Dispatch</h3>
-        <button type="button" onClick={() => navigate('/dispatch/orders')} style={btn('#e0e7ff', '#3730a3')}>Dispatch orders</button>
-        <button onClick={load} style={btn('#f1f5f9', '#374151')}>↻</button>
-      </div>
+    <PageLayout title="Ready for Dispatch" onBack={() => navigate(-1)} actions={headerActions}>
+    <div style={{ maxWidth: 680, margin: '0 auto' }}>
 
       {loading && (
         <div style={{ textAlign: 'center', color: '#9ca3af', padding: 48 }}>Loading…</div>
@@ -139,5 +141,6 @@ export default function ReadyOrders() {
         </button>
       )}
     </div>
+    </PageLayout>
   );
 }

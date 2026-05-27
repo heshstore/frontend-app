@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { apiFetch } from '../../utils/api';
 import { toast } from '../../utils/toast';
+import PageLayout from '../../components/layout/PageLayout';
 
 const TRANSPORT_TYPES = ['Courier', 'Transport', 'Bus', 'Train', 'Air'];
 
@@ -46,13 +47,9 @@ export default function DispatchForm() {
 
   if (!order) {
     return (
-      <div style={{ maxWidth: 680, margin: '0 auto', padding: '16px 12px' }}>
-        <button onClick={() => navigate('/dispatch')} style={{
-          background: '#f1f5f9', color: '#374151', border: 'none', borderRadius: 8,
-          padding: '10px 16px', fontSize: 14, fontWeight: 600, cursor: 'pointer',
-        }}>← Back</button>
+      <PageLayout title="Create Dispatch" onBack={() => navigate('/dispatch')}>
         <p style={{ color: '#dc2626', marginTop: 20 }}>No order selected. Go back and select an order.</p>
-      </div>
+      </PageLayout>
     );
   }
 
@@ -86,15 +83,8 @@ export default function DispatchForm() {
   };
 
   return (
-    <div style={{ maxWidth: 680, margin: '0 auto', padding: '16px 12px' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-        <button onClick={() => navigate(-1)} style={{
-          background: '#f1f5f9', color: '#374151', border: 'none', borderRadius: 8,
-          padding: '10px 16px', fontSize: 14, fontWeight: 600, cursor: 'pointer', minHeight: 44,
-        }}>← Back</button>
-        <h3 style={{ margin: 0, fontSize: 17 }}>Create Dispatch</h3>
-      </div>
+    <PageLayout title="Create Dispatch" onBack={() => navigate(-1)}>
+    <div style={{ maxWidth: 680, margin: '0 auto' }}>
 
       {/* Order summary card */}
       <div style={{
@@ -169,5 +159,6 @@ export default function DispatchForm() {
         </button>
       </form>
     </div>
+    </PageLayout>
   );
 }
