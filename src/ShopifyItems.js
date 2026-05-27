@@ -1,6 +1,7 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { apiFetch } from "./utils/api";
 import { toast } from "./utils/toast";
+import { GST_OPTIONS } from "./config/gstOptions";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -49,38 +50,88 @@ function groupItems(items) {
     });
 }
 
-// ── Sync status banner ────────────────────────────────────────────────────────
+// ── Catalog health strip ──────────────────────────────────────────────────────
 
-function StatsBanner({ stats, onSync, syncing }) {
+const HEALTH_CARDS = [
+  { key: 'syncTotal',      label: 'Active Catalog',   color: '#2563eb', bg: '#eff6ff' },
+  { key: 'quotationReady', label: 'Quotation Ready',  color: '#16a34a', bg: '#f0fdf4' },
+  { key: 'boqReady',       label: 'BOQ Ready',        color: '#7c3aed', bg: '#faf5ff' },
+  { key: 'wholesaleReady', label: 'Wholesale Ready',  color: '#d97706', bg: '#fffbeb' },
+  { key: 'hiddenVariants', label: 'Hidden Variants',  color: '#6b7280', bg: '#f9fafb' },
+];
+
+const PHASE_LABELS = {
+  starting:  'Starting sync…',
+  fetching:  'Fetching Shopify products…',
+  saving:    'Saving variants…',
+};
+
+function CatalogHealth({ stats, onSync, syncing, syncPhase }) {
   return (
-    <div style={{
-      display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center",
-      padding: "10px 14px", background: "#f8fafc", borderBottom: "1px solid #e2e8f0",
-    }}>
-      <div style={{ display: "flex", gap: 16, flex: 1 }}>
-        <Stat label="Pending Config" value={stats.shopifyPending} color="#dc2626" />
-        <Stat label="Ready" value={stats.shopifyReady} color="#16a34a" />
-        <Stat label="Hidden" value={stats.shopifyIgnored} color="#9ca3af" />
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+        {HEALTH_CARDS.map(c => {
+          const data = stats[c.key];
+          const isScalar = c.key === 'hiddenVariants';
+          const items    = isScalar ? null : (data?.items    ?? '…');
+          const variants = isScalar ? (data ?? '…') : (data?.variants ?? '…');
+          return (
+            <div key={c.key} style={{
+              flex: '1 1 130px', minWidth: 110,
+              background: c.bg, border: `1px solid ${c.color}30`,
+              borderRadius: 10, padding: '9px 12px',
+            }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: c.color, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 4 }}>
+                {c.label}
+              </div>
+              {items !== null && (
+                <div style={{ fontSize: 17, fontWeight: 800, color: c.color, lineHeight: 1.1 }}>
+                  {typeof items === 'number' ? items.toLocaleString() : items}
+                  <span style={{ fontSize: 10, fontWeight: 500, color: '#94a3b8', marginLeft: 3 }}>items</span>
+                </div>
+              )}
+              <div style={{
+                fontSize: items !== null ? 12 : 20,
+                fontWeight: items !== null ? 500 : 800,
+                color: items !== null ? '#64748b' : c.color,
+                marginTop: items !== null ? 1 : 0,
+              }}>
+                {typeof variants === 'number' ? variants.toLocaleString() : variants}
+                <span style={{ fontSize: 10, fontWeight: 500, color: '#94a3b8', marginLeft: 3 }}>variants</span>
+              </div>
+            </div>
+          );
+        })}
       </div>
-      <button
-        onClick={onSync}
-        disabled={syncing}
-        style={{
-          padding: "7px 16px", borderRadius: 6, border: "none", cursor: syncing ? "not-allowed" : "pointer",
-          background: syncing ? "#94a3b8" : "#0f172a", color: "#fff", fontWeight: 600, fontSize: 13,
-        }}
-      >
-        {syncing ? "Syncing…" : "Sync Now"}
-      </button>
-    </div>
-  );
-}
-
-function Stat({ label, value, color }) {
-  return (
-    <div style={{ textAlign: "center" }}>
-      <div style={{ fontSize: 18, fontWeight: 800, color }}>{value ?? "…"}</div>
-      <div style={{ fontSize: 10, color: "#64748b", fontWeight: 600 }}>{label}</div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10 }}>
+        {syncing && syncPhase && (
+          <span style={{ fontSize: 12, color: '#64748b', fontStyle: 'italic' }}>
+            {PHASE_LABELS[syncPhase] ?? 'Sync Running…'}
+          </span>
+        )}
+        <button
+          onClick={onSync}
+          disabled={syncing}
+          style={{
+            padding: '6px 16px', borderRadius: 6, border: 'none',
+            cursor: syncing ? 'not-allowed' : 'pointer',
+            background: syncing ? '#94a3b8' : '#0f172a',
+            color: '#fff', fontWeight: 600, fontSize: 13,
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}
+        >
+          {syncing && (
+            <span style={{
+              width: 10, height: 10, borderRadius: '50%',
+              border: '2px solid rgba(255,255,255,0.4)',
+              borderTopColor: '#fff',
+              display: 'inline-block',
+              animation: 'spinLoader 0.8s linear infinite',
+            }} />
+          )}
+          {syncing ? 'Sync Running…' : 'Sync Now'}
+        </button>
+      </div>
     </div>
   );
 }
@@ -193,9 +244,7 @@ function InlineConfigForm({ item, mainData, selectedItems, selectedVariants,
             disabled={!fieldsEnabled}
             style={{ padding: 8, borderRadius: 6, border: "1px solid #ccc" }}
           >
-            <option value="">Select GST %</option>
-            <option value="5">5%</option>
-            <option value="18">18%</option>
+            {GST_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
           <input
             placeholder="Cost Price (₹)"
@@ -542,6 +591,174 @@ function ProductCard({ item, tab, mainData, selectedItems, selectedVariants,
   );
 }
 
+// ── Sync status panel (persistent history) ────────────────────────────────────
+
+function syncAbsTime(iso) {
+  if (!iso) return null;
+  const d   = new Date(iso);
+  const now = new Date();
+  const yest = new Date(now - 86400000);
+  const t   = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (d.toDateString() === now.toDateString())  return `Today ${t}`;
+  if (d.toDateString() === yest.toDateString()) return `Yesterday ${t}`;
+  return d.toLocaleDateString([], { day: 'numeric', month: 'short' }) + ' ' + t;
+}
+
+function syncSummary(rec) {
+  if (!rec) return { text: 'No record this session', color: '#9ca3af' };
+  const isFatal = !!rec.error && rec.fetchedProducts === 0;
+  if (isFatal) return { text: rec.error, color: '#dc2626' };
+  const parts = [];
+  if (rec.inserted) parts.push(`+${rec.inserted} added`);
+  if (rec.changed)  parts.push(`${rec.changed} changed`);
+  if (rec.errors)   parts.push(`${rec.errors} error${rec.errors > 1 ? 's' : ''}`);
+  if (parts.length === 0) return { text: 'Verified — no changes', color: '#6b7280' };
+  return { text: parts.join(' · '), color: rec.errors > 0 ? '#d97706' : '#16a34a' };
+}
+
+function SyncHistoryCard({ label, icon, record }) {
+  const ts  = record ? syncAbsTime(record.completedAt) : null;
+  const sum = syncSummary(record);
+  return (
+    <div style={{
+      flex: '1 1 160px', minWidth: 140,
+      background: '#f9fafb', border: '1px solid #e5e7eb',
+      borderRadius: 10, padding: '9px 12px',
+    }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 5 }}>
+        {icon} {label}
+      </div>
+      {ts
+        ? <div style={{ fontSize: 12, fontWeight: 600, color: '#111827', marginBottom: 2 }}>{ts}</div>
+        : <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 2 }}>—</div>}
+      <div style={{ fontSize: 11, color: sum.color, fontWeight: 500, lineHeight: 1.3 }}>{sum.text}</div>
+    </div>
+  );
+}
+
+function FreshnessCard({ lastSuccessfulSyncAt, running }) {
+  if (running) return (
+    <div style={{ flex: '1 1 160px', minWidth: 140, background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '9px 12px' }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: '#2563eb', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 5 }}>Catalog health</div>
+      <div style={{ fontSize: 12, fontWeight: 600, color: '#2563eb' }}>Sync in progress…</div>
+    </div>
+  );
+
+  const mins = lastSuccessfulSyncAt
+    ? Math.round((Date.now() - new Date(lastSuccessfulSyncAt).getTime()) / 60000)
+    : null;
+
+  let color, bg, bd, title, detail;
+  if (mins === null) {
+    color = '#9ca3af'; bg = '#f9fafb'; bd = '#e5e7eb';
+    title = 'Never verified'; detail = 'Run a sync to verify catalog';
+  } else if (mins < 1560) {  // < 26 h — daily sync is healthy
+    color = '#16a34a'; bg = '#f0fdf4'; bd = '#bbf7d0';
+    title = 'Catalog verified';
+    detail = mins < 60 ? `${mins}m ago` : `${Math.round(mins / 60)}h ago`;
+  } else if (mins < 4320) {  // < 72 h
+    color = '#d97706'; bg = '#fffbeb'; bd = '#fde68a';
+    title = 'Sync stale';
+    detail = `${Math.round(mins / 60)}h since last sync`;
+  } else {
+    color = '#dc2626'; bg = '#fff1f2'; bd = '#fecaca';
+    title = 'Sync overdue';
+    detail = `${Math.round(mins / 1440)}d since last sync`;
+  }
+
+  return (
+    <div style={{ flex: '1 1 160px', minWidth: 140, background: bg, border: `1px solid ${bd}`, borderRadius: 10, padding: '9px 12px' }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 5 }}>Catalog health</div>
+      <div style={{ fontSize: 12, fontWeight: 700, color, marginBottom: 2 }}>{title}</div>
+      <div style={{ fontSize: 11, color: '#6b7280' }}>{detail}</div>
+    </div>
+  );
+}
+
+function SyncStatusPanel({ data }) {
+  if (!data) return null;
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <SyncHistoryCard label="Auto Sync" icon="🔄" record={data.autoSync} />
+        <SyncHistoryCard label="Manual Sync" icon="▶" record={data.manualSync} />
+        <FreshnessCard lastSuccessfulSyncAt={data.lastSuccessfulSyncAt} running={data.status === 'running'} />
+      </div>
+      <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 5 }}>
+        Deleted-product tracking not yet implemented — removed count is not shown.
+      </div>
+    </div>
+  );
+}
+
+// ── Sync result panel ─────────────────────────────────────────────────────────
+
+function SyncResultPanel({ result, onDismiss }) {
+  if (!result) return null;
+
+  const isFatal   = !!result.error && result.fetched === 0;
+  const hasErrors = result.errors > 0;
+  const noChanges = !isFatal && result.inserted === 0 && result.changed === 0 && result.errors === 0;
+  const durationS = result.durationMs != null ? (result.durationMs / 1000).toFixed(1) : null;
+  const verifiedAt = result.verifiedAt
+    ? new Date(result.verifiedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  const bg    = isFatal ? '#fff1f2' : hasErrors ? '#fffbeb' : '#f0fdf4';
+  const bd    = isFatal ? '#fecaca' : hasErrors ? '#fde68a' : '#bbf7d0';
+  const hd    = isFatal ? '#dc2626' : hasErrors ? '#d97706' : '#16a34a';
+  const title = isFatal
+    ? 'Sync Failed'
+    : hasErrors
+    ? 'Sync Completed — Partial Failures'
+    : noChanges
+    ? 'Verified — No catalog changes detected'
+    : 'Sync Complete';
+
+  return (
+    <div style={{ background: bg, border: `1px solid ${bd}`, borderRadius: 10, padding: '12px 14px', marginBottom: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div style={{ fontWeight: 700, fontSize: 13, color: hd, marginBottom: 6 }}>{title}</div>
+        <button onClick={onDismiss} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 16, lineHeight: 1, padding: 0 }}>×</button>
+      </div>
+      {isFatal ? (
+        <div style={{ fontSize: 12, color: '#dc2626' }}>{result.error}</div>
+      ) : (
+        <div style={{ fontSize: 12, color: '#374151' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 20px' }}>
+            {result.fetched != null && (
+              <span style={{ color: '#64748b' }}>Shopify: <strong>{result.fetched}</strong> products · <strong>{result.rawVariants ?? result.variants}</strong> variants</span>
+            )}
+            {result.inserted > 0 && <span>Added: <strong style={{ color: '#16a34a' }}>{result.inserted}</strong></span>}
+            {result.changed > 0  && <span>Changed: <strong style={{ color: '#2563eb' }}>{result.changed}</strong></span>}
+            {result.verified > 0 && <span style={{ color: '#9ca3af' }}>Verified unchanged: <strong>{result.verified}</strong></span>}
+            {result.skippedSyncIgnored > 0 && <span style={{ color: '#9ca3af' }}>Hidden (ignored): <strong>{result.skippedSyncIgnored}</strong></span>}
+            {hasErrors && <span style={{ color: '#dc2626' }}>Errors: <strong>{result.errors}</strong></span>}
+            {durationS && <span>Duration: <strong>{durationS}s</strong></span>}
+            <span>Last verified: <strong>{verifiedAt}</strong></span>
+          </div>
+          {(result.skippedMissingSku > 0 || result.skippedMissingPrice > 0 || result.skippedInactive > 0 || result.skippedDuplicateSku > 0 || result.skippedInvalid > 0) && (
+            <div style={{ marginTop: 5, fontSize: 11, color: '#92400e', background: '#fef3c7', borderRadius: 5, padding: '3px 8px' }}>
+              Shopify exclusions —{result.skippedMissingSku > 0 ? ` missing SKU: ${result.skippedMissingSku}` : ''}{result.skippedMissingPrice > 0 ? ` · price=0: ${result.skippedMissingPrice}` : ''}{result.skippedInactive > 0 ? ` · inactive: ${result.skippedInactive}` : ''}{result.skippedDuplicateSku > 0 ? ` · duplicate SKU: ${result.skippedDuplicateSku}` : ''}{result.skippedInvalid > 0 ? ` · invalid: ${result.skippedInvalid}` : ''}
+            </div>
+          )}
+          {result.rawVariants != null && (
+            <div style={{ marginTop: 4, fontSize: 11, color: result.reconciled === false ? '#dc2626' : '#94a3b8', fontFamily: 'monospace', letterSpacing: 0.2 }}>
+              {result.rawVariants} raw = {result.inserted} added + {result.changed} changed + {result.verified} verified + {result.skipped} skipped + {result.errors} failed
+              {result.reconciled === true ? ' ✓' : result.reconciled === false ? ' ⚠ MISMATCH' : ''}
+            </div>
+          )}
+        </div>
+      )}
+      {hasErrors && result.error && (
+        <div style={{ marginTop: 6, fontSize: 11, color: '#92400e', background: '#fef3c7', borderRadius: 5, padding: '4px 8px' }}>
+          {result.error}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function ShopifyItems() {
@@ -553,7 +770,18 @@ export default function ShopifyItems() {
   const [mainData, setMainData] = useState({});
   const [selectedItems, setSelectedItems] = useState({});
   const [selectedVariants, setSelectedVariants] = useState({});
-  const [syncing, setSyncing] = useState(false);
+  const [syncing,        setSyncing]        = useState(false);
+  const [syncPhase,      setSyncPhase]      = useState(null);
+  const [syncResult,     setSyncResult]     = useState(null);
+  const [syncHistory,    setSyncHistory]    = useState(null);
+  const pollRef = useRef(null);
+
+  const loadSyncHistory = useCallback(async () => {
+    try {
+      const r = await apiFetch("/shopify/sync-status");
+      if (r.ok) setSyncHistory(await r.json());
+    } catch {}
+  }, []);
 
   const loadStats = useCallback(async () => {
     try {
@@ -592,27 +820,120 @@ export default function ShopifyItems() {
   useEffect(() => {
     loadItems();
     loadStats();
-  }, [loadItems, loadStats]);
+    loadSyncHistory();
+  }, [loadItems, loadStats, loadSyncHistory]);
 
-  const refresh = useCallback(() => { loadItems(); loadStats(); }, [loadItems, loadStats]);
+  // Clear polling interval on unmount to prevent memory leaks / stale state updates
+  useEffect(() => {
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, []);
 
-  const handleSync = async () => {
-    setSyncing(true);
-    try {
-      const res = await apiFetch("/shopify/sync-products", { method: "POST" });
-      const result = await res.json();
-      const { inserted = 0, updated = 0, skipped = 0, errors = 0 } = result;
-      const parts = [];
-      if (inserted) parts.push(`${inserted} new`);
-      if (updated) parts.push(`${updated} updated`);
-      if (skipped) parts.push(`${skipped} skipped`);
-      if (errors) parts.push(`${errors} errors`);
-      if (errors) toast.warn(`Sync done: ${parts.join(" · ")}`);
-      else toast.success(`Sync done: ${parts.join(" · ") || "no changes"}`);
-      refresh();
-    } catch { toast.error("Sync failed"); }
+  const refresh = useCallback(() => { loadItems(); loadStats(); loadSyncHistory(); }, [loadItems, loadStats, loadSyncHistory]);
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
     setSyncing(false);
-  };
+    setSyncPhase(null);
+  }, []);
+
+  const startPolling = useCallback(() => {
+    if (pollRef.current) return; // already polling
+    pollRef.current = setInterval(async () => {
+      try {
+        const res    = await apiFetch("/shopify/sync-status");
+        const status = await res.json();
+
+        // Update live phase label while running
+        if (status.status === 'running') {
+          setSyncPhase(status.phase === 'saving' ? 'saving' : 'fetching');
+          return;
+        }
+
+        // Sync finished
+        stopPolling();
+        setSyncHistory(status);  // update history panel from final status
+
+        const result = {
+          fetched:              status.fetchedProducts      ?? 0,
+          rawVariants:          status.rawVariants          ?? null,
+          variants:             status.total                ?? 0,
+          inserted:             status.inserted             ?? 0,
+          changed:              status.changed              ?? 0,
+          verified:             status.verified             ?? 0,
+          skipped:              status.skipped              ?? 0,  // total all reasons
+          skippedSyncIgnored:   status.skippedSyncIgnored   ?? 0,
+          skippedMissingSku:    status.skippedMissingSku    ?? 0,
+          skippedMissingPrice:  status.skippedMissingPrice  ?? 0,
+          skippedInactive:      status.skippedInactive      ?? 0,
+          skippedInvalid:       status.skippedInvalid       ?? 0,
+          skippedDuplicateSku:  status.skippedDuplicateSku  ?? 0,
+          errors:               status.errors               ?? 0,
+          reconciled:           status.reconciled            ?? null,
+          durationMs:           status.durationMs           ?? null,
+          error:                status.lastError || undefined,
+          verifiedAt:           status.lastSuccessfulSyncAt || null,
+        };
+        setSyncResult(result);
+
+        const isFatal = !!result.error && result.fetched === 0;
+        if (isFatal) {
+          toast.error(`Sync failed: ${result.error}`);
+        } else if (result.errors > 0) {
+          toast.warn(`Sync completed with ${result.errors} error${result.errors > 1 ? 's' : ''} — see result panel`);
+        } else if (result.inserted === 0 && result.changed === 0) {
+          toast.success("Verified — no catalog changes detected");
+        } else {
+          const parts = [];
+          if (result.inserted) parts.push(`${result.inserted} added`);
+          if (result.changed)  parts.push(`${result.changed} changed`);
+          toast.success(`Sync complete: ${parts.join(", ")}`);
+        }
+        refresh();
+      } catch {
+        // Poll failures are transient — keep polling until sync finishes or timeout
+      }
+    }, 2500);
+  }, [stopPolling, refresh]);
+
+  const handleSync = useCallback(async () => {
+    if (syncing) {
+      toast.warn("Sync already in progress");
+      return;
+    }
+    setSyncing(true);
+    setSyncResult(null);
+    setSyncPhase('starting');
+
+    try {
+      const res  = await apiFetch("/shopify/sync/start", { method: "POST" });
+      const body = await res.json();
+
+      if (!res.ok) {
+        stopPolling();
+        const msg = body?.message ?? body?.error ?? `Server error (HTTP ${res.status})`;
+        setSyncResult({ fetched: 0, rawVariants: 0, variants: 0, inserted: 0, changed: 0, verified: 0, skipped: 0, skippedSyncIgnored: 0, skippedMissingSku: 0, skippedMissingPrice: 0, skippedInactive: 0, skippedInvalid: 0, skippedDuplicateSku: 0, errors: 1, reconciled: false, durationMs: 0, error: msg });
+        toast.error(`Could not start sync: ${msg}`);
+        return;
+      }
+
+      if (body.started === false) {
+        // Sync was already running — attach to it
+        toast.info("Sync already running — tracking progress");
+        setSyncPhase('fetching');
+      } else {
+        setSyncPhase('fetching');
+      }
+
+      // Start polling for progress and completion
+      startPolling();
+
+    } catch (err) {
+      stopPolling();
+      const msg = err?.message ?? "Network error — could not reach server";
+      setSyncResult({ fetched: 0, rawVariants: 0, variants: 0, inserted: 0, changed: 0, verified: 0, skipped: 0, skippedSyncIgnored: 0, skippedMissingSku: 0, skippedMissingPrice: 0, skippedInactive: 0, skippedInvalid: 0, skippedDuplicateSku: 0, errors: 1, reconciled: false, durationMs: 0, error: msg });
+      toast.error(`Could not start sync: ${msg}`);
+    }
+  }, [syncing, startPolling, stopPolling]);
 
   const handleHide = async (ids) => {
     try {
@@ -656,6 +977,8 @@ export default function ShopifyItems() {
 
   return (
     <div>
+      <style>{`@keyframes spinLoader { to { transform: rotate(360deg); } }`}</style>
+
       {/* Page title row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
         <div style={{ flex: 1 }}>
@@ -664,8 +987,14 @@ export default function ShopifyItems() {
         </div>
       </div>
 
-      {/* Stats + Sync */}
-      <StatsBanner stats={stats} onSync={handleSync} syncing={syncing} />
+      {/* Sync history */}
+      <SyncStatusPanel data={syncHistory} />
+
+      {/* Catalog health */}
+      <CatalogHealth stats={stats} onSync={handleSync} syncing={syncing} syncPhase={syncPhase} />
+
+      {/* Sync result */}
+      <SyncResultPanel result={syncResult} onDismiss={() => setSyncResult(null)} />
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>

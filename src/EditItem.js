@@ -9,8 +9,7 @@ import { apiFetch } from "./utils/api";
 import { toast } from "./utils/toast";
 import { hasAnyPermission } from "./utils/usePermission";
 import BoqManager from "./pages/boq/BoqManager";
-
-const GST_OPTIONS  = [{ value: '', label: 'Select GST %' }, { value: '5', label: '5%' }, { value: '18', label: '18%' }];
+import { GST_OPTIONS, getEditGstOptions } from "./config/gstOptions";
 const UNIT_OPTIONS = ['pcs', 'box', 'doz', 'pair', 'set', 'kg', 'ltr'];
 
 const CATEGORY_OPTIONS = [
@@ -322,7 +321,7 @@ export default function EditItem() {
               </FormField>
               <FormField label="GST rate">
                 <select name="gst" value={form.gst} onChange={handleChange} style={selectStyle}>
-                  {GST_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  {getEditGstOptions(form.gst).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               </FormField>
               <FormField label="Unit">

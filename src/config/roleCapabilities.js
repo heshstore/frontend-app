@@ -13,8 +13,18 @@ export function getUserCapabilities() {
   const has    = (p)       => isAdmin || permissions.includes(p);
   const hasAny = (...ps)   => isAdmin || ps.some(p => permissions.includes(p));
 
+  const roleStr          = (user?.role || '').toLowerCase();
+  const isAdminOrCoo     = isAdmin || user?.role === 'COO';
+  const isTelecaller     = roleStr.includes('telecaller') || roleStr.includes('sales executive');
+  const isProductionUser = roleStr.includes('production');
+  const isSalesUser      = roleStr.includes('sales');
+
   return {
     isAdmin,
+    isAdminOrCoo,
+    isTelecaller,
+    isProductionUser,
+    isSalesUser,
 
     // ── Module-level access (mirrors Sidebar permission checks) ───────────────
     canViewOrders:      has('order.view'),

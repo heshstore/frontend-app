@@ -1,11 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from './utils/api';
-import { toast } from './utils/toast';
 import { getUserCapabilities } from './config/roleCapabilities';
 import KpiCard from './components/dashboard/KpiCard';
 import KpiGrid from './components/dashboard/KpiGrid';
-import ActivityTimeline from './components/dashboard/ActivityTimeline';
 
 // ── Palette ──────────────────────────────────────────────────────────────────
 
@@ -103,41 +101,32 @@ function ProgressBar({ pct, color, h = 7 }) {
   );
 }
 
-// ── Priority action card ──────────────────────────────────────────────────────
+// ── Compact attention chip (Group 1) ─────────────────────────────────────────
 
-function PriorityCard({ icon, label, value, sub, btnLabel, bgFrom, bgTo, onClick, loading }) {
+function AttentionChip({ icon, label, value, color, onClick, loading }) {
   const [hov, setHov] = useState(false);
   return (
-    <div style={{
-      borderRadius: 16, padding: '20px 22px',
-      background: `linear-gradient(135deg, ${bgFrom}, ${bgTo})`,
-      boxShadow: `0 4px 16px ${bgFrom}55`,
-      display: 'flex', flexDirection: 'column', gap: 8,
-      flex: 1, minWidth: 0,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontSize: 22 }}>{icon}</span>
-        <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', opacity: 0.9 }}>{label}</span>
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        flex: '1 1 160px', display: 'flex', alignItems: 'center', gap: 12,
+        background: hov ? color + '22' : color + '12',
+        border: `1.5px solid ${color}44`,
+        borderRadius: 12, padding: '12px 16px',
+        cursor: 'pointer', transition: 'background 0.15s',
+        minWidth: 0,
+      }}
+    >
+      <span style={{ fontSize: 24, flexShrink: 0 }}>{icon}</span>
+      <div style={{ minWidth: 0 }}>
+        {loading
+          ? <Skeleton h={22} r={6} w="60px" />
+          : <div style={{ fontSize: 22, fontWeight: 900, color, lineHeight: 1 }}>{value}</div>
+        }
+        <div style={{ fontSize: 11, fontWeight: 600, color, opacity: 0.75, marginTop: 2 }}>{label}</div>
       </div>
-      {loading
-        ? <Skeleton h={42} r={8} style={{ background: 'rgba(255,255,255,0.25)' }} />
-        : <div style={{ fontSize: 38, fontWeight: 900, color: '#fff', lineHeight: 1, letterSpacing: -1 }}>{value}</div>
-      }
-      {sub && <div style={{ fontSize: 12, color: '#fff', opacity: 0.8 }}>{sub}</div>}
-      <button
-        onClick={onClick}
-        onMouseEnter={() => setHov(true)}
-        onMouseLeave={() => setHov(false)}
-        style={{
-          marginTop: 6, padding: '10px 0', borderRadius: 10, border: 'none',
-          background: hov ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.22)',
-          color: '#fff', fontSize: 13, fontWeight: 800,
-          cursor: 'pointer', transition: 'background 0.15s',
-          minHeight: 44,
-        }}
-      >
-        {btnLabel} →
-      </button>
     </div>
   );
 }
@@ -166,38 +155,6 @@ function QuickBtn({ icon, label, color, bg, onClick }) {
       <span style={{ fontSize: 22 }}>{icon}</span>
       {label}
     </button>
-  );
-}
-
-// ── Summary card ─────────────────────────────────────────────────────────────
-
-function SummaryCard({ icon, title, value, trend, trendUp, color, loading }) {
-  return (
-    <Card style={{ padding: '14px 16px', borderTop: `3px solid ${color}` }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-        <div style={{
-          width: 32, height: 32, borderRadius: 8, background: color + '15',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14,
-        }}>
-          {icon}
-        </div>
-        {trend !== undefined && !loading && (
-          <span style={{
-            fontSize: 10, fontWeight: 700,
-            color: trendUp ? C.green : C.red,
-            background: trendUp ? '#f0fdf4' : '#fff1f2',
-            padding: '2px 7px', borderRadius: 99,
-          }}>
-            {trendUp ? '↑' : '↓'} {trend}
-          </span>
-        )}
-      </div>
-      {loading
-        ? <Skeleton h={26} r={6} w="70%" />
-        : <div style={{ fontSize: 22, fontWeight: 900, color: C.text, lineHeight: 1 }}>{value}</div>
-      }
-      <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{title}</div>
-    </Card>
   );
 }
 
@@ -296,6 +253,67 @@ function DelayedRow({ job, onView }) {
   );
 }
 
+// ── Attendance widget (Admin/COO only) ────────────────────────────────────────
+
+function AttendanceWidget({ data, isMobile }) {
+  const cells = [
+    { label: 'Present',        value: data.present        ?? '—', color: C.green  },
+    { label: 'Absent',         value: data.absent         ?? '—', color: C.red    },
+    { label: 'Pending Leaves', value: data.pending_leaves ?? '—', color: C.yellow },
+    { label: 'Overtime',       value: data.overtime       ?? '—', color: C.blue   },
+  ];
+  return (
+    <>
+      <SectionLabel>👥 Today's Attendance</SectionLabel>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 10, marginBottom: 20 }}>
+        {cells.map(c => (
+          <div key={c.label} style={{
+            background: C.card, borderRadius: 12, border: `1px solid ${C.border}`,
+            padding: '12px 14px', borderTop: `3px solid ${c.color}`,
+          }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.5 }}>{c.label}</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: c.color, marginTop: 4 }}>{c.value}</div>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+// ── Top seller items (Admin/COO only) ─────────────────────────────────────────
+
+function TopSellerItems({ items, isMobile }) {
+  return (
+    <>
+      <SectionLabel>🏆 Top Sellers (by qty)</SectionLabel>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(5, 1fr)', gap: 10, marginBottom: 20 }}>
+        {items.map((item, idx) => (
+          <Card key={item.sku} style={{ padding: '10px 12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+              <span style={{ fontSize: 10, fontWeight: 800, color: C.faint }}>#{idx + 1}</span>
+              {item.image
+                ? <img src={item.image} alt="" style={{ width: 38, height: 38, objectFit: 'cover', borderRadius: 6 }} />
+                : <div style={{ width: 38, height: 38, borderRadius: 6, background: '#e9ecef', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>📦</div>
+              }
+            </div>
+            <div style={{ fontSize: 10, color: C.faint, fontFamily: 'monospace', marginBottom: 2 }}>{item.sku}</div>
+            <div style={{
+              fontSize: 12, fontWeight: 700, color: C.text, lineHeight: 1.3, marginBottom: 6,
+              display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+            }}>
+              {item.item_name}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+              <span style={{ color: C.blue,  fontWeight: 700 }}>{item.total_qty} qty</span>
+              <span style={{ color: C.green, fontWeight: 700 }}>{fmtCurrency(item.total_value)}</span>
+            </div>
+          </Card>
+        ))}
+      </div>
+    </>
+  );
+}
+
 // ── Status panel (compact chips, top-right of dashboard) ─────────────────────
 
 function StatusDot({ status, pulse }) {
@@ -347,14 +365,19 @@ function StatusPanel({ kpis, waNumbers, navigate }) {
     : connectedNums.length > 0 ? 'warning'
     : 'error';
 
+  // Sync runs daily at 2:30 AM IST; ok = verified within 26h, warning = 26-72h, error = stale > 3d
   const shopifyStatus = !kpis || kpis.shopify_sync_minutes == null ? 'unknown'
-    : kpis.shopify_sync_minutes < 120 ? 'ok'
-    : kpis.shopify_sync_minutes < 720 ? 'warning'
+    : kpis.shopify_sync_minutes < 1560  ? 'ok'      // < 26 h
+    : kpis.shopify_sync_minutes < 4320  ? 'warning'  // < 72 h
     : 'error';
   const shopifyDetail = kpis?.shopify_sync_minutes != null
-    ? (kpis.shopify_sync_minutes < 60
-        ? `${kpis.shopify_sync_minutes}m ago`
-        : `${Math.round(kpis.shopify_sync_minutes / 60)}h ago`)
+    ? (shopifyStatus === 'ok'
+        ? (kpis.shopify_sync_minutes < 60
+            ? `verified ${kpis.shopify_sync_minutes}m ago`
+            : `verified ${Math.round(kpis.shopify_sync_minutes / 60)}h ago`)
+        : (kpis.shopify_sync_minutes < 60
+            ? `last verified ${kpis.shopify_sync_minutes}m ago`
+            : `last verified ${Math.round(kpis.shopify_sync_minutes / 60)}h ago`))
     : null;
 
   return (
@@ -383,7 +406,6 @@ export default function Dashboard() {
   const caps = useMemo(() => getUserCapabilities(), []);
 
   // ── Per-widget loading states ──────────────────────────────────────────────
-  const [loadingSummary,  setLoadingSummary]  = useState(caps.canViewDashboardSummary);
   const [loadingDelayed,  setLoadingDelayed]  = useState(caps.canViewDelayedJobs);
   const [loadingLeads,    setLoadingLeads]    = useState(caps.canViewHotLeads);
   const [loadingPayments, setLoadingPayments] = useState(caps.canViewPendingPayments);
@@ -396,11 +418,9 @@ export default function Dashboard() {
   const [kpis,        setKpis]        = useState(null);
   const [kpisLoading, setKpisLoading] = useState(caps.canViewDashboardSummary);
 
-  const [syncing,   setSyncing]   = useState(false);
-  const [progress,  setProgress]  = useState(0);
-  const [syncPhase, setSyncPhase] = useState('idle');
-
-  const [waNumbers, setWaNumbers] = useState([]);
+  const [waNumbers, setWaNumbers]   = useState([]);
+  const [workforce, setWorkforce]   = useState(null);
+  const [topItems,  setTopItems]    = useState([]);
 
   // ── Fetch — only APIs the current user is permitted to call ────────────────
 
@@ -410,10 +430,9 @@ export default function Dashboard() {
     // Re-read capabilities fresh so the 60s refresh interval uses current perms
     const c = getUserCapabilities();
 
-    if (c.canViewDashboardSummary) setLoadingSummary(true);
-    if (c.canViewDelayedJobs)      setLoadingDelayed(true);
-    if (c.canViewHotLeads)         setLoadingLeads(true);
-    if (c.canViewPendingPayments)  setLoadingPayments(true);
+    if (c.canViewDelayedJobs)     setLoadingDelayed(true);
+    if (c.canViewHotLeads)        setLoadingLeads(true);
+    if (c.canViewPendingPayments) setLoadingPayments(true);
 
     const tasks = [];
 
@@ -431,7 +450,6 @@ export default function Dashboard() {
           .then(r => r.ok ? r.json() : null)
           .then(d => { if (d && ok()) setSummary(d); })
           .catch(() => {})
-          .finally(() => { if (ok()) setLoadingSummary(false); })
       );
     }
 
@@ -481,6 +499,22 @@ export default function Dashboard() {
       .then(d => { if (ok()) setWaNumbers(Array.isArray(d) ? d : []); })
       .catch(() => {});
 
+    // Admin/COO-only fetches — attendance + top sellers
+    if (c.isAdminOrCoo) {
+      tasks.push(
+        apiFetch('/workforce-ops/dashboard')
+          .then(r => r.ok ? r.json() : null)
+          .then(d => { if (d && ok()) setWorkforce(d); })
+          .catch(() => {})
+      );
+      tasks.push(
+        apiFetch('/dashboard/top-items')
+          .then(r => r.ok ? r.json() : [])
+          .then(d => { if (ok()) setTopItems(Array.isArray(d) ? d : []); })
+          .catch(() => {})
+      );
+    }
+
     await Promise.allSettled(tasks);
 
     if (process.env.NODE_ENV !== 'production') {
@@ -494,98 +528,9 @@ export default function Dashboard() {
     return () => { mountedRef.current = false; };
   }, [fetchDashboard]);
 
-  // ── Shopify sync ───────────────────────────────────────────────────────────
-
-  const handleSync = () => {
-    setSyncing(true); setProgress(0); setSyncPhase('fetching');
-    apiFetch('/shopify/sync').catch(() => {});
-    const iv = setInterval(async () => {
-      try {
-        const res = await apiFetch('/shopify/sync-status');
-        const st  = await res.json();
-        setSyncPhase(st.phase || (st.status === 'done' ? 'done' : 'fetching'));
-        if (st.total > 0) setProgress(Math.min(Math.round((st.processed / st.total) * 100), 99));
-        if (st.status === 'done') {
-          clearInterval(iv); setProgress(100); setSyncPhase('done');
-          const parts = [];
-          if (st.inserted > 0) parts.push(`${st.inserted} new`);
-          if (st.updated  > 0) parts.push(`${st.updated} updated`);
-          if (st.skipped  > 0) parts.push(`${st.skipped} skipped`);
-          if (st.errors   > 0) parts.push(`${st.errors} errors`);
-          const summary = parts.length > 0 ? parts.join(' · ') : '0 items synced';
-          if (st.errors > 0) {
-            toast.warn(`Sync done: ${summary}`);
-          } else {
-            toast.success(`Sync done: ${summary}`);
-          }
-          setSyncing(false); setSyncPhase('idle');
-        }
-      } catch {}
-    }, 2000);
-  };
-
-  // ── Handlers ───────────────────────────────────────────────────────────────
-
-  const handleDelayedJobClick = () => {
-    navigate('/production/execution');
-  };
-
   // ── Derived values ─────────────────────────────────────────────────────────
 
-  const totalOrders   = summary?.total_orders ?? '—';
-  const todaySales    = fmtCurrency(summary?.today_sales);
-  const pendingAmtFmt = fmtCurrency(pendingAmount || summary?.pending_amount);
-  const delayedCount  = summary?.delayed_jobs ?? delayedJobs.length;
-
-  // ── Role-aware widget configs ──────────────────────────────────────────────
-
-  const priorityCards = [
-    caps.canViewDelayedJobs && {
-      key: 'delayed',
-      icon: '⚠️', label: 'Delayed Jobs',
-      value: delayedCount, sub: 'Jobs stuck in production',
-      btnLabel: 'View Jobs',
-      bgFrom: '#dc2626', bgTo: '#ef4444',
-      loading: loadingSummary || loadingDelayed,
-      onClick: () => navigate('/production/execution'),
-    },
-    caps.canViewHotLeads && {
-      key: 'leads',
-      icon: '🔥', label: 'HOT Leads',
-      value: hotLeadsCount, sub: 'Leads need follow-up today',
-      btnLabel: 'View Leads',
-      bgFrom: '#ea580c', bgTo: '#f97316',
-      loading: loadingLeads,
-      onClick: () => navigate('/crm/leads?filter=hot'),
-    },
-    caps.canViewPendingPayments && {
-      key: 'payments',
-      icon: '💰', label: 'Pending Payments',
-      value: pendingAmtFmt, sub: 'Outstanding from customers',
-      btnLabel: 'View Accounts',
-      bgFrom: '#d97706', bgTo: '#f59e0b',
-      loading: loadingPayments,
-      onClick: () => navigate('/accounts/outstanding'),
-    },
-  ].filter(Boolean);
-
-  const quickActions = [
-    caps.canViewCrm        && { key: 'leads', icon: '📞', label: 'Call HOT Leads',  color: C.red,    bg: '#fff5f5', href: '/crm/queue'       },
-    caps.canViewProduction  && { key: 'jobs',  icon: '✅', label: 'Complete Jobs',   color: C.green,  bg: '#f0fdf4', href: '/production/execution' },
-    caps.canViewQuotations  && { key: 'quot',  icon: '📝', label: 'Send Quotation',  color: C.blue,   bg: '#eff6ff', href: '/quotation'        },
-    caps.canViewOrders      && { key: 'order', icon: '📦', label: 'Add Order',       color: C.purple, bg: '#f5f3ff', href: '/order'            },
-  ].filter(Boolean);
-
-  const summaryCards = [
-    caps.canViewOrders          && { key: 'orders',  icon: '📦', title: 'Total Orders',    value: totalOrders,                      color: C.blue,   loading: loadingSummary  },
-    caps.canViewPendingPayments && { key: 'pending', icon: '💰', title: 'Pending Amount',  value: pendingAmtFmt,                    color: C.red,    loading: loadingPayments },
-    caps.canViewOrders          && { key: 'sales',   icon: '📈', title: "Today's Sales",   value: todaySales,                       color: C.green,  loading: loadingSummary  },
-    caps.canViewProduction      && { key: 'prod',    icon: '⚙️', title: 'Production Jobs', value: summary?.production_jobs ?? '—', color: C.orange, loading: loadingSummary  },
-  ].filter(Boolean);
-
-  // ── Layout helpers ─────────────────────────────────────────────────────────
-
-  const colSummary = isMobile ? '1fr 1fr' : `repeat(${Math.max(summaryCards.length, 1)}, 1fr)`;
+  const pendingAmtFmt = fmtCurrency(pendingAmount);
 
   return (
     <div style={{ fontFamily: "'Inter','Segoe UI',Arial,sans-serif", background: C.bg, minHeight: '100%', paddingBottom: 32 }}>
@@ -611,177 +556,35 @@ export default function Dashboard() {
               ↻ Refresh
             </button>
           </div>
-          <StatusPanel kpis={kpis} waNumbers={waNumbers} navigate={navigate} />
+          {caps.isAdminOrCoo && <StatusPanel kpis={kpis} waNumbers={waNumbers} navigate={navigate} />}
         </div>
 
-        {/* ── Priority Actions — only visible cards for this role ── */}
-        {priorityCards.length > 0 && (
-          <>
-            <SectionLabel>🔥 Priority Actions</SectionLabel>
-            <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexDirection: isMobile ? 'column' : 'row' }}>
-              {priorityCards.map(card => (
-                <PriorityCard key={card.key} {...card} />
-              ))}
-            </div>
-          </>
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        {/* GROUP 1 — ATTENTION REQUIRED                                     */}
+        {/* ══════════════════════════════════════════════════════════════════ */}
+
+        {(caps.canViewHotLeads || caps.canViewPendingPayments || caps.canViewOrders || caps.canViewDelayedJobs) && (
+          <SectionLabel>⚠️ Attention Required</SectionLabel>
         )}
 
-        {/* ── Quick Actions — only actions this role can perform ── */}
-        {quickActions.length > 0 && (
-          <>
-            <SectionLabel>⚡ Quick Actions</SectionLabel>
-            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : `repeat(${quickActions.length}, 1fr)`, gap: 10, marginBottom: 20 }}>
-              {quickActions.map(a => (
-                <QuickBtn key={a.key} icon={a.icon} label={a.label} color={a.color} bg={a.bg} onClick={() => navigate(a.href)} />
-              ))}
-            </div>
-          </>
+        {(caps.canViewHotLeads || caps.canViewPendingPayments || caps.canViewOrders) && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
+            {caps.canViewHotLeads && (
+              <AttentionChip icon="🔥" label="Hot Leads" value={hotLeadsCount} color={C.orange} loading={loadingLeads} onClick={() => navigate('/crm/leads?filter=hot')} />
+            )}
+            {caps.canViewOrders && (kpis?.pending_approvals ?? 0) > 0 && (
+              <AttentionChip icon="⏳" label="Pending Approvals" value={kpis.pending_approvals} color={C.red} onClick={() => navigate('/pending-approval')} />
+            )}
+            {caps.canViewPendingPayments && (
+              <AttentionChip icon="💰" label="Outstanding" value={pendingAmtFmt} color={C.yellow} loading={loadingPayments} onClick={() => navigate('/accounts/outstanding')} />
+            )}
+          </div>
         )}
 
-        {/* ── Overview — only cards for visible data ── */}
-        {summaryCards.length > 0 && (
-          <>
-            <SectionLabel>📊 Overview</SectionLabel>
-            <div style={{ display: 'grid', gridTemplateColumns: colSummary, gap: 10, marginBottom: 20 }}>
-              {summaryCards.map(card => (
-                <SummaryCard key={card.key} {...card} />
-              ))}
-            </div>
-          </>
-        )}
-
-        {caps.canViewProduction && summary?.manufacturing_intel && (
-          <>
-            <SectionLabel>🏭 Production</SectionLabel>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)',
-              gap: 10,
-              marginBottom: 10,
-            }}>
-              {[
-                { k: 'wip', label: 'WIP value',        v: fmtCurrency(summary.manufacturing_intel.wip_order_value),           color: C.blue   },
-                { k: 'pd',  label: 'Pending dispatch',  v: fmtCurrency(summary.manufacturing_intel.pending_dispatch_value),     color: C.orange },
-                { k: 'ex',  label: 'Active jobs',       v: String(summary.manufacturing_intel.active_execution_jobs ?? '—'),   color: C.green  },
-                { k: 'dl',  label: 'Delayed',           v: String(summary.manufacturing_intel.delayed_execution_hints ?? '—'), color: summary.manufacturing_intel.delayed_execution_hints > 0 ? C.red : C.green },
-              ].map((x) => (
-                <div key={x.k} onClick={() => navigate('/production/execution')} style={{
-                  background: C.card, borderRadius: 12, border: `1px solid ${C.border}`,
-                  padding: '12px 14px', cursor: 'pointer',
-                  borderTop: `3px solid ${x.color}`,
-                }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.5 }}>{x.label}</div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: x.color, marginTop: 4 }}>{x.v}</div>
-                </div>
-              ))}
-            </div>
-            <div style={{ marginBottom: 20, textAlign: 'right' }}>
-              <button
-                type="button"
-                onClick={() => navigate('/manufacturing/analytics')}
-                style={{
-                  padding: '7px 14px', borderRadius: 8, border: `1px solid ${C.border}`,
-                  background: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 12, color: C.muted,
-                }}
-              >
-                Full analytics →
-              </button>
-            </div>
-          </>
-        )}
-
-        {caps.canViewAccounts && summary?.finance_ops && (
-          <>
-            <SectionLabel>💹 Finance</SectionLabel>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)',
-              gap: 10,
-              marginBottom: 10,
-            }}>
-              {[
-                { k: 'tro', label: 'Receivables',      v: fmtCurrency(summary.finance_ops.total_receivables_outstanding), color: C.blue,   href: '/accounts/outstanding' },
-                { k: 'orc', label: 'Overdue',           v: fmtCurrency(summary.finance_ops.overdue_receivables_amount),    color: C.red,    href: '/accounts/outstanding' },
-                { k: 'exi', label: 'Expected in (30d)', v: fmtCurrency(summary.finance_ops.expected_incoming_30d),         color: C.green,  href: '/finance' },
-                { k: 'ce',  label: 'Customer exposure', v: fmtCurrency(summary.finance_ops.customer_exposure),             color: C.orange, href: '/finance' },
-              ].map((x) => (
-                <div key={x.k} onClick={() => navigate(x.href)} style={{
-                  background: C.card, borderRadius: 12, border: `1px solid ${C.border}`,
-                  padding: '12px 14px', cursor: 'pointer',
-                  borderTop: `3px solid ${x.color}`,
-                }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.5 }}>{x.label}</div>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: x.color, marginTop: 4 }}>{x.v}</div>
-                </div>
-              ))}
-            </div>
-            <div style={{ marginBottom: 20, textAlign: 'right' }}>
-              <button
-                type="button"
-                onClick={() => navigate('/finance')}
-                style={{
-                  padding: '7px 14px', borderRadius: 8, border: `1px solid ${C.border}`,
-                  background: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 12, color: C.muted,
-                }}
-              >
-                Finance dashboard →
-              </button>
-            </div>
-          </>
-        )}
-
-        {/* ── KPI Banner — role-aware live metrics ── */}
-        {caps.canViewDashboardSummary && (
-          <>
-            <SectionLabel>📊 Today's KPIs</SectionLabel>
-            <KpiGrid minCardWidth={148} gap={10} style={{ marginBottom: 20 }}>
-              {caps.canViewQuotations && (
-                <KpiCard icon="📄" title="Quotations today" value={kpis?.quotations_today ?? '—'} color="#0891b2" path="/quotations" loading={kpisLoading} />
-              )}
-              {caps.canViewOrders && (
-                <KpiCard icon="📋" title="Orders today" value={kpis?.orders_today ?? '—'} color="#2563eb" path="/orders" loading={kpisLoading} />
-              )}
-              {caps.canViewOrders && (
-                <KpiCard icon="⏳" title="Pending approvals" value={kpis?.pending_approvals ?? '—'} color="#f59e0b" path="/pending-approval" loading={kpisLoading} alert={(kpis?.pending_approvals ?? 0) > 0} />
-              )}
-              {caps.canViewDispatch && (
-                <KpiCard icon="🚚" title="Pending dispatch" value={kpis?.pending_dispatch ?? '—'} color="#7c3aed" path="/dispatch" loading={kpisLoading} />
-              )}
-              {caps.canViewAccounts && (
-                <KpiCard icon="💵" title="Collections today" value={kpis?.collections_today != null ? `₹${Number(kpis.collections_today).toLocaleString('en-IN')}` : '—'} color="#16a34a" path="/accounts/outstanding" loading={kpisLoading} />
-              )}
-              {caps.canViewAccounts && (
-                <KpiCard icon="🔴" title="Overdue payments" value={kpis?.overdue_payments ?? '—'} color="#dc2626" path="/accounts/outstanding" loading={kpisLoading} trendInverse alert={(kpis?.overdue_payments ?? 0) > 0} />
-              )}
-              {caps.canViewProduction && (
-                <KpiCard icon="⚙️" title="Production pending" value={kpis?.production_pending ?? '—'} color="#ea580c" path="/production/execution" loading={kpisLoading} />
-              )}
-              {caps.canViewCrm && (
-                <KpiCard icon="🎯" title="Active leads" value={kpis?.active_leads ?? '—'} color="#6366f1" path="/crm/leads" loading={kpisLoading} />
-              )}
-            </KpiGrid>
-
-          </>
-        )}
-
-        {/* ── Production Stages — production role only ── */}
-        {caps.canViewProduction && (
-          <>
-            <SectionLabel>⚙️ Production Stages</SectionLabel>
-            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 10, marginBottom: 20 }}>
-              <StageCard label="Designing" count={summary?.stage_designing} backlog={0} pct={60} color={C.blue}   onClick={() => navigate('/production/execution')} />
-              <StageCard label="Printing"  count={summary?.stage_printing}  backlog={2} pct={45} color={C.orange} onClick={() => navigate('/production/execution')} />
-              <StageCard label="Laser"     count={summary?.stage_laser}     backlog={1} pct={30} color={C.red}    onClick={() => navigate('/production/execution')} />
-              <StageCard label="Assembly"  count={summary?.stage_assembly}  backlog={0} pct={75} color={C.purple} onClick={() => navigate('/production/execution')} />
-            </div>
-          </>
-        )}
-
-        {/* ── Delayed jobs list — production role only ── */}
         {caps.canViewDelayedJobs && (
           <Card style={{ padding: '16px 18px', marginBottom: 20 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <SectionLabel>⚠ Needs Attention</SectionLabel>
+              <SectionLabel>⚠ Delayed Jobs</SectionLabel>
               <button
                 onClick={() => navigate('/production/execution')}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: C.blue, fontWeight: 700, padding: 0 }}
@@ -789,7 +592,6 @@ export default function Dashboard() {
                 View All →
               </button>
             </div>
-
             {loadingDelayed ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {[1, 2, 3].map(i => <Skeleton key={i} h={52} r={9} />)}
@@ -800,67 +602,105 @@ export default function Dashboard() {
               </div>
             ) : (
               delayedJobs.map(j => (
-                <DelayedRow key={j.id} job={j} onView={handleDelayedJobClick} />
+                <DelayedRow key={j.id} job={j} onView={() => navigate('/production/execution')} />
               ))
             )}
           </Card>
         )}
 
-        {/* ── Shopify sync — item managers only ── */}
-        {caps.canSyncShopify && (
-          <Card style={{ padding: '12px 18px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>🛍 Shopify Items</div>
-                <div style={{ fontSize: 12, color: C.muted }}>Sync product catalogue from Shopify</div>
-              </div>
-              <button
-                onClick={syncing ? undefined : handleSync}
-                disabled={syncing}
-                style={{
-                  padding: '10px 18px', borderRadius: 8, border: 'none',
-                  background: syncing ? '#f3f4f6' : C.green,
-                  color: syncing ? C.muted : '#fff',
-                  fontSize: 13, fontWeight: 600,
-                  cursor: syncing ? 'default' : 'pointer',
-                  minWidth: 120, minHeight: 44, transition: 'background 0.15s',
-                }}
-              >
-                {syncing ? `⏳ ${progress}%` : '↻ Sync Now'}
-              </button>
-            </div>
-            {syncing && (
-              <div style={{ marginTop: 10 }}>
-                <div style={{ height: 5, background: '#f1f5f9', borderRadius: 99, overflow: 'hidden', position: 'relative' }}>
-                  {syncPhase === 'fetching' ? (
-                    <div style={{
-                      position: 'absolute', height: '100%', width: '40%',
-                      background: C.green, borderRadius: 99,
-                      animation: 'dash 1.4s ease-in-out infinite',
-                    }} />
-                  ) : (
-                    <div style={{ height: '100%', width: `${progress}%`, background: C.green, borderRadius: 99, transition: 'width 0.4s' }} />
-                  )}
-                </div>
-                <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>
-                  {syncPhase === 'fetching' ? 'Fetching from Shopify…' : `Saving items… ${progress}%`}
-                </div>
-              </div>
-            )}
-          </Card>
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        {/* GROUP 2 — DAILY OPERATIONS                                        */}
+        {/* ══════════════════════════════════════════════════════════════════ */}
+
+        {caps.canViewDashboardSummary && (
+          <>
+            <SectionLabel>📋 Daily Operations</SectionLabel>
+            <KpiGrid minCardWidth={148} gap={10} style={{ marginBottom: 20 }}>
+              {caps.canViewQuotations && <KpiCard icon="📄" title="Quotations today"  value={kpis?.quotations_today ?? '—'}  color="#0891b2" path="/quotations"        loading={kpisLoading} />}
+              {caps.canViewOrders     && <KpiCard icon="📋" title="Orders today"       value={kpis?.orders_today ?? '—'}       color="#2563eb" path="/orders"            loading={kpisLoading} />}
+              {caps.canViewOrders     && <KpiCard icon="⏳" title="Pending approvals"  value={kpis?.pending_approvals ?? '—'}  color="#f59e0b" path="/pending-approval"  loading={kpisLoading} alert={(kpis?.pending_approvals ?? 0) > 0} />}
+              {caps.canViewDispatch   && <KpiCard icon="🚚" title="Pending dispatch"   value={kpis?.pending_dispatch ?? '—'}   color="#7c3aed" path="/dispatch"          loading={kpisLoading} />}
+              {caps.canViewAccounts   && <KpiCard icon="💵" title="Collections today"  value={kpis?.collections_today != null ? `₹${Number(kpis.collections_today).toLocaleString('en-IN')}` : '—'} color="#16a34a" path="/accounts/outstanding" loading={kpisLoading} />}
+              {caps.canViewAccounts   && <KpiCard icon="🔴" title="Overdue payments"   value={kpis?.overdue_payments ?? '—'}   color="#dc2626" path="/accounts/outstanding" loading={kpisLoading} trendInverse alert={(kpis?.overdue_payments ?? 0) > 0} />}
+              {caps.canViewProduction && <KpiCard icon="⚙️" title="Production pending" value={kpis?.production_pending ?? '—'} color="#ea580c" path="/production/execution" loading={kpisLoading} />}
+              {caps.canViewCrm        && <KpiCard icon="🎯" title="Active leads"        value={kpis?.active_leads ?? '—'}       color="#6366f1" path="/crm/leads"         loading={kpisLoading} />}
+            </KpiGrid>
+          </>
         )}
 
-        {/* ── Activity Timeline ── */}
-        <Card style={{ padding: '16px 18px', marginTop: 4 }}>
-          <SectionLabel>📋 Recent Activity</SectionLabel>
-          <ActivityTimeline limit={8} showTitle={false} />
-        </Card>
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        {/* GROUP 3 — PERFORMANCE                                             */}
+        {/* ══════════════════════════════════════════════════════════════════ */}
+
+        {(caps.isAdminOrCoo || caps.canViewProduction || caps.canViewAccounts) && (
+          <SectionLabel>📊 Performance</SectionLabel>
+        )}
+
+        {caps.isAdminOrCoo && workforce && (
+          <AttendanceWidget data={workforce} isMobile={isMobile} />
+        )}
+
+        {caps.canViewProduction && (
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 10, marginBottom: 20 }}>
+            <StageCard label="Designing" count={summary?.stage_designing} backlog={0} pct={60} color={C.blue}   onClick={() => navigate('/production/execution')} />
+            <StageCard label="Printing"  count={summary?.stage_printing}  backlog={2} pct={45} color={C.orange} onClick={() => navigate('/production/execution')} />
+            <StageCard label="Laser"     count={summary?.stage_laser}     backlog={1} pct={30} color={C.red}    onClick={() => navigate('/production/execution')} />
+            <StageCard label="Assembly"  count={summary?.stage_assembly}  backlog={0} pct={75} color={C.purple} onClick={() => navigate('/production/execution')} />
+          </div>
+        )}
+
+        {caps.canViewAccounts && summary?.finance_ops && (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 10, marginBottom: 10 }}>
+              {[
+                { k: 'tro', label: 'Receivables',      v: fmtCurrency(summary.finance_ops.total_receivables_outstanding), color: C.blue,   href: '/accounts/outstanding' },
+                { k: 'orc', label: 'Overdue',           v: fmtCurrency(summary.finance_ops.overdue_receivables_amount),    color: C.red,    href: '/accounts/outstanding' },
+                { k: 'exi', label: 'Expected in (30d)', v: fmtCurrency(summary.finance_ops.expected_incoming_30d),         color: C.green,  href: '/finance' },
+                { k: 'ce',  label: 'Customer exposure', v: fmtCurrency(summary.finance_ops.customer_exposure),             color: C.orange, href: '/finance' },
+              ].map(x => (
+                <div key={x.k} onClick={() => navigate(x.href)} style={{
+                  background: C.card, borderRadius: 12, border: `1px solid ${C.border}`,
+                  padding: '12px 14px', cursor: 'pointer', borderTop: `3px solid ${x.color}`,
+                }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.5 }}>{x.label}</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: x.color, marginTop: 4 }}>{x.v}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginBottom: 20, textAlign: 'right' }}>
+              <button type="button" onClick={() => navigate('/finance')} style={{ padding: '7px 14px', borderRadius: 8, border: `1px solid ${C.border}`, background: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 12, color: C.muted }}>
+                Finance dashboard →
+              </button>
+            </div>
+          </>
+        )}
+
+        {caps.isAdminOrCoo && topItems.length > 0 && (
+          <TopSellerItems items={topItems} isMobile={isMobile} />
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        {/* GROUP 4 — QUICK TOOLS                                             */}
+        {/* ══════════════════════════════════════════════════════════════════ */}
+
+        {(caps.canViewCrm || caps.canViewProduction || caps.canViewQuotations || caps.canViewOrders || caps.canViewItems) && (
+          <>
+            <SectionLabel>⚡ Quick Tools</SectionLabel>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
+              {caps.canViewCrm        && <QuickBtn icon="📞" label="Call HOT Leads"  color={C.red}    bg="#fff5f5" onClick={() => navigate('/crm/queue')}            />}
+              {caps.canViewProduction  && <QuickBtn icon="✅" label="Complete Jobs"   color={C.green}  bg="#f0fdf4" onClick={() => navigate('/production/execution')} />}
+              {caps.canViewQuotations  && <QuickBtn icon="📝" label="Send Quotation"  color={C.blue}   bg="#eff6ff" onClick={() => navigate('/quotation')}            />}
+              {caps.canViewOrders      && <QuickBtn icon="📦" label="Add Order"       color={C.purple} bg="#f5f3ff" onClick={() => navigate('/order')}                />}
+            </div>
+          </>
+        )}
 
       </div>
 
       <style>{`
-        @keyframes dash     { 0% { left: -40%; } 100% { left: 100%; } }
-        @keyframes shimmer  { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+        @keyframes dash      { 0% { left: -40%; } 100% { left: 100%; } }
+        @keyframes shimmer   { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+        @keyframes pulseDot  { 0%, 100% { box-shadow: 0 0 0 0 currentColor; opacity: 1; } 50% { box-shadow: 0 0 0 4px currentColor; opacity: 0.6; } }
       `}</style>
     </div>
   );

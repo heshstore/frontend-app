@@ -104,7 +104,7 @@ export default function UniversalSearch({ placeholder = 'Search… ⌘K for acti
         ? (await custRes.value.json()).slice(0, 5) : [];
 
       const items = itemRes.status === 'fulfilled' && itemRes.value.ok
-        ? (await itemRes.value.json()).slice(0, 4) : [];
+        ? (await itemRes.value.json()).slice(0, 6) : [];
 
       let orders = [];
       if (ordRes.status === 'fulfilled' && ordRes.value.ok) {
@@ -318,9 +318,65 @@ export default function UniversalSearch({ placeholder = 'Search… ⌘K for acti
                 {list.map((item, i) => {
                   flatIdx++;
                   const myFlatIdx = flatIdx;
+                  const path  = getPath(section.key, item);
                   const label = getLabel(section.key, item);
                   const sub   = getSub(section.key, item);
-                  const path  = getPath(section.key, item);
+
+                  // ── Rich item row: photo + full pricing data ──────────────────
+                  if (section.key === 'items') {
+                    const retail    = item.retail_price > 0 ? item.retail_price : (item.sellingPrice || 0);
+                    const wholesale = item.wholesale_price || 0;
+                    return (
+                      <div
+                        key={item.id || item.sku || i}
+                        onMouseDown={() => handleSelect({ path })}
+                        onMouseEnter={() => setActiveIdx(myFlatIdx)}
+                        style={{
+                          padding: '7px 12px', cursor: 'pointer',
+                          borderBottom: '1px solid #f9fafb',
+                          background: activeIdx === myFlatIdx ? '#f0f4ff' : '#fff',
+                          transition: 'background 0.08s',
+                          display: 'flex', alignItems: 'center', gap: 9,
+                        }}
+                      >
+                        {item.image
+                          ? <img src={item.image} alt="" loading="lazy" style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 5, flexShrink: 0 }} />
+                          : <div style={{ width: 36, height: 36, borderRadius: 5, background: '#f3f4f6', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>📦</div>
+                        }
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {item.itemName}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2, flexWrap: 'nowrap', overflow: 'hidden' }}>
+                            <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#9ca3af', flexShrink: 0 }}>{item.sku}</span>
+                            {item.unit && <span style={{ fontSize: 10, color: '#9ca3af', flexShrink: 0 }}>· {item.unit}</span>}
+                            {item.gst > 0 && (
+                              <span style={{ fontSize: 9, fontWeight: 700, color: '#2563eb', background: '#eff6ff', borderRadius: 3, padding: '1px 3px', flexShrink: 0 }}>
+                                GST {item.gst}%
+                              </span>
+                            )}
+                            {item.hsnCode && (
+                              <span style={{ fontSize: 9, fontFamily: 'monospace', color: '#9ca3af', flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {item.hsnCode}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div style={{ flexShrink: 0, textAlign: 'right' }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: '#16a34a', lineHeight: 1 }}>
+                            ₹{Number(retail).toLocaleString('en-IN')}
+                          </div>
+                          {wholesale > 0 && (
+                            <div style={{ fontSize: 10, color: '#6b7280', marginTop: 1 }}>
+                              WS ₹{Number(wholesale).toLocaleString('en-IN')}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // ── Generic row (customers, orders, quotations, leads) ─────────
                   return (
                     <div
                       key={item.id || i}

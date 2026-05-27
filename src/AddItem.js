@@ -7,8 +7,7 @@ import {
 } from "./components/ui/FormComponents";
 import { apiFetch } from "./utils/api";
 import { toast } from "./utils/toast";
-
-const GST_OPTIONS  = [{ value: '', label: 'Select GST %' }, { value: '5', label: '5%' }, { value: '18', label: '18%' }];
+import { GST_OPTIONS } from "./config/gstOptions";
 const UNIT_OPTIONS = ['pcs', 'box', 'doz', 'pair', 'set', 'kg', 'ltr'];
 
 const CATEGORY_OPTIONS = [
