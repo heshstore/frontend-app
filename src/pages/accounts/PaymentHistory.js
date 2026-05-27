@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { apiFetch } from '../../utils/api';
+import PageLayout from '../../components/layout/PageLayout';
 
 const MODE_LABEL = { cash: 'Cash', upi: 'UPI', bank: 'Bank Transfer' };
 const MODE_COLOR = { cash: '#15803d', upi: '#7c3aed', bank: '#1d4ed8' };
@@ -69,14 +70,13 @@ export default function PaymentHistory() {
     whiteSpace: 'nowrap',
   });
 
+  const refreshBtn = (
+    <button onClick={load} style={btn('#f1f5f9', '#374151')} title="Refresh">↻</button>
+  );
+
   return (
-    <div style={{ maxWidth: 680, margin: '0 auto', padding: '16px 12px' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-        <button onClick={() => navigate(-1)} style={btn('#f1f5f9', '#374151')}>← Back</button>
-        <h3 style={{ margin: 0, flex: 1, fontSize: 17 }}>Payment History</h3>
-        <button onClick={load} style={btn('#f1f5f9', '#374151')}>↻</button>
-      </div>
+    <PageLayout title="Payment History" onBack={() => navigate(-1)} actions={refreshBtn}>
+    <div style={{ maxWidth: 680, margin: '0 auto' }}>
 
       {/* Order summary */}
       {(order || summary) && (() => {
@@ -188,5 +188,6 @@ export default function PaymentHistory() {
         </div>
       )}
     </div>
+    </PageLayout>
   );
 }

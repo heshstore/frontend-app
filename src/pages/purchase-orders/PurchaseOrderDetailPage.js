@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { apiFetch } from "../../utils/api";
 import { toast } from "../../utils/toast";
+import PageLayout from "../../components/layout/PageLayout";
 
 const btn = (bg, color = "#fff") => ({
   background: bg, color, border: "none", borderRadius: 7,
@@ -86,22 +87,21 @@ export default function PurchaseOrderDetailPage() {
     }
   };
 
-  if (loading) return <div style={{ padding: 24 }}>Loading…</div>;
-  if (!po) return <div style={{ padding: 24 }}>Not found</div>;
+  if (loading) return <PageLayout title="Purchase Order" onBack={() => navigate("/purchase-orders")}><div style={{ padding: 24 }}>Loading…</div></PageLayout>;
+  if (!po) return <PageLayout title="Purchase Order" onBack={() => navigate("/purchase-orders")}><div style={{ padding: 24 }}>Not found</div></PageLayout>;
+
+  const poNumber  = po.po_number ?? po.poNumber;
+  const subtitle  = [
+    po.vendor_name ?? po.vendorName,
+    po.status?.replace(/_/g, " "),
+    (po.expected_date ?? po.expectedDate) && `Expected ${new Date(po.expected_date ?? po.expectedDate).toLocaleDateString("en-IN")}`,
+  ].filter(Boolean).join(" · ");
 
   const canReceive = !["RECEIVED", "CANCELLED", "DRAFT"].includes(po.status);
 
   return (
-    <div style={{ padding: "20px 24px", maxWidth: 960, margin: "0 auto" }}>
-      <button style={{ ...btn("#e2e8f0", "#374151"), marginBottom: 12 }} onClick={() => navigate("/purchase-orders")}>
-        ← Back
-      </button>
-      <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>{po.po_number ?? po.poNumber}</h1>
-      <p style={{ margin: "4px 0 16px", color: "#64748b", fontSize: 14 }}>
-        {po.vendor_name ?? po.vendorName} · {po.status?.replace(/_/g, " ")}
-        {(po.expected_date ?? po.expectedDate) &&
-          ` · Expected ${new Date(po.expected_date ?? po.expectedDate).toLocaleDateString("en-IN")}`}
-      </p>
+    <PageLayout title={poNumber} subtitle={subtitle} onBack={() => navigate("/purchase-orders")}>
+      <div style={{ maxWidth: 960, margin: "0 auto" }}>
 
       <div style={{
         display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20,
@@ -202,6 +202,7 @@ export default function PurchaseOrderDetailPage() {
           </tbody>
         </table>
       </div>
-    </div>
+      </div>
+    </PageLayout>
   );
 }
