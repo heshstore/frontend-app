@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import PageLayout from '../../../components/layout/PageLayout';
 import { apiFetch } from '../../../utils/api';
+import { isNumberConnected } from '../utils/whatsappStatus';
 
 const card = (border = '#dee2e6', bg = '#fff') => ({
   background: bg, border: `1px solid ${border}`, borderRadius: 8, padding: 16, marginBottom: 14,
@@ -205,8 +206,8 @@ export default function WaDailyReport() {
                         {n.risk_score.toFixed(0)}
                       </td>
                       <td style={{ padding: '7px 10px' }}>
-                        <span style={{ background: n.is_active ? '#dcfce7' : '#fee2e2', color: n.is_active ? '#166534' : '#991b1b', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 700 }}>
-                          {n.is_active ? 'ACTIVE' : 'PAUSED'}
+                        <span style={{ background: isNumberConnected(n) ? '#dcfce7' : '#f3f4f6', color: isNumberConnected(n) ? '#166534' : '#6b7280', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 700 }}>
+                          {isNumberConnected(n) ? 'Connected' : 'Not Connected'}
                         </span>
                       </td>
                     </tr>

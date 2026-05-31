@@ -37,52 +37,6 @@ const td = {
 
 const WARMUP_LABELS = { 1: 'COLD', 2: 'WARM', 3: 'HOT', 4: 'SEASONED' };
 
-// ── Stable status derivation ───────────────────────────────────────────────────
-
-const UNHEALTHY_THRESHOLD  = 3;
-const DISCONNECTED_HOLD_MS = 90_000;
-// Minimum time that must have elapsed since the first non-CONNECTED poll before we
-// will consider downgrading from CONNECTED. Guards against polling storms where
-// multiple rapid polls burn through UNHEALTHY_THRESHOLD in milliseconds.
-const DISCONNECT_GRACE_MS  = 15_000;
-
-function rawToMapped(waState) {
-  if (['ready', 'authenticated'].includes(waState)) return 'CONNECTED';
-  if (['booting', 'initializing', 'authenticating'].includes(waState)) return 'CONNECTING';
-  if (waState === 'qr_ready') return 'QR_READY';
-  if (['failed', 'auth_failure'].includes(waState)) return 'FAILED';
-  if (waState === 'disconnected') return 'DISCONNECTED';
-  return 'IDLE';
-}
-
-// graceSince: timestamp when we first saw a non-CONNECTED response from a CONNECTED state.
-function deriveStableStatus(prevStable, raw, unhealthyCount, disconnectedSince, graceSince) {
-  const rawMapped = rawToMapped(raw?.waState ?? 'idle');
-  if (prevStable !== 'CONNECTED') return rawMapped;
-  if (rawMapped === 'CONNECTED') return 'CONNECTED';
-  if (rawMapped === 'QR_READY' || rawMapped === 'FAILED') return rawMapped;
-
-  // Time gate: absorb transient backend states and polling storms.
-  // If we haven't been seeing non-CONNECTED for at least DISCONNECT_GRACE_MS, hold CONNECTED.
-  const graceExpired = graceSince !== null && (Date.now() - graceSince) >= DISCONNECT_GRACE_MS;
-  if (!graceExpired) return 'CONNECTED';
-
-  // Evidence gate: require positive proof that the session is truly gone before downgrading.
-  // A transient 'idle' response while the browser is still alive must NOT flip the UI.
-  const browserGone  = raw?.browserConnected === false;
-  const clientGone   = raw?.clientExists === false;
-  const lastReadyMs  = raw?.lastReadyAt ? new Date(raw.lastReadyAt).getTime() : null;
-  const readyStale   = lastReadyMs !== null && (Date.now() - lastReadyMs) > 2 * 60_000;
-  if (!browserGone && !clientGone && !readyStale) return 'CONNECTED';
-
-  if (rawMapped === 'DISCONNECTED') {
-    if (disconnectedSince && Date.now() - disconnectedSince >= DISCONNECTED_HOLD_MS) return 'DISCONNECTED';
-    return 'CONNECTED';
-  }
-  if (unhealthyCount >= UNHEALTHY_THRESHOLD) return rawMapped;
-  return 'CONNECTED';
-}
-
 function riskColor(score) {
   if (score > 60) return '#dc3545';
   if (score >= 30) return '#fd7e14';
@@ -94,28 +48,137 @@ function formatTime(ts) {
   try { return new Date(ts).toLocaleString(); } catch { return ts; }
 }
 
-// ── WA state badge ─────────────────────────────────────────────────────────────
+function formatDuration(ms) {
+  if (ms == null || ms < 0) return '—';
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${s % 60}s`;
+  const h = Math.floor(m / 60);
+  return `${h}h ${m % 60}m`;
+}
 
-function WaStateBadge({ stableStatus }) {
-  if (stableStatus === 'CONNECTED') {
+// ── WA exact-state chip ────────────────────────────────────────────────────────
+
+const WA_STATE_CHIP = {
+  idle:           { bg: '#f3f4f6', color: '#6b7280',  label: 'Idle' },
+  initializing:   { bg: '#dbeafe', color: '#1d4ed8',  label: 'Initializing' },
+  awaiting_scan:  { bg: '#fef9c3', color: '#854d0e',  label: 'Scan Required' },
+  authenticating: { bg: '#ede9fe', color: '#6d28d9',  label: 'Authenticating' },
+  ready:          { bg: '#dcfce7', color: '#166534',  label: 'Connected' },
+  failed:         { bg: '#fee2e2', color: '#991b1b',  label: 'Failed' },
+  disconnecting:  { bg: '#f3f4f6', color: '#374151',  label: 'Disconnecting' },
+};
+
+// Phase 3: when awaiting_scan + qr exists, show RESTORE FAILED / QR READY instead of "Scan Required"
+function WaStateChip({ waState, qrActive }) {
+  if (waState === 'awaiting_scan' && qrActive) {
     return (
-      <span style={{ background: '#dcfce7', color: '#166534', padding: '2px 9px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>
-        CONNECTED
-      </span>
+      <div style={{ display: 'inline-flex', flexDirection: 'column', gap: 3 }}>
+        <span style={{
+          background: '#fee2e2', color: '#991b1b',
+          padding: '2px 7px', borderRadius: 12, fontSize: 10, fontWeight: 700,
+          display: 'inline-block',
+        }}>
+          RESTORE FAILED
+        </span>
+        <span style={{
+          background: '#dcfce7', color: '#166534',
+          padding: '2px 7px', borderRadius: 12, fontSize: 10, fontWeight: 700,
+          display: 'inline-block',
+        }}>
+          QR READY
+        </span>
+      </div>
     );
   }
-  if (!stableStatus || stableStatus === 'IDLE') return null;
-  const map = {
-    CONNECTING:   { bg: '#e0f2fe', color: '#0369a1', label: 'CONNECTING' },
-    QR_READY:     { bg: '#fef9c3', color: '#854d0e', label: 'QR READY' },
-    DISCONNECTED: { bg: '#f3f4f6', color: '#6b7280', label: 'DISCONNECTED' },
-    FAILED:       { bg: '#fee2e2', color: '#991b1b', label: 'FAILED' },
-  };
-  const c = map[stableStatus] || { bg: '#f3f4f6', color: '#6b7280', label: stableStatus };
+  const cfg = WA_STATE_CHIP[waState] || WA_STATE_CHIP.idle;
   return (
-    <span style={{ background: c.bg, color: c.color, padding: '2px 9px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>
-      {c.label}
+    <span style={{
+      background: cfg.bg, color: cfg.color,
+      padding: '2px 9px', borderRadius: 12, fontSize: 11, fontWeight: 700,
+      display: 'inline-block',
+    }}>
+      {cfg.label}
     </span>
+  );
+}
+
+// ── Runtime state stripper ────────────────────────────────────────────────────
+// Zeroes all backend-derived runtime fields on a number record.
+// Applied to every row when the backend is unreachable so that stale
+// connected badges, health metrics, and session ages cannot be displayed.
+// Static DB fields (name, phone, warmup_level, daily_limit, is_active,
+// risk_score, last_message_sent_at) are preserved as-is.
+function stripRuntimeState(num) {
+  return {
+    ...num,
+    waState:            'idle',
+    effectiveState:     'idle',
+    connected:          false,
+    booting:            false,
+    qrActive:           false,
+    lastHeartbeat:      null,
+    lastReadyAt:        null,
+    browserConnected:   false,
+    clientExists:       false,
+    reconnectCount:     0,
+    qrRefreshCount:     0,
+    sessionStartedAt:   null,
+    lastDisconnectedAt: null,
+    firstQrGeneratedAt: null,
+    sessionAvailable:   false,
+    liveAndReady:       false,
+  };
+}
+
+// ── Phase 1: Inline metrics sub-row ──────────────────────────────────────────
+// Always-visible diagnostic strip below each number row. Replaces the toggled
+// Health panel so debug data is always in view without any interaction.
+function InlineMetricsRow({ num, backendAvailable }) {
+  const now = Date.now();
+
+  const connectedMs = (num.sessionStartedAt && num.connected)
+    ? now - new Date(num.sessionStartedAt).getTime()
+    : null;
+
+  const pillStyle = {
+    display: 'inline-flex', alignItems: 'center', gap: 4,
+    background: '#fff', border: '1px solid #e2e8f0',
+    borderRadius: 4, padding: '2px 7px',
+  };
+
+  if (!backendAvailable) {
+    return (
+      <tr>
+        <td colSpan={8} style={{ padding: '3px 14px 7px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+          <span style={{ fontSize: 11, color: '#9ca3af', fontStyle: 'italic' }}>metrics unavailable</span>
+        </td>
+      </tr>
+    );
+  }
+
+  const metrics = [
+    { label: 'CONNECTED',    value: connectedMs !== null ? formatDuration(connectedMs) : '—' },
+    { label: 'DISCONNECTS',  value: num.reconnectCount ?? 0 },
+    { label: 'RECONNECTS',   value: num.reconnectCount ?? 0 },
+    { label: 'QR REFRESHES', value: num.qrRefreshCount ?? 0 },
+    { label: 'STATE',        value: num.waState ?? 'idle' },
+  ];
+
+  return (
+    <tr>
+      <td colSpan={8} style={{ padding: '3px 14px 8px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+          {metrics.map(({ label, value }) => (
+            <div key={label} style={pillStyle}>
+              <span style={{ fontSize: 9, color: '#9ca3af', fontWeight: 700, letterSpacing: '0.04em' }}>{label}</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#374151' }}>{String(value)}</span>
+            </div>
+          ))}
+        </div>
+      </td>
+    </tr>
   );
 }
 
@@ -127,25 +190,19 @@ function QrModal({ numberId, numberPhone, onClose }) {
   const pollRef = useRef(null);
 
   const poll = useCallback(async () => {
-    // Skip poll when tab is hidden — avoids unnecessary network during reconnect loops
     if (document.hidden) return;
-    console.log('[POLL_DEBUG] qr_modal', { numberId, intervalMs: 5000, hidden: document.hidden, timestamp: Date.now() });
     try {
       const [qrRes, statusRes] = await Promise.all([
         apiFetch(`/marketing/whatsapp-engine/numbers/${numberId}/qr`).then((r) => r.json()),
         apiFetch(`/marketing/whatsapp-engine/numbers/${numberId}/status`).then((r) => r.json()),
       ]);
-      if (qrRes?.qr) {
-        console.log('[FRONTEND_QR] receivedLength=' + qrRes.qr.length + ' active=' + qrRes.active);
-      } else {
-        console.log('[FRONTEND_QR] no_qr', { active: qrRes?.active, waState: statusRes?.waState });
-      }
+      // Backend returns { active, qr, generatedAt } — NOT dataUrl.
+      console.log('[QR_FETCH]', { active: qrRes?.active, hasQr: !!qrRes?.qr, qrLength: qrRes?.qr?.length, waState: statusRes?.waState });
+      console.log('[UI_QR_RECEIVED]', { numberId, hasQr: !!qrRes?.qr, qrLength: qrRes?.qr?.length ?? 0, active: qrRes?.active, waState: statusRes?.waState });
       setQrData(qrRes);
       setWaStatus(statusRes);
-      // Auto-close once connected (ready OR recovering — both mean session is live)
-      const stableConnected = statusRes?.connected ||
-        ['ready', 'authenticated'].includes(statusRes?.waState);
-      if (stableConnected) {
+      const sessionReady = statusRes?.effectiveState === 'ready' || statusRes?.waState === 'ready';
+      if (sessionReady) {
         clearInterval(pollRef.current);
         setTimeout(onClose, 1_500);
       }
@@ -158,8 +215,9 @@ function QrModal({ numberId, numberPhone, onClose }) {
     return () => clearInterval(pollRef.current);
   }, [poll]);
 
-  const connected = waStatus?.connected || ['ready', 'authenticated'].includes(waStatus?.waState);
-  const qrActive = qrData?.active && qrData?.qr;
+  const connected = waStatus?.effectiveState === 'ready' || waStatus?.waState === 'ready';
+  // Backend field is `qr`, not `dataUrl`. Using `dataUrl` always returned undefined → modal stuck on "Waiting for QR".
+  const qrActive  = !!qrData?.qr && !connected;
 
   return (
     <div style={{
@@ -170,13 +228,30 @@ function QrModal({ numberId, numberPhone, onClose }) {
         background: '#fff', borderRadius: 12, padding: 32, minWidth: 340, maxWidth: 420,
         boxShadow: '0 20px 60px rgba(0,0,0,0.25)', textAlign: 'center',
       }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <div>
             <div style={{ fontWeight: 700, fontSize: 16, color: '#111827' }}>Pair WhatsApp</div>
             <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{numberPhone}</div>
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#6b7280', lineHeight: 1 }}>✕</button>
         </div>
+
+        {waStatus?.waState && (
+          <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 500 }}>Current State:</span>
+            <WaStateChip waState={waStatus.waState} qrActive={qrActive} />
+          </div>
+        )}
+
+        {/* Temporary render-path log — remove once QR display is confirmed stable */}
+        {console.log('QR_RENDER', {
+          active: qrData?.active,
+          hasDataUrl: !!qrData?.dataUrl,  // always false — backend field is `qr`, not `dataUrl`
+          hasQr: !!qrData?.qr,
+          dataUrlLength: qrData?.dataUrl?.length,
+          qrLength: qrData?.qr?.length,
+          waState: waStatus?.waState,
+        })}
 
         {connected ? (
           <div style={{ padding: '24px 0' }}>
@@ -192,10 +267,22 @@ function QrModal({ numberId, numberPhone, onClose }) {
               <strong>Linked Devices → Link a Device</strong>, then scan.
             </div>
             <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 8 }}>
-              QR refreshes automatically · Polling every 5s
+              QR refreshes every ~20s — scan the current code
             </div>
           </>
-        ) : waStatus?.booting || waStatus?.waState === 'booting' ? (
+        ) : waStatus?.waState === 'authenticating' ? (
+          <div style={{ padding: '24px 0' }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>🔐</div>
+            <div style={{ fontWeight: 700, color: '#6d28d9', fontSize: 16 }}>Authenticating…</div>
+            <div style={{ fontSize: 13, color: '#6b7280', marginTop: 8, lineHeight: 1.6 }}>
+              QR scanned — WhatsApp is establishing the session.<br />
+              <strong>Do not close this window.</strong>
+            </div>
+            <div style={{ fontSize: 11, color: '#a78bfa', marginTop: 10 }}>
+              Session will be ready in a few seconds
+            </div>
+          </div>
+        ) : waStatus?.booting || waStatus?.waState === 'initializing' ? (
           <div style={{ padding: '24px 0', color: '#6b7280' }}>
             <div style={{ fontSize: 32, marginBottom: 10 }}>⏳</div>
             <div style={{ fontWeight: 600 }}>Starting WhatsApp…</div>
@@ -223,150 +310,51 @@ function QrModal({ numberId, numberPhone, onClose }) {
   );
 }
 
-// ── Health Trend Panel ────────────────────────────────────────────────────────
-
-function TrendPanel({ numberId, onClose }) {
-  const [trend, setTrend] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    apiFetch(`/marketing/whatsapp-engine/numbers/${numberId}/health-trend`)
-      .then((r) => r.json())
-      .then(setTrend)
-      .catch(() => setTrend([]))
-      .finally(() => setLoading(false));
-  }, [numberId]);
-
-  const maxSent = trend ? Math.max(...trend.map((d) => d.sent || 0), 1) : 1;
-
-  return (
-    <div style={{ background: '#f8fafc', borderTop: '2px solid #e0f2fe', padding: '14px 16px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#075985' }}>7-DAY HEALTH TREND</div>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: '#6b7280' }}>✕</button>
-      </div>
-      {loading ? (
-        <div style={{ fontSize: 13, color: '#6b7280' }}>Loading…</div>
-      ) : !trend || trend.length === 0 ? (
-        <div style={{ fontSize: 13, color: '#6b7280' }}>No data for the past 7 days.</div>
-      ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%' }}>
-            <thead>
-              <tr>
-                {['Date', 'Sent', 'Delivered', 'Read', 'Replied', 'Failed', 'Volume'].map((h) => (
-                  <th key={h} style={{ padding: '4px 10px', textAlign: h === 'Date' || h === 'Volume' ? 'left' : 'center', color: '#475569', fontWeight: 600, borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {trend.map((day) => (
-                <tr key={day.date}>
-                  <td style={{ padding: '6px 10px', fontWeight: 600, color: '#374151', whiteSpace: 'nowrap' }}>{day.date}</td>
-                  <td style={{ padding: '6px 10px', textAlign: 'center', color: '#0d6efd', fontWeight: 700 }}>{day.sent}</td>
-                  <td style={{ padding: '6px 10px', textAlign: 'center', color: '#0891b2' }}>{day.delivered}</td>
-                  <td style={{ padding: '6px 10px', textAlign: 'center', color: '#7c3aed' }}>{day.read}</td>
-                  <td style={{ padding: '6px 10px', textAlign: 'center', color: '#15803d', fontWeight: 600 }}>{day.replied}</td>
-                  <td style={{ padding: '6px 10px', textAlign: 'center', color: day.failed > 0 ? '#dc3545' : '#9ca3af' }}>{day.failed}</td>
-                  <td style={{ padding: '6px 10px', minWidth: 120 }}>
-                    <div style={{ height: 8, background: '#e2e8f0', borderRadius: 4, overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${Math.round((day.sent / maxSent) * 100)}%`, background: '#0d6efd', borderRadius: 4 }} />
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── Number Row ────────────────────────────────────────────────────────────────
 
-function NumberRow({ num, onAction, trendOpen, onToggleTrend }) {
-  const [waStatus,       setWaStatus]       = useState(null);
-  const [stableUiStatus, setStableUiStatus] = useState('IDLE');
-  const [busy, setBusy] = useState(false);
+function NumberRow({ num, onAction, backendAvailable }) {
+  const [busy, setBusy]           = useState(false);
   const [limitEdit, setLimitEdit] = useState('');
   const [limitDirty, setLimitDirty] = useState(false);
-  const [qrOpen, setQrOpen] = useState(false);
-  const statusPollRef        = useRef(null);
-  const prevStableRef        = useRef('IDLE');
-  const unhealthyCountRef    = useRef(0);
-  const disconnectedSinceRef = useRef(null);
-  // Timestamp of the first non-CONNECTED poll after being CONNECTED.
-  // Used with DISCONNECT_GRACE_MS to prevent polling storms from downgrading the UI.
-  const disconnectGraceRef   = useRef(null);
+  const [qrOpen, setQrOpen]       = useState(false);
+  // Prevents re-opening after user manually closes — resets when state leaves awaiting_scan.
+  const autoOpenedRef = useRef(false);
 
-  const pollStatus = useCallback(async () => {
-    if (document.hidden) return;
-    try {
-      const r = await apiFetch(`/marketing/whatsapp-engine/numbers/${num.id}/status`);
-      if (!r.ok) return;
-      const data = await r.json();
-      const rawMapped = rawToMapped(data?.waState ?? 'idle');
-
-      if (rawMapped === 'CONNECTED') {
-        unhealthyCountRef.current    = 0;
-        disconnectedSinceRef.current = null;
-        disconnectGraceRef.current   = null;
-      } else if (prevStableRef.current === 'CONNECTED') {
-        unhealthyCountRef.current += 1;
-        // Record the first moment we saw a non-CONNECTED response — grace timer starts here.
-        if (!disconnectGraceRef.current) disconnectGraceRef.current = Date.now();
-        if (rawMapped === 'DISCONNECTED' && !disconnectedSinceRef.current) {
-          disconnectedSinceRef.current = Date.now();
-        }
-      }
-
-      const newStable = deriveStableStatus(
-        prevStableRef.current, data,
-        unhealthyCountRef.current, disconnectedSinceRef.current,
-        disconnectGraceRef.current,
-      );
-
-      // Temporary diagnostics — remove once synchronization is confirmed stable.
-      console.log('[WA_UI_STATE]', {
-        numberId:          num.id,
-        previousState:     prevStableRef.current,
-        polledState:       data?.waState,
-        finalRenderedState: newStable,
-        clientExists:      data?.clientExists,
-        browserConnected:  data?.browserConnected,
-        unhealthyCount:    unhealthyCountRef.current,
-        graceMs:           disconnectGraceRef.current ? Date.now() - disconnectGraceRef.current : null,
-      });
-
-      prevStableRef.current = newStable;
-      setWaStatus(data);
-      setStableUiStatus(newStable);
-    } catch { /* silent */ }
-  }, [num.id]);
-
-  // Stable 15s polling interval — must NOT depend on waStatus?.waState.
-  // A dependency on waState caused the interval to restart on every state change,
-  // creating rapid-fire polls that exhausted the UNHEALTHY_THRESHOLD grace in
-  // milliseconds and instantly showed "Connect" on any transient backend response.
+  // Auto-close QR modal when backend goes offline — its internal polls will silently
+  // fail and leave the user staring at a stale "Waiting for QR…" screen forever.
   useEffect(() => {
-    pollStatus();
-    statusPollRef.current = setInterval(pollStatus, 15_000);
-    return () => clearInterval(statusPollRef.current);
-  }, [pollStatus]);
+    if (!backendAvailable && qrOpen) setQrOpen(false);
+  }, [backendAvailable, qrOpen]);
+
+  // Auto-open QR modal as soon as backend signals awaiting_scan + qr ready.
+  // Guard: once auto-opened, don't re-open if user manually closes.
+  // Reset: when state leaves awaiting_scan so the next QR cycle works.
+  useEffect(() => {
+    if (num.waState === 'awaiting_scan' && num.qrActive && backendAvailable) {
+      if (!autoOpenedRef.current) {
+        autoOpenedRef.current = true;
+        console.log('[UI_QR_MODAL_OPEN]', { numberId: num.id, trigger: 'auto', waState: num.waState });
+        setQrOpen(true);
+      }
+    } else if (num.waState !== 'awaiting_scan') {
+      autoOpenedRef.current = false;
+    }
+  }, [num.id, num.waState, num.qrActive, backendAvailable]);
+
+  const actionDisabled = busy || !backendAvailable;
 
   const doAction = async (action) => {
     setBusy(true);
     try {
       await onAction(num.id, num.phone, action);
-      await pollStatus();
+      await onAction(num.id, num.phone, 'reload');
     } finally {
       setBusy(false);
     }
   };
 
   const saveLimit = async () => {
-    if (!limitDirty) return;
+    if (!limitDirty || !backendAvailable) return;
     const parsed = parseInt(limitEdit, 10);
     if (isNaN(parsed) || parsed < 1) return;
     setBusy(true);
@@ -383,10 +371,61 @@ function NumberRow({ num, onAction, trendOpen, onToggleTrend }) {
     }
   };
 
-  const connected = stableUiStatus === 'CONNECTED';
-  const booting   = waStatus?.booting || waStatus?.waState === 'booting';
-  const qrActive  = waStatus?.qrActive;
-  const canConnect = !connected && !['CONNECTING', 'QR_READY'].includes(stableUiStatus);
+  const connected   = num.connected === true;
+  const waState     = num.waState ?? 'idle';
+  const chipWaState = connected ? 'ready' : waState;
+
+  // Phase 2: smart connect button — one button per state, no ambiguity
+  const isReconnect = (num.reconnectCount > 0) || !!num.lastDisconnectedAt;
+  let connectButton = null;
+  if (backendAvailable) {
+    if (connected) {
+      // READY → do nothing
+    } else if (waState === 'awaiting_scan') {
+      // AWAITING_SCAN → open QR immediately, no connect API call needed
+      connectButton = (
+        <button
+          style={btn('#16a34a', '#fff', actionDisabled)}
+          disabled={actionDisabled}
+          onClick={() => {
+            console.log('[UI_QR_MODAL_OPEN]', { numberId: num.id, trigger: 'user_click', waState: num.waState });
+            setQrOpen(true);
+          }}
+        >
+          Scan QR
+        </button>
+      );
+    } else if (waState === 'initializing') {
+      // INITIALIZING → loading indicator
+      connectButton = (
+        <button style={btn('#e5e7eb', '#9ca3af', true)} disabled={true}>
+          Starting…
+        </button>
+      );
+    } else if (waState === 'authenticating' && num.clientExists) {
+      // Authenticating with live client — QR was scanned, waiting for session
+      connectButton = (
+        <button style={btn('#e5e7eb', '#9ca3af', true)} disabled={true}>
+          Authenticating…
+        </button>
+      );
+    } else {
+      // DISCONNECTED / idle / failed / stuck-authenticating → reconnect or initial connect
+      connectButton = (
+        <button
+          style={btn('#0d6efd', '#fff', actionDisabled)}
+          disabled={actionDisabled}
+          onClick={async () => {
+            console.warn('[CONNECT_BUTTON_CLICK]', { numberId: num.id, phone: num.phone, ts: Date.now() });
+            await doAction('connect');
+            setQrOpen(true);
+          }}
+        >
+          {isReconnect ? 'Reconnect' : 'Connect'}
+        </button>
+      );
+    }
+  }
 
   return (
     <>
@@ -394,7 +433,7 @@ function NumberRow({ num, onAction, trendOpen, onToggleTrend }) {
         <QrModal
           numberId={num.id}
           numberPhone={num.phone}
-          onClose={() => { setQrOpen(false); pollStatus(); }}
+          onClose={() => { setQrOpen(false); onAction(num.id, num.phone, 'reload'); }}
         />
       )}
       <React.Fragment>
@@ -405,17 +444,17 @@ function NumberRow({ num, onAction, trendOpen, onToggleTrend }) {
             <div style={{ fontFamily: 'monospace', fontSize: 12, color: '#6b7280', marginTop: 2 }}>{num.phone}</div>
           </td>
 
-          {/* Live WA Connection State */}
+          {/* WA Session State — Phase 3: chip shows RESTORE FAILED / QR READY when awaiting_scan + qrActive */}
           <td style={td}>
-            <WaStateBadge stableStatus={stableUiStatus} />
-            {waStatus?.lastReadyAt && (
+            <WaStateChip waState={chipWaState} qrActive={num.qrActive} />
+            {num.lastReadyAt && (
               <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 3 }}>
-                Since {formatTime(waStatus.lastReadyAt)}
+                Since {formatTime(num.lastReadyAt)}
               </div>
             )}
           </td>
 
-          {/* Engine Status (active/paused for queue) */}
+          {/* Engine Status */}
           <td style={td}>
             <span style={{
               background: num.is_active ? '#dcfce7' : '#f3f4f6',
@@ -466,72 +505,40 @@ function NumberRow({ num, onAction, trendOpen, onToggleTrend }) {
             {formatTime(num.last_message_sent_at)}
           </td>
 
-          {/* Actions */}
+          {/* Actions — Phase 2: smart connect button replaces fixed Connect */}
           <td style={td}>
             <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-              {/* Connect / QR */}
-              {canConnect && (
-                <button
-                  style={btn('#0d6efd', '#fff', busy)}
-                  disabled={busy}
-                  onClick={() => { doAction('connect'); setQrOpen(true); }}
-                >
-                  Connect
-                </button>
-              )}
-              {(connected || qrActive || booting) && (
-                <button
-                  style={btn('#6366f1', '#fff', busy)}
-                  disabled={busy}
-                  onClick={() => setQrOpen(true)}
-                >
-                  {qrActive ? 'View QR' : 'Status'}
-                </button>
-              )}
+              {connectButton}
               {connected && (
                 <button
-                  style={btn('#f3f4f6', '#374151', busy)}
-                  disabled={busy}
+                  style={btn('#f3f4f6', '#374151', actionDisabled)}
+                  disabled={actionDisabled}
                   onClick={() => doAction('disconnect')}
                 >
                   Disconnect
                 </button>
               )}
-              {/* Reset session */}
               <button
-                style={btn('#fee2e2', '#991b1b', busy)}
-                disabled={busy}
+                style={btn('#fee2e2', '#991b1b', actionDisabled)}
+                disabled={actionDisabled}
                 title="Wipe session — generates fresh QR"
                 onClick={() => doAction('reset')}
               >
                 Reset
               </button>
-              {/* Engine queue pause/resume */}
               <button
-                style={btn(num.is_active ? '#fef9c3' : '#dcfce7', num.is_active ? '#854d0e' : '#166534', busy)}
-                disabled={busy}
+                style={btn(num.is_active ? '#fef9c3' : '#dcfce7', num.is_active ? '#854d0e' : '#166534', actionDisabled)}
+                disabled={actionDisabled}
                 onClick={() => doAction('toggle')}
               >
                 {num.is_active ? 'Pause' : 'Resume'}
-              </button>
-              {/* Trend */}
-              <button
-                style={btn(trendOpen ? '#0d6efd' : '#f3f4f6', trendOpen ? '#fff' : '#374151')}
-                onClick={onToggleTrend}
-              >
-                Trend
               </button>
             </div>
           </td>
         </tr>
 
-        {trendOpen && (
-          <tr>
-            <td colSpan={8} style={{ padding: 0 }}>
-              <TrendPanel numberId={num.id} onClose={onToggleTrend} />
-            </td>
-          </tr>
-        )}
+        {/* Phase 1: inline metrics — always visible, no toggle */}
+        <InlineMetricsRow num={num} backendAvailable={backendAvailable} />
       </React.Fragment>
     </>
   );
@@ -540,12 +547,13 @@ function NumberRow({ num, onAction, trendOpen, onToggleTrend }) {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function WaNumbers() {
-  const [numbers, setNumbers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [numbers, setNumbers]   = useState([]);
+  const [loading, setLoading]   = useState(true);
   const [feedback, setFeedback] = useState(null);
   const [resetting, setResetting] = useState(false);
-  const [trendOpenId, setTrendOpenId] = useState(null);
+  // 'connected' | 'disconnected'
+  // Starts as 'connected' — first poll either confirms or flips it within 15s.
+  const [backendStatus, setBackendStatus] = useState('connected');
 
   const showFeedback = (msg, isError = false) => {
     setFeedback({ msg, isError });
@@ -554,32 +562,46 @@ export default function WaNumbers() {
 
   const loadNumbers = useCallback(async () => {
     setLoading(true);
-    setError(null);
     try {
       const res = await apiFetch('/marketing/whatsapp-engine/numbers');
       if (!res.ok) throw new Error(`Server error ${res.status}`);
       const d = await res.json();
       setNumbers(Array.isArray(d) ? d : []);
-    } catch (e) {
-      setError(e?.message || 'Failed to load numbers');
+      setBackendStatus('connected');
+    } catch {
+      // Do NOT clear numbers — preserve static row data (name/phone/warmup/limits)
+      // for display. Runtime fields are stripped via displayNumbers below.
+      setBackendStatus('disconnected');
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { loadNumbers(); }, [loadNumbers]);
-  // Lightweight DB refresh (live WA state is polled per-row; this catches limit/status edits)
+  // Single interval — initial load + 15s background polling.
+  // One effect, one interval, no duplicate fetches, no race conditions.
   useEffect(() => {
-    const t = setInterval(loadNumbers, 30_000);
+    loadNumbers();
+    const t = setInterval(loadNumbers, 15_000);
     return () => clearInterval(t);
   }, [loadNumbers]);
+
+  // Derived: strip all runtime state when the backend is unreachable.
+  // Structural guarantee: connected=false on every row when backendAvailable=false,
+  // making it impossible to render a Connected badge without live backend data.
+  const backendAvailable = backendStatus === 'connected';
+  const displayNumbers   = backendAvailable ? numbers : numbers.map(stripRuntimeState);
 
   const handleAction = useCallback(async (numberId, phone, action) => {
     if (action === 'reload') { await loadNumbers(); return; }
     try {
       if (action === 'connect') {
+        console.warn('[CONNECT_REQUEST_START]', { numberId, phone, ts: Date.now() });
         const r = await apiFetch(`/marketing/whatsapp-engine/numbers/${numberId}/connect`, { method: 'POST' });
-        if (!r.ok) throw new Error(`Server error ${r.status}`);
+        if (!r.ok) {
+          console.warn('[CONNECT_REQUEST_FAIL]', { numberId, phone, status: r.status, ts: Date.now() });
+          throw new Error(`Server error ${r.status}`);
+        }
+        console.warn('[CONNECT_REQUEST_SUCCESS]', { numberId, phone, status: r.status, ts: Date.now() });
         showFeedback(`Connecting ${phone}… scan QR`);
       } else if (action === 'disconnect') {
         const r = await apiFetch(`/marketing/whatsapp-engine/numbers/${numberId}/disconnect`, { method: 'POST' });
@@ -631,7 +653,11 @@ export default function WaNumbers() {
               {feedback.msg}
             </span>
           )}
-          <button style={btn('#fd7e14', '#fff', resetting)} onClick={resetDaily} disabled={resetting}>
+          <button
+            style={btn('#fd7e14', '#fff', resetting || !backendAvailable)}
+            onClick={resetDaily}
+            disabled={resetting || !backendAvailable}
+          >
             {resetting ? 'Resetting…' : '↺ Reset Daily Counts'}
           </button>
           <button style={btn('#0d6efd', '#fff', loading)} onClick={loadNumbers} disabled={loading}>
@@ -648,15 +674,28 @@ export default function WaNumbers() {
           <strong>You handle:</strong> connecting numbers · monitoring stability
         </div>
 
-        {error && (
-          <div style={{ background: '#fff5f5', border: '1px solid #fca5a5', borderRadius: 8, padding: '14px 18px', marginBottom: 16, color: '#dc3545' }}>
-            {error} <button style={{ ...btn('#dc3545'), marginLeft: 12 }} onClick={loadNumbers}>Retry</button>
+        {/* Backend unavailable banner — disappears automatically when the next 15s poll succeeds. */}
+        {!backendAvailable && (
+          <div style={{
+            background: '#fff5f5', border: '1px solid #fca5a5', borderRadius: 8,
+            padding: '12px 18px', marginBottom: 16,
+            display: 'flex', alignItems: 'center', gap: 10,
+          }}>
+            <span style={{ fontSize: 18, lineHeight: 1 }}>⚠</span>
+            <div>
+              <div style={{ fontWeight: 700, color: '#dc3545', fontSize: 13 }}>
+                Backend unavailable — reconnecting…
+              </div>
+              <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
+                Session states and health metrics are hidden until connection is restored.
+              </div>
+            </div>
           </div>
         )}
 
-        {loading ? (
+        {loading && numbers.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 48, color: '#6c757d' }}>Loading numbers…</div>
-        ) : numbers.length === 0 ? (
+        ) : displayNumbers.length === 0 ? (
           <div style={{ background: '#fff', border: '1px solid #dee2e6', borderRadius: 8, padding: 48, textAlign: 'center', color: '#6c757d' }}>
             <div style={{ fontSize: 36, marginBottom: 12 }}>📱</div>
             <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 15 }}>No telecaller numbers found</div>
@@ -678,13 +717,12 @@ export default function WaNumbers() {
                 </tr>
               </thead>
               <tbody>
-                {numbers.map((num) => (
+                {displayNumbers.map((num) => (
                   <NumberRow
                     key={num.id}
                     num={num}
                     onAction={handleAction}
-                    trendOpen={trendOpenId === num.id}
-                    onToggleTrend={() => setTrendOpenId(trendOpenId === num.id ? null : num.id)}
+                    backendAvailable={backendAvailable}
                   />
                 ))}
               </tbody>
@@ -693,7 +731,7 @@ export default function WaNumbers() {
         )}
 
         <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 12 }}>
-          Sessions are manual-only — click Connect to start. Status polls every 15s per row. Pauses when tab is hidden. Edit limit inline (Enter to save). Reset wipes LocalAuth — phone must re-scan QR.
+          Sessions are manual-only — click Connect to start. Connection state refreshes every 15s. Edit limit inline (Enter to save). Reset wipes LocalAuth — phone must re-scan QR.
         </div>
       </div>
     </PageLayout>

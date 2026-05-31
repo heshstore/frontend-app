@@ -40,6 +40,53 @@ function StatusBadge({ status }) {
   );
 }
 
+// Renders the sender cell for a queue row.
+// Priority: denormalized actual_sender_* fields → numberMap fallback → "Waiting Assignment"
+function SenderCell({ item, numberMap }) {
+  const name  = item.actual_sender_name  || null;
+  const phone = item.actual_sender_phone || null;
+
+  if (name || phone) {
+    return (
+      <div title="Actual WhatsApp number used for sending">
+        {name  && <div style={{ fontWeight: 600, fontSize: 12, color: '#111827' }}>{name}</div>}
+        {phone && <div style={{ fontSize: 11, color: '#6b7280', fontFamily: 'monospace' }}>{phone}</div>}
+      </div>
+    );
+  }
+
+  // Historical rows or fallback via number_id → live numbers list
+  const n = item.number_id ? numberMap[item.number_id] : null;
+  if (n) {
+    return (
+      <div title="Actual WhatsApp number used for sending">
+        {n.name  && <div style={{ fontWeight: 600, fontSize: 12, color: '#111827' }}>{n.name}</div>}
+        {n.phone && <div style={{ fontSize: 11, color: '#6b7280', fontFamily: 'monospace' }}>{n.phone}</div>}
+      </div>
+    );
+  }
+
+  const isPending = !item.status || item.status === 'pending';
+  if (isPending) {
+    return <span style={{ fontSize: 11, color: '#9ca3af', fontStyle: 'italic' }}>Waiting Assignment</span>;
+  }
+  return <span style={{ color: '#9ca3af' }}>—</span>;
+}
+
+// Sender cell for log entries (failed tab) — uses number_id against live numbers list.
+function LogSenderCell({ log, numberMap }) {
+  const n = log.number_id ? numberMap[log.number_id] : null;
+  if (n) {
+    return (
+      <div title="Actual WhatsApp number used for sending">
+        {n.name  && <div style={{ fontWeight: 600, fontSize: 12, color: '#111827' }}>{n.name}</div>}
+        {n.phone && <div style={{ fontSize: 11, color: '#6b7280', fontFamily: 'monospace' }}>{n.phone}</div>}
+      </div>
+    );
+  }
+  return <span style={{ color: '#9ca3af' }}>—</span>;
+}
+
 function formatTime(ts) {
   if (!ts) return '—';
   try { return new Date(ts).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' }); } catch { return ts; }
@@ -61,6 +108,7 @@ export default function WaQueue() {
 
   const [tab, setTab] = useState('pending');
   const [items, setItems] = useState([]);
+  const [numbers, setNumbers] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
   const [campaignFilter, setCampaignFilter] = useState(initCampaign);
   const [loading, setLoading] = useState(true);
@@ -74,11 +122,16 @@ export default function WaQueue() {
     setTimeout(() => setFeedback(null), 3500);
   };
 
-  // Load campaigns list for the filter dropdown
+  // Load campaigns + numbers once on mount
   useEffect(() => {
     apiFetch('/marketing/whatsapp-engine/campaigns')
       .then(r => r.ok ? r.json() : [])
       .then(d => setCampaigns(Array.isArray(d) ? d : []))
+      .catch(() => {});
+
+    apiFetch('/marketing/whatsapp-engine/numbers')
+      .then(r => r.ok ? r.json() : [])
+      .then(d => setNumbers(Array.isArray(d) ? d : []))
       .catch(() => {});
   }, []);
 
@@ -88,7 +141,6 @@ export default function WaQueue() {
       let res;
       if (tab === 'pending') {
         if (campaignFilter) {
-          // Show all queue items for this campaign (any status)
           res = await apiFetch(`/marketing/whatsapp-engine/queue/campaign/${campaignFilter}?limit=200`);
         } else {
           res = await apiFetch('/marketing/whatsapp-engine/queue/pending?limit=100');
@@ -96,7 +148,6 @@ export default function WaQueue() {
         if (!res.ok) throw new Error(`Server error ${res.status}`);
         setItems(Array.isArray(await res.clone().json()) ? await res.json() : []);
       } else {
-        // Failed tab uses analytics/logs endpoint
         const params = new URLSearchParams({ status: 'failed', limit: 100 });
         if (campaignFilter) params.set('campaignId', campaignFilter);
         res = await apiFetch(`/marketing/whatsapp-engine/analytics/logs?${params}`);
@@ -113,7 +164,6 @@ export default function WaQueue() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Auto-refresh every 15s for pending, 60s for failed
   useEffect(() => {
     const interval = tab === 'pending' ? 15000 : 60000;
     const t = setInterval(load, interval);
@@ -144,10 +194,13 @@ export default function WaQueue() {
     return { label: 'Low', color: '#6b7280' };
   };
 
+  // id → campaign name
   const campaignMap = Object.fromEntries(campaigns.map(c => [c.id, c.campaign_name]));
+  // id → { phone, name }
+  const numberMap   = Object.fromEntries(numbers.map(n => [n.id, { phone: n.phone, name: n.name }]));
 
   const pendingCount = tab === 'pending' ? items.filter(i => (i.status || 'pending') === 'pending').length : null;
-  const failedItems = tab === 'pending' ? [] : items;
+  const failedItems  = tab === 'pending' ? [] : items;
 
   return (
     <PageLayout
@@ -172,7 +225,7 @@ export default function WaQueue() {
         </div>
       }
     >
-      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 4, marginBottom: 14, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 4, width: 'fit-content' }}>
           {TABS.map(t => (
@@ -249,12 +302,19 @@ export default function WaQueue() {
             </div>
           </div>
         ) : tab === 'pending' ? (
-          <div style={{ background: '#fff', border: '1px solid #dee2e6', borderRadius: 8, overflow: 'auto' }}>
+          <div style={{ background: '#fff', border: '1px solid #dee2e6', borderRadius: 8, overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr>
                   <th style={th}>Scheduled</th>
-                  <th style={th}>Phone</th>
+                  <th style={th}>Recipient</th>
+                  <th style={{ ...th, minWidth: 120 }}>
+                    Sender
+                    <span
+                      title="Actual WhatsApp number used for sending"
+                      style={{ marginLeft: 4, cursor: 'help', color: '#94a3b8', fontSize: 11, fontWeight: 400 }}
+                    >ⓘ</span>
+                  </th>
                   <th style={th}>Status</th>
                   <th style={th}>Campaign</th>
                   <th style={th}>Template</th>
@@ -271,6 +331,7 @@ export default function WaQueue() {
                     <tr key={item.id} style={{ background: isFailed ? '#fff9f9' : idx % 2 === 0 ? '#fff' : '#fafafa' }}>
                       <td style={{ ...td, whiteSpace: 'nowrap', fontSize: 12 }}>{formatTime(item.scheduled_at || item.created_at)}</td>
                       <td style={td}><span style={{ fontWeight: 600 }}>{item.customer_phone || '—'}</span></td>
+                      <td style={td}><SenderCell item={item} numberMap={numberMap} /></td>
                       <td style={td}><StatusBadge status={item.status || 'pending'} /></td>
                       <td style={{ ...td, fontSize: 12, color: '#475569' }}>
                         {item.campaign_id ? (campaignMap[item.campaign_id] || truncate(item.campaign_id, 12)) : <span style={{ color: '#9ca3af' }}>—</span>}
@@ -302,15 +363,21 @@ export default function WaQueue() {
           </div>
         ) : (
           /* Failed tab — uses log entries */
-          <div style={{ background: '#fff', border: '1px solid #dee2e6', borderRadius: 8, overflow: 'auto' }}>
+          <div style={{ background: '#fff', border: '1px solid #dee2e6', borderRadius: 8, overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr>
                   <th style={th}>Sent At</th>
-                  <th style={th}>Phone</th>
+                  <th style={th}>Recipient</th>
+                  <th style={{ ...th, minWidth: 120 }}>
+                    Sender
+                    <span
+                      title="Actual WhatsApp number used for sending"
+                      style={{ marginLeft: 4, cursor: 'help', color: '#94a3b8', fontSize: 11, fontWeight: 400 }}
+                    >ⓘ</span>
+                  </th>
                   <th style={th}>Message Preview</th>
                   <th style={th}>Campaign</th>
-                  <th style={th}>Number</th>
                 </tr>
               </thead>
               <tbody>
@@ -318,6 +385,7 @@ export default function WaQueue() {
                   <tr key={log.id || idx} style={{ background: '#fff9f9' }}>
                     <td style={{ ...td, whiteSpace: 'nowrap', fontSize: 12, color: '#6c757d' }}>{formatTime(log.sent_at)}</td>
                     <td style={td}><span style={{ fontWeight: 600 }}>{log.customer_phone || '—'}</span></td>
+                    <td style={td}><LogSenderCell log={log} numberMap={numberMap} /></td>
                     <td style={{ ...td, maxWidth: 280, color: '#374151' }}>
                       <span title={log.message_body || ''}>
                         {log.message_body ? truncate(log.message_body, 60) : <span style={{ color: '#9ca3af' }}>—</span>}
@@ -325,9 +393,6 @@ export default function WaQueue() {
                     </td>
                     <td style={{ ...td, fontSize: 12, color: '#475569' }}>
                       {log.campaign_id ? (campaignMap[log.campaign_id] || truncate(log.campaign_id, 12)) : <span style={{ color: '#9ca3af' }}>—</span>}
-                    </td>
-                    <td style={{ ...td, fontSize: 12, color: '#9ca3af', fontFamily: 'monospace' }}>
-                      {log.number_id ? truncate(log.number_id, 10) : '—'}
                     </td>
                   </tr>
                 ))}

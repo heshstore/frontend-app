@@ -36,10 +36,10 @@ const DISCONNECTED_HOLD_MS  = 90_000;
 
 function rawToMapped(waState) {
   if (['ready', 'authenticated', 'recovering', 'reconnecting'].includes(waState)) return 'CONNECTED';
-  if (['booting', 'initializing', 'authenticating'].includes(waState)) return 'CONNECTING';
-  if (waState === 'qr_ready') return 'QR_READY';
+  if (['initializing', 'authenticating'].includes(waState)) return 'CONNECTING';
+  if (['awaiting_scan', 'qr_ready'].includes(waState)) return 'QR_READY';
   if (['failed', 'auth_failure'].includes(waState)) return 'FAILED';
-  if (waState === 'disconnected') return 'DISCONNECTED';
+  if (['disconnected', 'disconnecting'].includes(waState)) return 'DISCONNECTED';
   return 'IDLE';
 }
 

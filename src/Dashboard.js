@@ -4,6 +4,7 @@ import { apiFetch } from './utils/api';
 import { getUserCapabilities } from './config/roleCapabilities';
 import KpiCard from './components/dashboard/KpiCard';
 import KpiGrid from './components/dashboard/KpiGrid';
+import { isNumberConnected } from './pages/marketing/utils/whatsappStatus';
 
 // ── Palette ──────────────────────────────────────────────────────────────────
 
@@ -358,19 +359,23 @@ function StatusPanel({ kpis, waNumbers, navigate }) {
     : kpis.whatsapp_status === 'NO_SESSION' ? 'warning'
     : 'error';
 
-  const activeNums  = waNumbers.filter(n => n.is_active);
-  const connectedNums = activeNums.filter(n => n.wa_state === 'ready');
+  const activeNums    = waNumbers.filter(n => n.is_active);
+  const connectedNums = activeNums.filter(n => isNumberConnected(n));
   const engStatus = activeNums.length === 0 ? 'unknown'
     : connectedNums.length === activeNums.length ? 'ok'
     : connectedNums.length > 0 ? 'warning'
     : 'error';
 
   // Sync runs daily at 2:30 AM IST; ok = verified within 26h, warning = 26-72h, error = stale > 3d
-  const shopifyStatus = !kpis || kpis.shopify_sync_minutes == null ? 'unknown'
+  // shopify_configured=false means env vars are missing on the server — show distinct warning
+  const shopifyNotConfigured = kpis && kpis.shopify_configured === false;
+  const shopifyStatus = shopifyNotConfigured ? 'warning'
+    : !kpis || kpis.shopify_sync_minutes == null ? 'unknown'
     : kpis.shopify_sync_minutes < 1560  ? 'ok'      // < 26 h
     : kpis.shopify_sync_minutes < 4320  ? 'warning'  // < 72 h
     : 'error';
-  const shopifyDetail = kpis?.shopify_sync_minutes != null
+  const shopifyDetail = shopifyNotConfigured ? 'not configured'
+    : kpis?.shopify_sync_minutes != null
     ? (shopifyStatus === 'ok'
         ? (kpis.shopify_sync_minutes < 60
             ? `verified ${kpis.shopify_sync_minutes}m ago`
@@ -385,7 +390,7 @@ function StatusPanel({ kpis, waNumbers, navigate }) {
       <StatusChip label="CRM WA" status={crmWaStatus} onClick={() => navigate('/whatsapp')} />
       {activeNums.length > 0 && (
         <StatusChip
-          label={`Engine ${connectedNums.length}/${activeNums.length}`}
+          label={`Connected ${connectedNums.length}/${activeNums.length}`}
           status={engStatus}
           onClick={() => navigate('/marketing/whatsapp-engine/numbers')}
         />

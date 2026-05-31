@@ -32,6 +32,9 @@ const BLANK = {
   template_name: '', message_body: '',
   message_type: 'text', cta_type: 'none',
   product_category: '', performance_weight: 1,
+  is_auto: false, template_mode: 'manual',
+  offer_enabled: false, offer_title: '', offer_text: '',
+  offer_start_date: '', offer_end_date: '',
 };
 
 function TemplateModal({ template, onClose, onSaved }) {
@@ -43,15 +46,37 @@ function TemplateModal({ template, onClose, onSaved }) {
     cta_type:          template.cta_type          ?? 'none',
     product_category:  template.product_category  ?? '',
     performance_weight: template.performance_weight ?? 1,
+    is_auto:           template.is_auto           ?? false,
+    template_mode:     template.template_mode     ?? 'manual',
+    offer_enabled:     template.offer_enabled     ?? false,
+    offer_title:       template.offer_title       ?? '',
+    offer_text:        template.offer_text        ?? '',
+    offer_start_date:  template.offer_start_date  ? template.offer_start_date.slice(0, 16) : '',
+    offer_end_date:    template.offer_end_date    ? template.offer_end_date.slice(0, 16) : '',
   } : BLANK);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
+  const isAiMode = form.template_mode === 'ai';
+
   const submit = async () => {
     if (!form.template_name.trim()) { setErr('Template name is required'); return; }
-    if (!form.message_body.trim()) { setErr('Message body is required'); return; }
+    if (!isAiMode && !form.message_body.trim()) { setErr('Message body is required'); return; }
+    if (isAiMode && form.offer_enabled && !form.offer_text.trim()) { setErr('Offer text is required when offer is enabled'); return; }
+    if (isAiMode && form.offer_start_date && form.offer_end_date && form.offer_start_date > form.offer_end_date) { setErr('Offer start date must be before end date'); return; }
+    const submitForm = { ...form };
+    if (isAiMode && !submitForm.message_body.trim()) submitForm.message_body = '[AI Generated]';
+    // Nullify offer fields when not applicable
+    if (!isAiMode || !submitForm.offer_enabled) {
+      submitForm.offer_title = null; submitForm.offer_text = null;
+      submitForm.offer_start_date = null; submitForm.offer_end_date = null;
+      if (!isAiMode) submitForm.offer_enabled = false;
+    } else {
+      if (!submitForm.offer_start_date) submitForm.offer_start_date = null;
+      if (!submitForm.offer_end_date) submitForm.offer_end_date = null;
+    }
     setBusy(true); setErr(null);
     try {
       const url = isEdit
@@ -60,7 +85,7 @@ function TemplateModal({ template, onClose, onSaved }) {
       const r = await apiFetch(url, {
         method: isEdit ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, performance_weight: parseFloat(form.performance_weight) || 1 }),
+        body: JSON.stringify({ ...submitForm, performance_weight: parseFloat(submitForm.performance_weight) || 1 }),
       });
       if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.message || `Error ${r.status}`); }
       onSaved();
@@ -86,17 +111,107 @@ function TemplateModal({ template, onClose, onSaved }) {
             {label('Template Name *')}
             <input style={inputStyle} value={form.template_name} onChange={e => set('template_name', e.target.value)} placeholder="e.g. AC Summer Offer" />
           </div>
+
+          {/* Mode selector */}
           <div>
-            {label('Message Body *')}
+            {label('Template Mode')}
+            <div style={{ display: 'flex', border: '1px solid #d1d5db', borderRadius: 6, overflow: 'hidden' }}>
+              {[['manual', 'Manual Template'], ['ai', 'AI Generated']].map(([val, lbl]) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => set('template_mode', val)}
+                  style={{
+                    flex: 1, padding: '7px 0', fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer',
+                    background: form.template_mode === val ? (val === 'ai' ? '#6366f1' : '#0d6efd') : '#f9fafb',
+                    color: form.template_mode === val ? '#fff' : '#6b7280',
+                    transition: 'background 0.15s',
+                  }}
+                >
+                  {lbl}
+                </button>
+              ))}
+            </div>
+            {isAiMode && (
+              <div style={{ fontSize: 11, color: '#6366f1', marginTop: 5, padding: '6px 10px', background: '#eef2ff', borderRadius: 6 }}>
+                AI picks a product from your catalog and generates a unique message per send using the 24h rotation window. Message body below is optional.
+              </div>
+            )}
+          </div>
+
+          <div>
+            {label(isAiMode ? 'Message Body (optional override)' : 'Message Body *')}
             <textarea
               style={{ ...inputStyle, height: 140, resize: 'vertical' }}
               value={form.message_body}
               onChange={e => set('message_body', e.target.value)}
-              placeholder="Hello {name}, we have a special offer…"
+              placeholder={isAiMode
+                ? 'Leave blank for fully AI-generated message, or enter base body with {{product.title}}, {{product.sku}}'
+                : form.is_auto
+                  ? 'Base body — AI will add greeting + CTA. Use {{product.title}}, {{product.sku}}, {{product.link}}'
+                  : 'Hello {{name}}, we have a special offer on {{product.title}}…'}
             />
-            <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>
-              Use {'{name}'}, {'{city}'} as placeholders
+            {!isAiMode && (
+              <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>
+                Flat: {'{name}'}, {'{city}'} &nbsp;·&nbsp; Product: {'{{product.title}}'}, {'{{product.sku}}'}, {'{{product.image}}'}, {'{{product.link}}'} &nbsp;·&nbsp; Sender: {'{{sender.phone}}'}
+              </div>
+            )}
+          </div>
+          {/* Offer section — AI mode only */}
+          {isAiMode && (
+            <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: form.offer_enabled ? 14 : 0 }}>
+                <input
+                  type="checkbox" id="offer_enabled"
+                  checked={!!form.offer_enabled}
+                  onChange={e => set('offer_enabled', e.target.checked)}
+                  style={{ width: 15, height: 15, cursor: 'pointer' }}
+                />
+                <label htmlFor="offer_enabled" style={{ fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#374151', userSelect: 'none' }}>
+                  Enable Offer
+                </label>
+                {form.offer_enabled && <span style={{ marginLeft: 'auto', fontSize: 11, background: '#fef9c3', color: '#854d0e', padding: '2px 8px', borderRadius: 10, fontWeight: 700 }}>OFFER ON</span>}
+              </div>
+              {form.offer_enabled && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div>
+                    {label('Offer Title (optional)')}
+                    <input style={inputStyle} value={form.offer_title} onChange={e => set('offer_title', e.target.value)} placeholder="e.g. Special Note" />
+                  </div>
+                  <div>
+                    {label('Offer Text *')}
+                    <input style={inputStyle} value={form.offer_text} onChange={e => set('offer_text', e.target.value)} placeholder="e.g. Available in bulk quantities this month." />
+                    <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 3 }}>One short sentence only. No pricing, no urgency language.</div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div>
+                      {label('Active From (optional)')}
+                      <input style={inputStyle} type="datetime-local" value={form.offer_start_date} onChange={e => set('offer_start_date', e.target.value)} />
+                    </div>
+                    <div>
+                      {label('Expires At (optional)')}
+                      <input style={inputStyle} type="datetime-local" value={form.offer_end_date} onChange={e => set('offer_end_date', e.target.value)} />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
+          )}
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+            <input
+              type="checkbox"
+              id="is_auto_toggle"
+              checked={!!form.is_auto}
+              onChange={e => set('is_auto', e.target.checked)}
+              style={{ width: 16, height: 16, cursor: 'pointer' }}
+            />
+            <label htmlFor="is_auto_toggle" style={{ cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#374151', userSelect: 'none' }}>
+              AUTO template — AI adds greeting &amp; CTA rotation on each send
+            </label>
+            {form.is_auto && (
+              <span style={{ marginLeft: 'auto', fontSize: 11, background: '#dbeafe', color: '#1d4ed8', padding: '2px 8px', borderRadius: 10, fontWeight: 700 }}>AUTO</span>
+            )}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
@@ -248,7 +363,11 @@ export default function WaTemplates() {
                   <tr key={t.id}>
                     <td style={td}>
                       <div style={{ fontWeight: 700, color: '#111827' }}>{t.template_name}</div>
-                      <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>ID {t.id}</div>
+                      <div style={{ display: 'flex', gap: 4, marginTop: 3 }}>
+                        {t.template_mode === 'ai' && <span style={{ fontSize: 10, background: '#eef2ff', color: '#4f46e5', padding: '1px 7px', borderRadius: 10, fontWeight: 700 }}>AI</span>}
+                        {t.is_auto && <span style={{ fontSize: 10, background: '#dbeafe', color: '#1d4ed8', padding: '1px 7px', borderRadius: 10, fontWeight: 700 }}>AUTO</span>}
+                        <span style={{ fontSize: 10, color: '#9ca3af' }}>ID {t.id.slice(0, 8)}</span>
+                      </div>
                     </td>
                     <td style={td}>
                       <span style={{ fontSize: 14 }}>{TYPE_ICONS[t.message_type] ?? '💬'}</span>{' '}

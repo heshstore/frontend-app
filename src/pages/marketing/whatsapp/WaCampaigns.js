@@ -38,6 +38,14 @@ const STATUS_META = {
   cancelled:  { bg: '#fee2e2', color: '#991b1b',  label: 'Cancelled' },
 };
 
+const PROMOTION_RULES_DISPLAY = [
+  { icon: '✓', label: 'Customer Database Audience' },
+  { icon: '✓', label: 'Auto Telecaller Rotation' },
+  { icon: '✓', label: '10AM–6PM Window' },
+  { icon: '✓', label: 'Random Delay Enabled (30–120s)' },
+  { icon: '✓', label: '7 Days Active' },
+];
+
 function StatusBadge({ status }) {
   const m = STATUS_META[status] || { bg: '#f3f4f6', color: '#6b7280', label: status };
   return (
@@ -91,33 +99,78 @@ function CampaignStatsPanel({ campaignId }) {
   );
 }
 
-function CreateModal({ templates, onClose, onCreated }) {
+function PromotionRulesPanel() {
+  return (
+    <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '12px 14px', marginTop: 10 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: '#15803d', letterSpacing: 0.4, marginBottom: 8, textTransform: 'uppercase' }}>
+        Promotion Rules (system-enforced)
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+        {PROMOTION_RULES_DISPLAY.map((r, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#166534' }}>
+            <span style={{ fontWeight: 700, color: '#16a34a', minWidth: 14 }}>{r.icon}</span>
+            <span>{r.label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Create Modal ──────────────────────────────────────────────────────────────
+
+function CreateModal({ templates, products, onClose, onCreated }) {
+  const [campaignType, setCampaignType] = useState('promotion'); // 'promotion' | 'broadcast'
   const [form, setForm] = useState({
-    campaign_name: '', daily_target: 50,
-    send_window_start: '09:00', send_window_end: '18:00',
-    random_delay_min: 30, random_delay_max: 120,
-    template_id: '', notes: '',
+    campaign_name: '',
+    template_id: '',
+    test_mode: false,
+    // broadcast-only fields (hidden for promotion)
+    daily_target: 50,
+    send_window_start: '09:00',
+    send_window_end: '18:00',
+    random_delay_min: 30,
+    random_delay_max: 120,
+    product_id: '',
+    notes: '',
   });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const isPromotion = campaignType === 'promotion';
 
   const submit = async () => {
     if (!form.campaign_name.trim()) { setErr('Campaign name is required'); return; }
     setBusy(true); setErr(null);
     try {
+      const body = isPromotion
+        ? {
+            campaign_name: form.campaign_name.trim(),
+            campaign_type: 'promotion',
+            is_promotion:  true,
+            test_mode:     form.test_mode,
+            template_id:   form.template_id || null,
+          }
+        : {
+            campaign_name:     form.campaign_name.trim(),
+            campaign_type:     'broadcast',
+            is_promotion:      false,
+            test_mode:         false,
+            daily_target:      parseInt(form.daily_target, 10) || 50,
+            send_window_start: form.send_window_start,
+            send_window_end:   form.send_window_end,
+            random_delay_min:  parseInt(form.random_delay_min, 10) || 30,
+            random_delay_max:  parseInt(form.random_delay_max, 10) || 120,
+            template_id:       form.template_id || null,
+            product_id:        form.product_id ? parseInt(form.product_id, 10) : null,
+            notes:             form.notes || null,
+          };
+
       const r = await apiFetch('/marketing/whatsapp-engine/campaigns', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...form,
-          daily_target: parseInt(form.daily_target, 10) || 50,
-          random_delay_min: parseInt(form.random_delay_min, 10) || 30,
-          random_delay_max: parseInt(form.random_delay_max, 10) || 120,
-          // FIX: template_id is UUID — pass as string, not parseInt
-          template_id: form.template_id || null,
-        }),
+        body: JSON.stringify(body),
       });
       if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.message || `Error ${r.status}`); }
       onCreated();
@@ -138,21 +191,49 @@ function CreateModal({ templates, onClose, onCreated }) {
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#6b7280' }}>✕</button>
         </div>
 
+        {/* Campaign type selector */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 20 }}>
+          {[
+            { value: 'promotion', label: 'Promotion', desc: 'Fixed rules, safe defaults' },
+            { value: 'broadcast', label: 'Broadcast', desc: 'Full manual configuration' },
+          ].map(({ value, label, desc }) => (
+            <button
+              key={value}
+              onClick={() => setCampaignType(value)}
+              style={{
+                border: `2px solid ${campaignType === value ? '#0d6efd' : '#e5e7eb'}`,
+                borderRadius: 8, padding: '10px 12px', textAlign: 'left',
+                background: campaignType === value ? '#eff6ff' : '#fafafa',
+                cursor: 'pointer',
+              }}
+            >
+              <div style={{ fontWeight: 700, fontSize: 13, color: campaignType === value ? '#1d4ed8' : '#374151', marginBottom: 2 }}>
+                {label}
+                {value === 'promotion' && (
+                  <span style={{ marginLeft: 6, background: '#dcfce7', color: '#166534', fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 10 }}>
+                    RECOMMENDED
+                  </span>
+                )}
+              </div>
+              <div style={{ fontSize: 11, color: '#6b7280' }}>{desc}</div>
+            </button>
+          ))}
+        </div>
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* Campaign Name — always shown */}
           <div>
             {lbl('Campaign Name *')}
-            <input style={inputStyle} value={form.campaign_name} onChange={e => set('campaign_name', e.target.value)} placeholder="e.g. May AC Campaign" />
+            <input style={inputStyle} value={form.campaign_name} onChange={e => set('campaign_name', e.target.value)} placeholder="e.g. May AC Promotion" />
           </div>
+
+          {/* Template — always shown */}
           <div>
             {lbl('Template')}
-            <select
-              style={inputStyle}
-              value={form.template_id}
-              onChange={e => set('template_id', e.target.value)}
-            >
-              <option value="">— No template (use default) —</option>
+            <select style={inputStyle} value={form.template_id} onChange={e => set('template_id', e.target.value)}>
+              <option value="">— No template (set before launching) —</option>
               {templates.filter(t => t.is_active !== false).map(t => (
-                <option key={t.id} value={t.id}>{t.template_name}</option>
+                <option key={t.id} value={t.id}>{t.template_name}{t.is_auto ? ' [AUTO]' : ''}</option>
               ))}
               {templates.filter(t => t.is_active === false).length > 0 && (
                 <>
@@ -164,34 +245,100 @@ function CreateModal({ templates, onClose, onCreated }) {
               )}
             </select>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div>
-              {lbl('Daily Target')}
-              <input style={inputStyle} type="number" min={1} value={form.daily_target} onChange={e => set('daily_target', e.target.value)} />
-            </div>
-            <div>
-              {lbl('Send Window')}
-              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                <input style={{ ...inputStyle, width: 'auto' }} type="time" value={form.send_window_start} onChange={e => set('send_window_start', e.target.value)} />
-                <span style={{ color: '#9ca3af', fontSize: 12 }}>–</span>
-                <input style={{ ...inputStyle, width: 'auto' }} type="time" value={form.send_window_end} onChange={e => set('send_window_end', e.target.value)} />
+
+          {/* PROMOTION: show locked rules + test mode toggle */}
+          {isPromotion && (
+            <>
+              <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '12px 14px' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#15803d', letterSpacing: 0.4, marginBottom: 8, textTransform: 'uppercase' }}>
+                  Promotion Rules (auto-applied)
+                </div>
+                {PROMOTION_RULES_DISPLAY.map((r, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#166534', marginBottom: 4 }}>
+                    <span style={{ fontWeight: 700, color: '#16a34a', minWidth: 14 }}>{r.icon}</span>
+                    <span>{r.label}</span>
+                  </div>
+                ))}
               </div>
-            </div>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div>
-              {lbl('Min Delay (sec)')}
-              <input style={inputStyle} type="number" min={5} value={form.random_delay_min} onChange={e => set('random_delay_min', e.target.value)} />
-            </div>
-            <div>
-              {lbl('Max Delay (sec)')}
-              <input style={inputStyle} type="number" min={5} value={form.random_delay_max} onChange={e => set('random_delay_max', e.target.value)} />
-            </div>
-          </div>
-          <div>
-            {lbl('Notes')}
-            <textarea style={{ ...inputStyle, height: 60, resize: 'vertical' }} value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Internal notes…" />
-          </div>
+
+              {/* Test mode toggle */}
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', padding: '10px 12px', borderRadius: 8, background: form.test_mode ? '#fffbeb' : '#fafafa', border: `1px solid ${form.test_mode ? '#fcd34d' : '#e5e7eb'}` }}>
+                <input
+                  type="checkbox"
+                  checked={form.test_mode}
+                  onChange={e => set('test_mode', e.target.checked)}
+                  style={{ marginTop: 2, width: 16, height: 16, flexShrink: 0 }}
+                />
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: form.test_mode ? '#92400e' : '#374151' }}>
+                    TEST MODE
+                    {form.test_mode && (
+                      <span style={{ marginLeft: 8, background: '#fef3c7', color: '#92400e', fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 10 }}>
+                        ACTIVE
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>
+                    Sends to 6 test contacts only. Bypasses customer database.
+                  </div>
+                  {form.test_mode && (
+                    <div style={{ fontSize: 11, color: '#92400e', marginTop: 4, fontFamily: 'monospace' }}>
+                      +919884052555 · +919940172777 · +918939052555<br />
+                      +919952985052 · +919940190294 · +917010366206
+                    </div>
+                  )}
+                </div>
+              </label>
+            </>
+          )}
+
+          {/* BROADCAST: show all configuration fields */}
+          {!isPromotion && (
+            <>
+              <div>
+                {lbl('Product (optional)')}
+                <select style={inputStyle} value={form.product_id} onChange={e => set('product_id', e.target.value)}>
+                  <option value="">— No specific product —</option>
+                  {(products || []).map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.itemName || p.sku} {p.sku ? `· ${p.sku}` : ''}
+                    </option>
+                  ))}
+                </select>
+                <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>
+                  Injects {'{{product.title}}'}, {'{{product.sku}}'}, {'{{product.image}}'} into messages
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  {lbl('Daily Target')}
+                  <input style={inputStyle} type="number" min={1} value={form.daily_target} onChange={e => set('daily_target', e.target.value)} />
+                </div>
+                <div>
+                  {lbl('Send Window')}
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <input style={{ ...inputStyle, width: 'auto' }} type="time" value={form.send_window_start} onChange={e => set('send_window_start', e.target.value)} />
+                    <span style={{ color: '#9ca3af', fontSize: 12 }}>–</span>
+                    <input style={{ ...inputStyle, width: 'auto' }} type="time" value={form.send_window_end} onChange={e => set('send_window_end', e.target.value)} />
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  {lbl('Min Delay (sec)')}
+                  <input style={inputStyle} type="number" min={5} value={form.random_delay_min} onChange={e => set('random_delay_min', e.target.value)} />
+                </div>
+                <div>
+                  {lbl('Max Delay (sec)')}
+                  <input style={inputStyle} type="number" min={5} value={form.random_delay_max} onChange={e => set('random_delay_max', e.target.value)} />
+                </div>
+              </div>
+              <div>
+                {lbl('Notes')}
+                <textarea style={{ ...inputStyle, height: 60, resize: 'vertical' }} value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Internal notes…" />
+              </div>
+            </>
+          )}
         </div>
 
         {err && <div style={{ marginTop: 12, fontSize: 12, color: '#dc3545', background: '#fff5f5', borderRadius: 6, padding: '8px 12px' }}>{err}</div>}
@@ -209,30 +356,46 @@ function CreateModal({ templates, onClose, onCreated }) {
 
 // ── Pre-flight checklist modal ────────────────────────────────────────────────
 
-const PREFLIGHT_ITEMS = [
-  { id: 'audience',  label: 'Audience is segmented correctly — no test contacts mixed in with live audience' },
-  { id: 'template',  label: 'Template has been reviewed — message is correct, no placeholder text' },
-  { id: 'window',    label: 'Send window is set (09:00–18:00 or similar) — not sending late night' },
-  { id: 'volume',    label: 'Expected send volume is within daily limit of the number(s) in use' },
-  { id: 'numbers',   label: 'WA number(s) are connected and showing CONNECTED status in Numbers page' },
+const PREFLIGHT_BROADCAST = [
+  { id: 'audience',   label: 'Audience is segmented correctly — no test contacts mixed in with live audience' },
+  { id: 'template',   label: 'Template has been reviewed — message is correct, no placeholder text' },
+  { id: 'window',     label: 'Send window is set (09:00–18:00 or similar) — not sending late night' },
+  { id: 'volume',     label: 'Expected send volume is within daily limit of the number(s) in use' },
+  { id: 'numbers',    label: 'WA number(s) are connected and showing CONNECTED status in Numbers page' },
   { id: 'governance', label: 'Engine governance check passed — stability report shows no active issues' },
+];
+
+const PREFLIGHT_PROMOTION = [
+  { id: 'template',   label: 'Template has been reviewed — message is correct, no placeholder text' },
+  { id: 'numbers',    label: 'WA number(s) are connected and showing CONNECTED status in Numbers page' },
+  { id: 'governance', label: 'Engine governance check passed — stability report shows no active issues' },
+  { id: 'testmode',   label: 'Test mode setting is correct — disabled for live sends, enabled for test only' },
 ];
 
 function PreflightModal({ campaign, templateName, onConfirm, onClose, busy }) {
   const [checked, setChecked] = useState({});
-  const allPassed = PREFLIGHT_ITEMS.every(i => checked[i.id]);
+  const items = campaign.is_promotion ? PREFLIGHT_PROMOTION : PREFLIGHT_BROADCAST;
+  const allPassed = items.every(i => checked[i.id]);
   const toggle = (id) => setChecked(p => ({ ...p, [id]: !p[id] }));
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
       <div style={{ background: '#fff', borderRadius: 12, padding: 28, maxWidth: 520, width: '92%', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
         <div style={{ fontWeight: 700, fontSize: 16, color: '#111827', marginBottom: 4 }}>Pre-flight Checklist</div>
-        <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 16 }}>
+        <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 4 }}>
           Launching <strong>{campaign.campaign_name}</strong>
           {templateName && <> · template <strong>{templateName}</strong></>}
         </div>
+        {campaign.is_promotion && (
+          <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+            <span style={{ background: '#eff6ff', color: '#1d4ed8', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10 }}>PROMOTION</span>
+            {campaign.test_mode && (
+              <span style={{ background: '#fef3c7', color: '#92400e', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10 }}>TEST MODE</span>
+            )}
+          </div>
+        )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 18 }}>
-          {PREFLIGHT_ITEMS.map(item => (
+          {items.map(item => (
             <label key={item.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', padding: '8px 10px', borderRadius: 6, background: checked[item.id] ? '#f0fdf4' : '#fafafa', border: `1px solid ${checked[item.id] ? '#bbf7d0' : '#e5e7eb'}` }}>
               <input
                 type="checkbox"
@@ -247,7 +410,7 @@ function PreflightModal({ campaign, templateName, onConfirm, onClose, busy }) {
           ))}
         </div>
         <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 16 }}>
-          {PREFLIGHT_ITEMS.filter(i => checked[i.id]).length} / {PREFLIGHT_ITEMS.length} items confirmed
+          {items.filter(i => checked[i.id]).length} / {items.length} items confirmed
         </div>
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
           <button onClick={onClose} disabled={busy} style={{ padding: '10px 16px', background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
@@ -263,7 +426,7 @@ function PreflightModal({ campaign, templateName, onConfirm, onClose, busy }) {
               color: allPassed ? '#fff' : '#9ca3af',
             }}
           >
-            {busy ? 'Launching…' : allPassed ? '✓ Launch Campaign' : `Confirm all ${PREFLIGHT_ITEMS.length} items first`}
+            {busy ? 'Launching…' : allPassed ? '✓ Launch Campaign' : `Confirm all ${items.length} items first`}
           </button>
         </div>
       </div>
@@ -271,17 +434,20 @@ function PreflightModal({ campaign, templateName, onConfirm, onClose, busy }) {
   );
 }
 
+// ── Main page ─────────────────────────────────────────────────────────────────
+
 export default function WaCampaigns() {
   const navigate = useNavigate();
   const [campaigns, setCampaigns] = useState([]);
   const [templates, setTemplates] = useState([]);
+  const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [feedback, setFeedback] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
-  const [preflightCampaign, setPreflightCampaign] = useState(null); // campaign pending launch
+  const [preflightCampaign, setPreflightCampaign] = useState(null);
 
   const flash = (msg, isError = false) => {
     setFeedback({ msg, isError });
@@ -291,14 +457,17 @@ export default function WaCampaigns() {
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const [cr, tr] = await Promise.all([
+      const [cr, tr, pr] = await Promise.all([
         apiFetch('/marketing/whatsapp-engine/campaigns'),
         apiFetch('/marketing/whatsapp-engine/templates'),
+        apiFetch('/shopify-catalog?limit=500'),
       ]);
       if (!cr.ok) throw new Error(`Server error ${cr.status}`);
-      const [cd, td] = await Promise.all([cr.json(), tr.ok ? tr.json() : []]);
+      const [cd, td, pd] = await Promise.all([cr.json(), tr.ok ? tr.json() : [], pr.ok ? pr.json() : []]);
       setCampaigns(Array.isArray(cd) ? cd : (cd.campaigns ?? []));
       setTemplates(Array.isArray(td) ? td : []);
+      const catalogItems = Array.isArray(pd) ? pd : (pd.items ?? []);
+      setProducts(catalogItems.filter(p => !p.syncIgnored));
     } catch (e) {
       setError(e.message);
     } finally {
@@ -324,7 +493,6 @@ export default function WaCampaigns() {
     }
   };
 
-  // Map template UUID → name for display
   const templateMap = Object.fromEntries(templates.map(t => [t.id, t.template_name]));
 
   const actionButtons = (c) => {
@@ -333,7 +501,12 @@ export default function WaCampaigns() {
       case 'draft':
       case 'scheduled':
         return (
-          <button style={btn('#198754', '#fff', busy || !c.template_id)} disabled={busy || !c.template_id} onClick={() => setPreflightCampaign(c)} title={!c.template_id ? 'Set a template first' : 'Launch campaign'}>
+          <button
+            style={btn('#198754', '#fff', busy || !c.template_id)}
+            disabled={busy || !c.template_id}
+            onClick={() => setPreflightCampaign(c)}
+            title={!c.template_id ? 'Set a template first' : 'Launch campaign'}
+          >
             Launch
           </button>
         );
@@ -371,6 +544,7 @@ export default function WaCampaigns() {
       {showCreate && (
         <CreateModal
           templates={templates}
+          products={products}
           onClose={() => setShowCreate(false)}
           onCreated={() => { setShowCreate(false); load(); flash('Campaign created'); }}
         />
@@ -424,7 +598,7 @@ export default function WaCampaigns() {
                   <th style={th}>Campaign</th>
                   <th style={th}>Status</th>
                   <th style={th}>Template</th>
-                  <th style={th}>Daily Target</th>
+                  <th style={th}>Type / Target</th>
                   <th style={th}>Send Window</th>
                   <th style={th}>Notes</th>
                   <th style={th}>Actions</th>
@@ -435,7 +609,14 @@ export default function WaCampaigns() {
                   <React.Fragment key={c.id}>
                     <tr style={{ background: expandedId === c.id ? '#f8fafc' : '#fff' }}>
                       <td style={td}>
-                        <div style={{ fontWeight: 700, color: '#111827' }}>{c.campaign_name}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <span style={{ fontWeight: 700, color: '#111827' }}>{c.campaign_name}</span>
+                          {c.test_mode && (
+                            <span style={{ background: '#fef3c7', color: '#92400e', fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 10, whiteSpace: 'nowrap' }}>
+                              TEST MODE
+                            </span>
+                          )}
+                        </div>
                         <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{new Date(c.created_at).toLocaleDateString('en-IN')}</div>
                       </td>
                       <td style={td}><StatusBadge status={c.status} /></td>
@@ -446,9 +627,22 @@ export default function WaCampaigns() {
                             </span>
                           : <span style={{ color: '#9ca3af', fontSize: 12 }}>No template set</span>}
                       </td>
-                      <td style={td}><span style={{ fontWeight: 700, color: '#0d6efd' }}>{c.daily_target ?? '—'}</span></td>
+                      <td style={td}>
+                        {c.is_promotion
+                          ? (
+                            <span style={{ background: '#dcfce7', color: '#166534', fontSize: 11, fontWeight: 700, padding: '2px 9px', borderRadius: 12 }}>
+                              PROMOTION
+                            </span>
+                          ) : (
+                            <span style={{ fontWeight: 700, color: '#0d6efd' }}>{c.daily_target ?? '—'}/day</span>
+                          )
+                        }
+                      </td>
                       <td style={{ ...td, fontSize: 12, color: '#475569', whiteSpace: 'nowrap' }}>
-                        {c.send_window_start && c.send_window_end ? `${c.send_window_start} – ${c.send_window_end}` : '—'}
+                        {c.is_promotion
+                          ? <span style={{ color: '#6b7280', fontSize: 12 }}>10:00 – 18:00</span>
+                          : (c.send_window_start && c.send_window_end ? `${c.send_window_start} – ${c.send_window_end}` : '—')
+                        }
                       </td>
                       <td style={{ ...td, fontSize: 12, color: '#6b7280', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {c.notes || '—'}
@@ -468,6 +662,7 @@ export default function WaCampaigns() {
                     {expandedId === c.id && (
                       <tr>
                         <td colSpan={7} style={{ padding: '0 14px 14px', background: '#f8fafc' }}>
+                          {c.is_promotion && <PromotionRulesPanel />}
                           <CampaignStatsPanel campaignId={c.id} />
                         </td>
                       </tr>

@@ -1,28 +1,8 @@
-import { useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { useNotifications } from '../context/NotificationContext';
-import { connectSocket, disconnectSocket } from '../lib/socket';
-
+// Socket connection and notification fetching are fully managed by NotificationContext.
+// This component was previously creating a second independent socket via lib/socket.js
+// while NotificationContext already created its own — causing duplicate connections.
+// All functionality (fetchNotifications, fetchUnreadCount, notification.new handler) is
+// handled inside NotificationProvider; this component is kept as a no-op mount point.
 export default function GlobalNotifications() {
-  const { currentUser } = useAuth();
-  const { addNotification, fetchNotifications, fetchUnreadCount } = useNotifications();
-
-  useEffect(() => {
-    if (!currentUser?.id) return;
-
-    fetchNotifications();
-    fetchUnreadCount();
-
-    const socket = connectSocket(currentUser.id);
-
-    // Guard against duplicate bindings if effect fires more than once
-    socket.off('notification.new');
-    socket.on('notification.new', addNotification);
-
-    return () => {
-      disconnectSocket();
-    };
-  }, [currentUser?.id, addNotification, fetchNotifications, fetchUnreadCount]);
-
   return null;
 }

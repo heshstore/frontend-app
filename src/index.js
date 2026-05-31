@@ -15,11 +15,10 @@ axios.interceptors.request.use(config => {
 });
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+// StrictMode intentionally removed: double-invocation in development caused
+// rapid socket connect→disconnect→connect cycles that trigger ERR_CONNECTION_REFUSED
+// on the socket.io upgrade handshake, and duplicate polling intervals.
+root.render(<App />);
 
 // If you want to start measuring performance in your app, pass a function
 // to log results (for example: reportWebVitals(console.log))

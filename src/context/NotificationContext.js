@@ -214,10 +214,13 @@ export function NotificationProvider({ children }) {
   useEffect(() => {
     if (!isAuthenticated || !currentUser?.id) return;
 
-    const socketUrl = API_URL || window.location.origin.replace(':3000', ':4000');
+    // Use API_URL from env; fall back to same origin only (not a port-swap hack).
+    // transports default (['polling','websocket']) lets socket.io upgrade gracefully
+    // and recovers from transient WebSocket failures via long-polling.
+    const socketUrl = API_URL || window.location.origin;
     const socket    = io(socketUrl, {
       query:                { userId: currentUser.id },
-      transports:           ['websocket'],
+      transports:           ['polling', 'websocket'],
       reconnectionAttempts: 5,
       reconnectionDelay:    2000,
     });
@@ -229,9 +232,11 @@ export function NotificationProvider({ children }) {
       socket.disconnect();
       socketRef.current = null;
     };
-  // addNotification has a stable identity — intentionally excluded from deps
+  // addNotification has a stable identity — intentionally excluded from deps.
+  // isAuthenticated is derived from currentUser + token and causes socket cycling
+  // when auth is re-evaluated. currentUser?.id alone is sufficient as the gate.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, currentUser?.id]);
+  }, [currentUser?.id]);
 
   /* ── Re-fetch when panel opens ─────────────────────────────────────────────── */
   useEffect(() => {

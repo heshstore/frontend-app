@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PageLayout from '../../components/layout/PageLayout';
 import { apiFetch } from '../../utils/api';
+import { isNumberConnected } from '../marketing/utils/whatsappStatus';
 
 const fmt    = (n) => Number(n || 0).toLocaleString('en-IN');
 const rupee  = (n) => '₹' + Number(n || 0).toLocaleString('en-IN');
@@ -126,10 +127,10 @@ function CampRow({ c, navigate }) {
 // ── WA Number row ─────────────────────────────────────────────────────────────
 
 function WaNumRow({ n }) {
-  const ok = n.status === 'CONNECTED';
+  const ok = isNumberConnected(n);
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderBottom: '1px solid #f1f5f9', fontSize: 13 }}>
-      <span style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: ok ? '#16a34a' : '#dc2626' }} />
+      <span style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: ok ? '#16a34a' : '#9ca3af' }} />
       <div style={{ flex: 1, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {n.name || n.phone}
       </div>
@@ -139,11 +140,9 @@ function WaNumRow({ n }) {
           Risk {n.risk_score}
         </span>
       )}
-      {!ok && n.is_active && (
-        <span style={{ fontSize: 11, background: '#fef9c3', color: '#854d0e', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }}>
-          {n.status || 'OFFLINE'}
-        </span>
-      )}
+      <span style={{ fontSize: 11, background: ok ? '#dcfce7' : '#f3f4f6', color: ok ? '#166534' : '#6b7280', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }}>
+        {ok ? 'Connected' : 'Not Connected'}
+      </span>
     </div>
   );
 }
@@ -289,8 +288,8 @@ export default function DailyOps() {
   const completedCamps    = data.campaigns.filter(c => c.status === 'completed');
   const activeCamps       = data.campaigns.filter(c => ['running', 'paused'].includes(c.status));
 
-  const waConnected       = data.numbers.filter(n => n.status === 'CONNECTED');
-  const waIssues          = data.numbers.filter(n => n.is_active && n.status !== 'CONNECTED');
+  const waConnected       = data.numbers.filter(n => isNumberConnected(n));
+  const waNotConnected    = data.numbers.filter(n => n.is_active && !isNumberConnected(n));
 
   // ── Priority strip ────────────────────────────────────────────────────────
 
@@ -299,7 +298,7 @@ export default function DailyOps() {
     overdueRecCount  > 0 && { count: overdueRecCount,  label: 'overdue collections', urgency: 'warning',  to: '/finance' },
     pausedCamps.length > 0 && { count: pausedCamps.length, label: 'paused campaigns', urgency: 'info',    to: '/marketing/whatsapp-engine/campaigns' },
     readyDispatch    > 0 && { count: readyDispatch,    label: 'pending dispatch',    urgency: 'dispatch', to: '/dispatch' },
-    waIssues.length  > 0 && { count: waIssues.length,  label: 'WA number issues',   urgency: 'purple',   to: '/marketing/whatsapp-engine/numbers' },
+    waNotConnected.length > 0 && { count: waNotConnected.length, label: 'WA not connected', urgency: 'purple', to: '/marketing/whatsapp-engine/numbers' },
   ].filter(Boolean);
 
   return (
@@ -482,16 +481,16 @@ export default function DailyOps() {
             title="WhatsApp Numbers" icon="📱"
             actionLabel="Manage" actionPath="/marketing/whatsapp-engine/numbers"
             navigate={navigate}
-            highlight={waIssues.length > 0}
+            highlight={waNotConnected.length > 0}
           >
             {data.numbers.length === 0 ? (
               <div style={{ fontSize: 13, color: '#9ca3af' }}>No WA numbers configured</div>
             ) : (
               <>
                 <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-                  <StatTile value={waConnected.length}  label="Connected"  color="#166534" bg="#f0fdf4" />
-                  <StatTile value={waIssues.length}     label="Issues"     urgent={waIssues.length > 0} />
-                  <StatTile value={data.numbers.length} label="Total"      color="#6b7280" />
+                  <StatTile value={waConnected.length}    label="Connected"     color="#166634" bg="#f0fdf4" />
+                  <StatTile value={waNotConnected.length} label="Not Connected" urgent={waNotConnected.length > 0} />
+                  <StatTile value={data.numbers.length}   label="Total"         color="#6b7280" />
                 </div>
                 {data.numbers.slice(0, 5).map(n => <WaNumRow key={n.id} n={n} />)}
               </>

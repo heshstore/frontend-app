@@ -72,8 +72,38 @@ function StatusPill({ ok, label }) {
         fontWeight: 600,
       }}
     >
-      <span style={{ fontSize: 7, lineHeight: 1 }}>{ok ? '●' : '●'}</span>
+      <span style={{ fontSize: 7, lineHeight: 1 }}>●</span>
       {label}
+    </span>
+  );
+}
+
+const WA_STATE_CHIP_DASH = {
+  ready:          { bg: '#dcfce7', color: '#166534',  label: 'Connected' },
+  awaiting_scan:  { bg: '#fef9c3', color: '#854d0e',  label: 'Scan Required' },
+  authenticating: { bg: '#ede9fe', color: '#6d28d9',  label: 'Authenticating' },
+  initializing:   { bg: '#dbeafe', color: '#1d4ed8',  label: 'Initializing' },
+  failed:         { bg: '#fee2e2', color: '#991b1b',  label: 'Failed' },
+  disconnecting:  { bg: '#f3f4f6', color: '#374151',  label: 'Disconnecting' },
+  idle:           { bg: '#f3f4f6', color: '#6b7280',  label: 'Idle' },
+};
+
+function WaStateCountChip({ stateKey, count }) {
+  const cfg = WA_STATE_CHIP_DASH[stateKey] || WA_STATE_CHIP_DASH.idle;
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 5,
+      background: cfg.bg, color: cfg.color,
+      borderRadius: 20, padding: '4px 12px',
+      fontSize: 12, fontWeight: 700,
+    }}>
+      {cfg.label}
+      <span style={{
+        background: 'rgba(0,0,0,0.12)', borderRadius: 10,
+        padding: '0 6px', fontSize: 11,
+      }}>
+        {count}
+      </span>
     </span>
   );
 }
@@ -224,6 +254,28 @@ export default function WaEngineDashboard() {
                   {a.phone} — risk {a.risk_score}
                 </span>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* WA Number State Summary */}
+        {health?.wa_state_breakdown && (
+          <div style={{
+            background: '#fff',
+            border: '1px solid #e2e8f0',
+            borderRadius: 8,
+            padding: '12px 16px',
+            marginBottom: 16,
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>
+              Number States (live)
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {['ready', 'authenticating', 'awaiting_scan', 'initializing', 'failed', 'disconnecting', 'idle'].map((k) => {
+                const count = health.wa_state_breakdown[k] ?? 0;
+                if (count === 0 && !['ready', 'failed'].includes(k)) return null;
+                return <WaStateCountChip key={k} stateKey={k} count={count} />;
+              })}
             </div>
           </div>
         )}

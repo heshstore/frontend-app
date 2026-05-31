@@ -101,7 +101,6 @@ function BulkImportModal({ onClose, onImported }) {
     });
     setBusy(true); setErr(null);
     try {
-      // FIX: correct endpoint is POST /audience/bulk with body { rows: [...] }
       const r = await apiFetch('/marketing/whatsapp-engine/audience/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -241,7 +240,6 @@ export default function WaAudience() {
     if (!window.confirm(`Opt out ${phone}? They will no longer receive messages.`)) return;
     setBusyId(id + ':optout');
     try {
-      // FIX: correct endpoint is PATCH /audience/:id/optout
       const r = await apiFetch(`/marketing/whatsapp-engine/audience/${id}/optout`, { method: 'PATCH' });
       if (!r.ok) throw new Error(`Error ${r.status}`);
       flash(`${phone} opted out`);

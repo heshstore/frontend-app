@@ -916,6 +916,15 @@ export default function ShopifyItems() {
         return;
       }
 
+      // Backend returned 200 but sync was rejected (not configured, already running, etc.)
+      if (body.started === false && body.reason && body.reason.toLowerCase().includes('not configured')) {
+        stopPolling();
+        const msg = body.reason;
+        setSyncResult({ fetched: 0, rawVariants: 0, variants: 0, inserted: 0, changed: 0, verified: 0, skipped: 0, skippedSyncIgnored: 0, skippedMissingSku: 0, skippedMissingPrice: 0, skippedInactive: 0, skippedInvalid: 0, skippedDuplicateSku: 0, errors: 1, reconciled: false, durationMs: 0, error: msg });
+        toast.error(msg);
+        return;
+      }
+
       if (body.started === false) {
         // Sync was already running — attach to it
         toast.info("Sync already running — tracking progress");
