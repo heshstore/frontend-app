@@ -61,14 +61,15 @@ function formatDuration(ms) {
 // ── WA exact-state chip ────────────────────────────────────────────────────────
 
 const WA_STATE_CHIP = {
-  idle:             { bg: '#f3f4f6', color: '#6b7280',  label: 'Idle' },
-  initializing:     { bg: '#dbeafe', color: '#1d4ed8',  label: 'Initializing' },
-  awaiting_scan:    { bg: '#fef9c3', color: '#854d0e',  label: 'Scan Required' },
-  authenticating:   { bg: '#ede9fe', color: '#6d28d9',  label: 'Authenticating' },
-  ready:            { bg: '#dcfce7', color: '#166534',  label: 'Connected' },
-  receive_pending:  { bg: '#fef3c7', color: '#b45309',  label: 'Receive Pending' },
-  failed:           { bg: '#fee2e2', color: '#991b1b',  label: 'Failed' },
-  disconnecting:    { bg: '#f3f4f6', color: '#374151',  label: 'Disconnecting' },
+  idle:                      { bg: '#f3f4f6', color: '#6b7280',  label: 'Idle' },
+  initializing:              { bg: '#dbeafe', color: '#1d4ed8',  label: 'Initializing' },
+  awaiting_scan:             { bg: '#fef9c3', color: '#854d0e',  label: 'Scan Required' },
+  authenticating:            { bg: '#ede9fe', color: '#6d28d9',  label: 'Authenticating' },
+  ready:                     { bg: '#dcfce7', color: '#166534',  label: 'Connected' },
+  receive_pending:           { bg: '#fef3c7', color: '#b45309',  label: 'Receive Pending' },
+  failed:                    { bg: '#fee2e2', color: '#991b1b',  label: 'Failed' },
+  disconnecting:             { bg: '#f3f4f6', color: '#374151',  label: 'Disconnecting' },
+  awaiting_manual_reconnect: { bg: '#fff7ed', color: '#c2410c',  label: 'Reconnect Required' },
 };
 
 // Phase 3: when awaiting_scan + qr exists, show RESTORE FAILED / QR READY instead of "Scan Required"
@@ -133,6 +134,7 @@ function stripRuntimeState(num) {
     bridgeReady:        false,
     sendCapable:        false,
     fullyOperational:   false,
+    isManualConnect:    false,
   };
 }
 
@@ -205,10 +207,14 @@ function QrModal({ numberId, numberPhone, onClose }) {
       console.log('[UI_QR_RECEIVED]', { numberId, hasQr: !!qrRes?.qr, qrLength: qrRes?.qr?.length ?? 0, active: qrRes?.active, waState: statusRes?.waState });
       setQrData(qrRes);
       setWaStatus(statusRes);
-      const sessionReady = statusRes?.effectiveState === 'ready' || statusRes?.waState === 'ready';
+      const sessionReady    = statusRes?.effectiveState === 'ready' || statusRes?.waState === 'ready';
+      const manualRequired  = statusRes?.waState === 'awaiting_manual_reconnect';
       if (sessionReady) {
         clearInterval(pollRef.current);
         setTimeout(onClose, 1_500);
+      } else if (manualRequired) {
+        // QR expired or restore failed — stop polling, show reconnect prompt.
+        clearInterval(pollRef.current);
       }
     } catch { /* poll silently */ }
   }, [numberId, onClose]);
@@ -291,6 +297,15 @@ function QrModal({ numberId, numberPhone, onClose }) {
             <div style={{ fontSize: 32, marginBottom: 10 }}>⏳</div>
             <div style={{ fontWeight: 600 }}>Starting WhatsApp…</div>
             <div style={{ fontSize: 12, marginTop: 4 }}>QR will appear shortly</div>
+          </div>
+        ) : waStatus?.waState === 'awaiting_manual_reconnect' ? (
+          <div style={{ padding: '20px 0' }}>
+            <div style={{ fontSize: 36, marginBottom: 10 }}>⏱</div>
+            <div style={{ fontWeight: 700, color: '#c2410c', fontSize: 16 }}>QR Expired</div>
+            <div style={{ fontSize: 13, color: '#6b7280', marginTop: 8, lineHeight: 1.6 }}>
+              The scan window closed or the session could not be restored.<br />
+              Close this dialog and click <strong>Connect</strong> to generate a new QR.
+            </div>
           </div>
         ) : waStatus?.waState === 'failed' || waStatus?.waState === 'auth_failure' ? (
           <div style={{ padding: '20px 0' }}>
