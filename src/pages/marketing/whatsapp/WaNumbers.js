@@ -61,13 +61,14 @@ function formatDuration(ms) {
 // ── WA exact-state chip ────────────────────────────────────────────────────────
 
 const WA_STATE_CHIP = {
-  idle:           { bg: '#f3f4f6', color: '#6b7280',  label: 'Idle' },
-  initializing:   { bg: '#dbeafe', color: '#1d4ed8',  label: 'Initializing' },
-  awaiting_scan:  { bg: '#fef9c3', color: '#854d0e',  label: 'Scan Required' },
-  authenticating: { bg: '#ede9fe', color: '#6d28d9',  label: 'Authenticating' },
-  ready:          { bg: '#dcfce7', color: '#166534',  label: 'Connected' },
-  failed:         { bg: '#fee2e2', color: '#991b1b',  label: 'Failed' },
-  disconnecting:  { bg: '#f3f4f6', color: '#374151',  label: 'Disconnecting' },
+  idle:             { bg: '#f3f4f6', color: '#6b7280',  label: 'Idle' },
+  initializing:     { bg: '#dbeafe', color: '#1d4ed8',  label: 'Initializing' },
+  awaiting_scan:    { bg: '#fef9c3', color: '#854d0e',  label: 'Scan Required' },
+  authenticating:   { bg: '#ede9fe', color: '#6d28d9',  label: 'Authenticating' },
+  ready:            { bg: '#dcfce7', color: '#166534',  label: 'Connected' },
+  receive_pending:  { bg: '#fef3c7', color: '#b45309',  label: 'Receive Pending' },
+  failed:           { bg: '#fee2e2', color: '#991b1b',  label: 'Failed' },
+  disconnecting:    { bg: '#f3f4f6', color: '#374151',  label: 'Disconnecting' },
 };
 
 // Phase 3: when awaiting_scan + qr exists, show RESTORE FAILED / QR READY instead of "Scan Required"
@@ -129,6 +130,9 @@ function stripRuntimeState(num) {
     firstQrGeneratedAt: null,
     sessionAvailable:   false,
     liveAndReady:       false,
+    bridgeReady:        false,
+    sendCapable:        false,
+    fullyOperational:   false,
   };
 }
 
@@ -371,9 +375,19 @@ function NumberRow({ num, onAction, backendAvailable }) {
     }
   };
 
-  const connected   = num.connected === true;
-  const waState     = num.waState ?? 'idle';
-  const chipWaState = connected ? 'ready' : waState;
+  const connected        = num.connected === true;
+  const waState          = num.waState ?? 'idle';
+  const fullyOperational = num.fullyOperational === true;
+  const sendCapable      = num.sendCapable === true;
+
+  // fullyOperational → green Connected
+  // sendCapable (ready) but bridgeReady=false → amber Receive Pending
+  // everything else → existing state chips
+  const chipWaState = fullyOperational
+    ? 'ready'
+    : (sendCapable && num.bridgeReady === false && waState === 'ready')
+      ? 'receive_pending'
+      : (connected ? 'ready' : waState);
 
   // Phase 2: smart connect button — one button per state, no ambiguity
   const isReconnect = (num.reconnectCount > 0) || !!num.lastDisconnectedAt;
