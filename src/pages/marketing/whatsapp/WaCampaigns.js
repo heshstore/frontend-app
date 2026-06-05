@@ -30,12 +30,14 @@ const inputStyle = {
 };
 
 const STATUS_META = {
-  draft:      { bg: '#f3f4f6', color: '#6b7280',  label: 'Draft'     },
-  scheduled:  { bg: '#e0f2fe', color: '#0369a1',  label: 'Scheduled' },
-  running:    { bg: '#dcfce7', color: '#166534',  label: 'Running'   },
-  paused:     { bg: '#fef9c3', color: '#854d0e',  label: 'Paused'    },
-  completed:  { bg: '#f0fdf4', color: '#15803d',  label: 'Completed' },
-  cancelled:  { bg: '#fee2e2', color: '#991b1b',  label: 'Cancelled' },
+  draft:                { bg: '#f3f4f6', color: '#6b7280',  label: 'Draft'                },
+  scheduled:            { bg: '#e0f2fe', color: '#0369a1',  label: 'Scheduled'            },
+  running:              { bg: '#dcfce7', color: '#166534',  label: 'Running'              },
+  paused:               { bg: '#fef9c3', color: '#854d0e',  label: 'Paused'               },
+  completed:            { bg: '#f0fdf4', color: '#15803d',  label: 'Completed'            },
+  partially_completed:  { bg: '#fff7ed', color: '#c2410c',  label: 'Partially Completed'  },
+  failed:               { bg: '#fee2e2', color: '#991b1b',  label: 'Failed'               },
+  cancelled:            { bg: '#f3f4f6', color: '#6b7280',  label: 'Cancelled'            },
 };
 
 const PROMOTION_RULES_DISPLAY = [
@@ -523,6 +525,19 @@ export default function WaCampaigns() {
             <button style={btn('#198754', '#fff', busy)} disabled={busy} onClick={() => doAction(c.id, 'resume')}>Resume</button>
             <button style={btn('#fee2e2', '#991b1b', busy)} disabled={busy} onClick={() => doAction(c.id, 'cancel')}>Cancel</button>
           </>
+        );
+      case 'completed':
+      case 'partially_completed':
+      case 'failed':
+        return (
+          <button
+            style={btn('#0d6efd', '#fff', busy || !c.template_id)}
+            disabled={busy || !c.template_id}
+            onClick={() => setPreflightCampaign(c)}
+            title="Relaunch campaign for a new audience batch"
+          >
+            Relaunch
+          </button>
         );
       default:
         return null;
