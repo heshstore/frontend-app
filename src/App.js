@@ -87,6 +87,7 @@ import WaAudience                 from "./pages/marketing/whatsapp/WaAudience";
 import WaTemplates                from "./pages/marketing/whatsapp/WaTemplates";
 import WaDailyReport              from "./pages/marketing/whatsapp/WaDailyReport";
 import WaGovernance               from "./pages/marketing/whatsapp/WaGovernance";
+import PilotDashboard             from "./pages/marketing/whatsapp/PilotDashboard";
 import OperationsLog              from "./pages/pilot/OperationsLog";
 import DailyOps                  from "./pages/ops/DailyOps";
 import CommissionPage             from "./pages/workforce/CommissionPage";
@@ -231,6 +232,7 @@ function App() {
               <Route path="/marketing/whatsapp-engine/audience" element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><WaAudience /></PermissionRoute>} />
               <Route path="/marketing/whatsapp-engine/templates" element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><WaTemplates /></PermissionRoute>} />
               <Route path="/marketing/whatsapp-engine/governance" element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><WaGovernance /></PermissionRoute>} />
+              <Route path="/marketing/whatsapp-engine/pilot" element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><PilotDashboard /></PermissionRoute>} />
               <Route path="/pilot/log" element={<PermissionRoute permission={["admin"]}><OperationsLog /></PermissionRoute>} />
               <Route path="/daily-ops" element={<PermissionRoute permission={["order.view"]}><DailyOps /></PermissionRoute>} />
               <Route path="/commission" element={<PermissionRoute permission="staff.view"><CommissionPage /></PermissionRoute>} />

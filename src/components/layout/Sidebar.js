@@ -453,18 +453,13 @@ export default function Sidebar({ onClose }) {
 
           {canSeeMarketing && (
             <SectionGroup id="marketing" label="Marketing" icon="megaphone" sections={sections} onToggle={toggleSection}>
-              {pi('Engine Dashboard', '/marketing/whatsapp-engine',                  'rocket')}
-              {pi('Campaigns',        '/marketing/whatsapp-engine/campaigns',        'megaphone')}
-              {pi('Audience',         '/marketing/whatsapp-engine/audience',         'users')}
-              {pi('Templates',        '/marketing/whatsapp-engine/templates',        'doc')}
-              {pi('Inbox',            '/marketing/whatsapp-engine/inbox',            'inbox')}
-              {pi('Daily Report',     '/marketing/whatsapp-engine/daily-report',     'calendar')}
-              {pi('Analytics',        '/marketing/whatsapp-engine/analytics',        'chart')}
-              {canSeeWhatsApp && pi('Queue Monitor', '/marketing/whatsapp-engine/queue',      'list')}
-              {canSeeWhatsApp && pi('Message Logs',  '/marketing/whatsapp-engine/logs',       'doc')}
-              {canSeeWhatsApp && pi('Numbers',       '/marketing/whatsapp-engine/numbers',    'phone')}
-              {canSeeWhatsApp && pi('Governance',    '/marketing/whatsapp-engine/governance', 'shield')}
-              {canSeeWhatsApp && pi('Validate',      '/marketing/whatsapp-engine/validate',   'check')}
+              {pi('Engine Dashboard',        '/marketing/whatsapp-engine',           'rocket')}
+              {pi('Pilot Dashboard',         '/marketing/whatsapp-engine/pilot',     'monitor')}
+              {pi('Inbox',                   '/marketing/whatsapp-engine/inbox',     'inbox')}
+              {pi('Promotions',              '/marketing/whatsapp-engine/campaigns', 'megaphone')}
+              {pi('Analytics / Performance', '/marketing/whatsapp-engine/analytics', 'chart')}
+              {canSeeWhatsApp && pi('Numbers', '/marketing/whatsapp-engine/numbers', 'phone')}
+              {pi('Audience',                '/marketing/whatsapp-engine/audience',  'users')}
             </SectionGroup>
           )}
 
