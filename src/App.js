@@ -83,11 +83,14 @@ import WaInbox                    from "./pages/marketing/whatsapp/WaInbox";
 import WaAnalytics                from "./pages/marketing/whatsapp/WaAnalytics";
 import WaValidate                 from "./pages/marketing/whatsapp/WaValidate";
 import WaCampaigns                from "./pages/marketing/whatsapp/WaCampaigns";
-import WaAudience                 from "./pages/marketing/whatsapp/WaAudience";
+// WaAudience removed — route now redirects to /database/promotional
 import WaTemplates                from "./pages/marketing/whatsapp/WaTemplates";
 import WaDailyReport              from "./pages/marketing/whatsapp/WaDailyReport";
 import WaGovernance               from "./pages/marketing/whatsapp/WaGovernance";
 import PilotDashboard             from "./pages/marketing/whatsapp/PilotDashboard";
+import AiPromotionDashboard       from "./pages/marketing/whatsapp/AiPromotionDashboard";
+import PromoDatabase              from "./pages/database/PromoDatabase";
+import VisitingCardReader         from "./pages/database/VisitingCardReader";
 import OperationsLog              from "./pages/pilot/OperationsLog";
 import DailyOps                  from "./pages/ops/DailyOps";
 import CommissionPage             from "./pages/workforce/CommissionPage";
@@ -220,19 +223,35 @@ function App() {
               <Route path="/whatsapp" element={<PermissionRoute permission={["lead.view", "whatsapp.manage"]}><WhatsAppQR /></PermissionRoute>} />
               <Route path="/admin/whatsapp" element={<PermissionRoute permission="whatsapp.manage"><WhatsAppMonitor /></PermissionRoute>} />
 
-              <Route path="/marketing/whatsapp-engine" element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><WaEngineDashboard /></PermissionRoute>} />
-              <Route path="/marketing/whatsapp-engine/numbers" element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><WaNumbers /></PermissionRoute>} />
-              <Route path="/marketing/whatsapp-engine/queue" element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><WaQueue /></PermissionRoute>} />
-              <Route path="/marketing/whatsapp-engine/logs" element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><WaLogs /></PermissionRoute>} />
-              <Route path="/marketing/whatsapp-engine/inbox" element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><WaInbox /></PermissionRoute>} />
-              <Route path="/marketing/whatsapp-engine/analytics" element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><WaAnalytics /></PermissionRoute>} />
-              <Route path="/marketing/whatsapp-engine/validate" element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><WaValidate /></PermissionRoute>} />
-              <Route path="/marketing/whatsapp-engine/daily-report" element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><WaDailyReport /></PermissionRoute>} />
-              <Route path="/marketing/whatsapp-engine/campaigns" element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><WaCampaigns /></PermissionRoute>} />
-              <Route path="/marketing/whatsapp-engine/audience" element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><WaAudience /></PermissionRoute>} />
-              <Route path="/marketing/whatsapp-engine/templates" element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><WaTemplates /></PermissionRoute>} />
-              <Route path="/marketing/whatsapp-engine/governance" element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><WaGovernance /></PermissionRoute>} />
-              <Route path="/marketing/whatsapp-engine/pilot" element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><PilotDashboard /></PermissionRoute>} />
+              {/* ── Database group ── */}
+              <Route path="/database/promotional"    element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><PromoDatabase /></PermissionRoute>} />
+              <Route path="/database/visiting-card"  element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><VisitingCardReader /></PermissionRoute>} />
+
+              {/* ── WhatsApp Promotional Engine — canonical routes ── */}
+              <Route path="/marketing/whatsapp" element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><WaEngineDashboard /></PermissionRoute>} />
+              <Route path="/marketing/whatsapp/inbox" element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><WaInbox /></PermissionRoute>} />
+              <Route path="/marketing/whatsapp/ai-campaigns" element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><AiPromotionDashboard /></PermissionRoute>} />
+              <Route path="/marketing/whatsapp/campaigns" element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><WaCampaigns /></PermissionRoute>} />
+              <Route path="/marketing/whatsapp/audience" element={<Navigate to="/database/promotional" replace />} />
+              <Route path="/marketing/whatsapp/connections" element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><WaNumbers /></PermissionRoute>} />
+              <Route path="/marketing/whatsapp/analytics" element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><WaAnalytics /></PermissionRoute>} />
+              <Route path="/marketing/whatsapp/templates" element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><WaTemplates /></PermissionRoute>} />
+
+              {/* ── Legacy /marketing/whatsapp-engine/* — permanent redirects ── */}
+              <Route path="/marketing/whatsapp-engine" element={<Navigate to="/marketing/whatsapp" replace />} />
+              <Route path="/marketing/whatsapp-engine/inbox" element={<Navigate to="/marketing/whatsapp/inbox" replace />} />
+              <Route path="/marketing/whatsapp-engine/ai-promotion" element={<Navigate to="/marketing/whatsapp/ai-campaigns" replace />} />
+              <Route path="/marketing/whatsapp-engine/campaigns" element={<Navigate to="/marketing/whatsapp/campaigns" replace />} />
+              <Route path="/marketing/whatsapp-engine/audience" element={<Navigate to="/marketing/whatsapp/audience" replace />} />
+              <Route path="/marketing/whatsapp-engine/numbers" element={<Navigate to="/marketing/whatsapp/connections" replace />} />
+              <Route path="/marketing/whatsapp-engine/analytics" element={<Navigate to="/marketing/whatsapp/analytics" replace />} />
+              <Route path="/marketing/whatsapp-engine/templates" element={<Navigate to="/marketing/whatsapp/templates" replace />} />
+              <Route path="/marketing/whatsapp-engine/queue" element={<Navigate to="/marketing/whatsapp/analytics" replace />} />
+              <Route path="/marketing/whatsapp-engine/logs" element={<Navigate to="/marketing/whatsapp/analytics" replace />} />
+              <Route path="/marketing/whatsapp-engine/daily-report" element={<Navigate to="/marketing/whatsapp/analytics" replace />} />
+              <Route path="/marketing/whatsapp-engine/validate" element={<Navigate to="/marketing/whatsapp/connections" replace />} />
+              <Route path="/marketing/whatsapp-engine/governance" element={<Navigate to="/marketing/whatsapp" replace />} />
+              <Route path="/marketing/whatsapp-engine/pilot" element={<Navigate to="/marketing/whatsapp" replace />} />
               <Route path="/pilot/log" element={<PermissionRoute permission={["admin"]}><OperationsLog /></PermissionRoute>} />
               <Route path="/daily-ops" element={<PermissionRoute permission={["order.view"]}><DailyOps /></PermissionRoute>} />
               <Route path="/commission" element={<PermissionRoute permission="staff.view"><CommissionPage /></PermissionRoute>} />

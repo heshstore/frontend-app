@@ -55,6 +55,7 @@ export default function WaAnalytics() {
   const [funnelLoading, setFunnelLoading] = useState(false);
   const [error, setError] = useState(null);
   const [expandedCampaign, setExpandedCampaign] = useState(null);
+  const [campaignFilter,   setCampaignFilter]   = useState('all'); // 'all' | 'ai' | 'manual'
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -180,7 +181,7 @@ export default function WaAnalytics() {
               </div>
               <div style={{ marginTop: 12 }}>
                 <button
-                  onClick={() => navigate('/marketing/whatsapp-engine/inbox')}
+                  onClick={() => navigate('/marketing/whatsapp/inbox')}
                   style={{ ...btn('#f0fdf4', '#15803d', true), border: '1px solid #bbf7d0', fontSize: 11 }}
                 >
                   View Inbox for follow-up →
@@ -255,16 +256,45 @@ export default function WaAnalytics() {
 
         {/* Campaign Stats */}
         <div style={sectionCard}>
-          <div style={{ fontWeight: 700, fontSize: 14, color: '#111827', marginBottom: 14 }}>
-            Campaign Stats ({campaigns.length})
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: '#111827' }}>
+              Campaign Stats
+            </div>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {[
+                { key: 'all',    label: 'All'    },
+                { key: 'ai',     label: 'AI'     },
+                { key: 'manual', label: 'Manual' },
+              ].map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setCampaignFilter(key)}
+                  style={{
+                    padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                    border: campaignFilter === key ? 'none' : '1px solid #e2e8f0',
+                    background: campaignFilter === key ? '#0d6efd' : '#f8fafc',
+                    color: campaignFilter === key ? '#fff' : '#374151',
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
           {loading ? (
             <div style={{ color: '#6c757d', fontSize: 13 }}>Loading…</div>
-          ) : campaigns.length === 0 ? (
-            <div style={{ color: '#6c757d', fontSize: 13 }}>No campaigns found.</div>
-          ) : (
+          ) : (() => {
+            const filtered = campaigns.filter(c => {
+              if (campaignFilter === 'ai')     return c.is_promotion === true  && c.test_mode === false;
+              if (campaignFilter === 'manual') return c.is_promotion === false || c.test_mode === true;
+              return true;
+            });
+            return filtered.length === 0 ? (
+              <div style={{ color: '#6c757d', fontSize: 13 }}>No campaigns found.</div>
+            ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {campaigns.map((camp, i) => {
+              <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 4 }}>{filtered.length} campaign{filtered.length !== 1 ? 's' : ''}</div>
+              {filtered.map((camp, i) => {
                 const sc = STATUS_COLORS[camp.status] || { bg: '#f3f4f6', color: '#374151' };
                 return (
                   <div key={camp.id || i} style={{ border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
@@ -297,7 +327,8 @@ export default function WaAnalytics() {
                 );
               })}
             </div>
-          )}
+            );
+          })()}
         </div>
       </div>
     </PageLayout>

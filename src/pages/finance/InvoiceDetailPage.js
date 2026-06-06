@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import PageLayout from '../../components/layout/PageLayout';
 import { apiFetch } from '../../utils/api';
+import { toast } from '../../utils/toast';
 
 const btn = (bg, color = '#fff', disabled = false) => ({
   background: disabled ? '#e5e7eb' : bg,
@@ -89,7 +90,7 @@ export default function InvoiceDetailPage() {
       if (!r.ok) throw new Error(`Email error ${r.status}`);
       setEmailForm(f => ({ ...f, sent: true, busy: false }));
     } catch (e) {
-      alert(`Email failed: ${e.message}`);
+      toast.error(`Email failed: ${e.message}`);
       setEmailForm(f => ({ ...f, busy: false }));
     }
   };

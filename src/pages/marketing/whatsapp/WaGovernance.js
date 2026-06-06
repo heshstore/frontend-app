@@ -370,7 +370,7 @@ export default function WaGovernance() {
               {feedback.ok ? '✓' : '✗'} {feedback.msg}
             </span>
           )}
-          <button style={btn('#6366f1')} onClick={() => navigate('/marketing/whatsapp-engine/validate')}>
+          <button style={btn('#6366f1')} onClick={() => navigate('/marketing/whatsapp/connections')}>
             Validate
           </button>
           <button style={btn('#0d6efd')} onClick={load} disabled={loading}>
@@ -627,7 +627,7 @@ export default function WaGovernance() {
                 ))}
                 <button
                   style={{ ...btn('#f1f5f9', '#374151'), marginTop: 12, width: '100%', fontSize: 12, padding: '6px 10px' }}
-                  onClick={() => navigate('/marketing/whatsapp-engine/numbers')}
+                  onClick={() => navigate('/marketing/whatsapp/connections')}
                 >
                   Manage Numbers →
                 </button>
@@ -650,8 +650,8 @@ export default function WaGovernance() {
             <div style={{ fontWeight: 600, fontSize: 13, color: '#111827', marginBottom: 2 }}>Engine Audit Events</div>
             <div style={{ fontSize: 12, color: '#6b7280' }}>Full audit log: auto-pauses, re-enables, scale-ups, fingerprint skips, hard limit hits</div>
           </div>
-          <button style={btn('#6366f1')} onClick={() => navigate('/marketing/whatsapp-engine/validate')}>
-            Open Validate →
+          <button style={btn('#6366f1')} onClick={() => navigate('/marketing/whatsapp/connections')}>
+            Open Connections →
           </button>
         </div>
 

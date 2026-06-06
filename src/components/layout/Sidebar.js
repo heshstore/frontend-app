@@ -27,7 +27,7 @@ const SECTIONS_KEY = 'saachu_sections';
 // All collapsed by default — expand only on click; auto-expands for active route
 const DEFAULT_SECTIONS = {
   crm: false, sales: false, production: false, dispatch: false,
-  marketing: false, service: false, workforce: false,
+  database: false, whatsapp: false, email: false, service: false, workforce: false,
   analytics: false, items: false, settings: false,
 };
 
@@ -36,7 +36,9 @@ const SECTION_ROUTE_MAP = {
   sales:      ['/quotations', '/orders', '/pending-approval', '/accounts/', '/finance/', '/set-credit-limit', '/invoice/'],
   production: ['/production/', '/departments', '/inventory', '/purchase-', '/vendors', '/manufacturing/'],
   dispatch:   ['/dispatch'],
-  marketing:  ['/marketing/'],
+  whatsapp:   ['/marketing/whatsapp/', '/marketing/whatsapp'],
+  email:      ['/marketing/email/'],
+  database:   ['/database/'],
   service:    ['/service/'],
   workforce:  ['/workforce/', '/commission'],
   analytics:  ['/kpi', '/sla', '/activity'],
@@ -451,15 +453,29 @@ export default function Sidebar({ onClose }) {
             </SectionGroup>
           )}
 
+          {(canSeeMarketing || canSeeCustomers) && (
+            <SectionGroup id="database" label="Database" icon="box" sections={sections} onToggle={toggleSection}>
+              {canSeeMarketing && pi('Promotional DB',       '/database/promotional',   'users')}
+              {canSeeMarketing && pi('Visiting Card Reader', '/database/visiting-card', 'card')}
+            </SectionGroup>
+          )}
+
           {canSeeMarketing && (
-            <SectionGroup id="marketing" label="Marketing" icon="megaphone" sections={sections} onToggle={toggleSection}>
-              {pi('Engine Dashboard',        '/marketing/whatsapp-engine',           'rocket')}
-              {pi('Pilot Dashboard',         '/marketing/whatsapp-engine/pilot',     'monitor')}
-              {pi('Inbox',                   '/marketing/whatsapp-engine/inbox',     'inbox')}
-              {pi('Promotions',              '/marketing/whatsapp-engine/campaigns', 'megaphone')}
-              {pi('Analytics / Performance', '/marketing/whatsapp-engine/analytics', 'chart')}
-              {canSeeWhatsApp && pi('Numbers', '/marketing/whatsapp-engine/numbers', 'phone')}
-              {pi('Audience',                '/marketing/whatsapp-engine/audience',  'users')}
+            <SectionGroup id="whatsapp" label="WhatsApp Engine" icon="message" sections={sections} onToggle={toggleSection}>
+              {pi('Dashboard',        '/marketing/whatsapp',              'rocket')}
+              {pi('Inbox',            '/marketing/whatsapp/inbox',        'inbox')}
+              {pi('AI Campaigns',     '/marketing/whatsapp/ai-campaigns', 'sparkles')}
+              {pi('Manual Campaigns', '/marketing/whatsapp/campaigns',    'megaphone')}
+              {canSeeWhatsApp && pi('Connections', '/marketing/whatsapp/connections', 'phone')}
+              {pi('Analytics',        '/marketing/whatsapp/analytics',    'chart')}
+            </SectionGroup>
+          )}
+
+          {canSeeMarketing && (
+            <SectionGroup id="email" label="Email Engine" icon="mail" sections={sections} onToggle={toggleSection}>
+              <div style={{ padding: '8px 12px 6px', fontSize: 11, color: 'rgba(255,255,255,0.28)', fontStyle: 'italic' }}>
+                Coming soon
+              </div>
             </SectionGroup>
           )}
 

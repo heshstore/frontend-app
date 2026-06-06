@@ -4,12 +4,12 @@ import PageLayout from '../../../components/layout/PageLayout';
 import { apiFetch } from '../../../utils/api';
 
 const WORKFLOW = [
-  { label: 'Audience',   path: '/marketing/whatsapp-engine/audience',   icon: '👥', desc: 'Contact list' },
-  { label: 'Templates',  path: '/marketing/whatsapp-engine/templates',  icon: '📝', desc: 'Message templates' },
-  { label: 'Campaigns',  path: '/marketing/whatsapp-engine/campaigns',  icon: '📢', desc: 'Launch & manage' },
-  { label: 'Queue',      path: '/marketing/whatsapp-engine/queue',      icon: '⏳', desc: 'Pending sends' },
-  { label: 'Logs',       path: '/marketing/whatsapp-engine/logs',       icon: '📋', desc: 'Sent messages' },
-  { label: 'Inbox',      path: '/marketing/whatsapp-engine/inbox',      icon: '📥', desc: 'Replies & leads' },
+  { label: 'Audience',   path: '/marketing/whatsapp/audience',   icon: '👥', desc: 'Contact list' },
+  { label: 'Templates',  path: '/marketing/whatsapp/templates',  icon: '📝', desc: 'Message templates' },
+  { label: 'Campaigns',  path: '/marketing/whatsapp/campaigns',  icon: '📢', desc: 'Launch & manage' },
+  { label: 'Analytics',  path: '/marketing/whatsapp/analytics',  icon: '📊', desc: 'Delivery & stats' },
+  { label: 'AI Campaigns', path: '/marketing/whatsapp/ai-campaigns', icon: '✨', desc: 'Autonomous engine' },
+  { label: 'Inbox',      path: '/marketing/whatsapp/inbox',      icon: '📥', desc: 'Replies & leads' },
 ];
 
 const card = {
@@ -32,11 +32,11 @@ const btn = (bg, color = '#fff') => ({
 });
 
 const QUICK_LINKS = [
-  { emoji: '📱', title: 'Numbers', desc: 'Manage WhatsApp numbers, QR, limits and risk.', path: '/marketing/whatsapp-engine/numbers' },
-  { emoji: '🛡️', title: 'Governance', desc: 'Stability report, scale readiness, re-enable controls.', path: '/marketing/whatsapp-engine/governance' },
-  { emoji: '📊', title: 'Analytics', desc: 'Delivery rates, campaign stats, template performance.', path: '/marketing/whatsapp-engine/analytics' },
-  { emoji: '📅', title: 'Daily Report', desc: 'Morning ops review — funnel, audience, numbers.', path: '/marketing/whatsapp-engine/daily-report' },
-  { emoji: '✅', title: 'Validate', desc: 'Delivery flow diagnostics and test contacts.', path: '/marketing/whatsapp-engine/validate' },
+  { emoji: '📱', title: 'Connections', desc: 'Manage WhatsApp numbers, QR, limits and risk.', path: '/marketing/whatsapp/connections' },
+  { emoji: '👥', title: 'Audience',    desc: 'Contact list, opt-outs, test contacts.', path: '/marketing/whatsapp/audience' },
+  { emoji: '📊', title: 'Analytics',   desc: 'Delivery rates, campaign stats, template performance.', path: '/marketing/whatsapp/analytics' },
+  { emoji: '✨', title: 'AI Campaigns', desc: 'Autonomous engine — product rotation, AI templates.', path: '/marketing/whatsapp/ai-campaigns' },
+  { emoji: '📢', title: 'Campaigns',   desc: 'Manual promotions — create, launch, pause.', path: '/marketing/whatsapp/campaigns' },
 ];
 
 function SkeletonCard() {

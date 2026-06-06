@@ -516,7 +516,7 @@ export default function WaCampaigns() {
         return (
           <>
             <button style={btn('#fef9c3', '#854d0e', busy)} disabled={busy} onClick={() => doAction(c.id, 'pause')}>Pause</button>
-            <button style={btn('#eff6ff', '#1d4ed8')} onClick={() => navigate(`/marketing/whatsapp-engine/queue?campaign=${c.id}`)} title="View queue for this campaign">Queue</button>
+            <button style={btn('#eff6ff', '#1d4ed8')} onClick={() => navigate(`/marketing/whatsapp/analytics?campaign=${c.id}`)} title="View analytics for this campaign">Analytics</button>
           </>
         );
       case 'paused':
@@ -579,15 +579,15 @@ export default function WaCampaigns() {
         {/* Workflow hint */}
         <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 12, color: '#475569', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
           <span>Workflow:</span>
-          <button onClick={() => navigate('/marketing/whatsapp-engine/audience')} style={{ ...btn('#f0f9ff', '#0369a1'), padding: '3px 10px', fontSize: 11 }}>Audience</button>
+          <button onClick={() => navigate('/marketing/whatsapp/audience')} style={{ ...btn('#f0f9ff', '#0369a1'), padding: '3px 10px', fontSize: 11 }}>Audience</button>
           <span style={{ color: '#94a3b8' }}>→</span>
-          <button onClick={() => navigate('/marketing/whatsapp-engine/templates')} style={{ ...btn('#f0f9ff', '#0369a1'), padding: '3px 10px', fontSize: 11 }}>Templates</button>
+          <button onClick={() => navigate('/marketing/whatsapp/templates')} style={{ ...btn('#f0f9ff', '#0369a1'), padding: '3px 10px', fontSize: 11 }}>Templates</button>
           <span style={{ color: '#94a3b8' }}>→</span>
           <span style={{ background: '#e0f2fe', color: '#0369a1', padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>Campaigns</span>
           <span style={{ color: '#94a3b8' }}>→</span>
-          <button onClick={() => navigate('/marketing/whatsapp-engine/queue')} style={{ ...btn('#f0f9ff', '#0369a1'), padding: '3px 10px', fontSize: 11 }}>Queue</button>
+          <button onClick={() => navigate('/marketing/whatsapp/analytics')} style={{ ...btn('#f0f9ff', '#0369a1'), padding: '3px 10px', fontSize: 11 }}>Analytics</button>
           <span style={{ color: '#94a3b8' }}>→</span>
-          <button onClick={() => navigate('/marketing/whatsapp-engine/inbox')} style={{ ...btn('#f0f9ff', '#0369a1'), padding: '3px 10px', fontSize: 11 }}>Inbox</button>
+          <button onClick={() => navigate('/marketing/whatsapp/inbox')} style={{ ...btn('#f0f9ff', '#0369a1'), padding: '3px 10px', fontSize: 11 }}>Inbox</button>
         </div>
 
         {error && (
