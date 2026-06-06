@@ -43,7 +43,7 @@ const SECTION_ROUTE_MAP = {
   workforce:  ['/workforce/', '/commission'],
   analytics:  ['/kpi', '/sla', '/activity'],
   items:      ['/items', '/add-item', '/edit-item', '/shopify-items'],
-  settings:   ['/staff', '/rbac', '/admin/'],
+  settings:   ['/staff', '/rbac', '/admin/', '/settings/'],
 };
 
 function loadSections() {
@@ -518,10 +518,11 @@ export default function Sidebar({ onClose }) {
 
           {canSeeStaff && (
             <SectionGroup id="settings" label="Settings" icon="gear" sections={sections} onToggle={toggleSection}>
-              {pi('Staff',               '/staff',          'user')}
-              {pi('Roles & Permissions', '/rbac',           'lock')}
-              {canSeeWhatsApp && pi('WA Monitor', '/admin/whatsapp', 'monitor')}
-              {pi('Ops Log',             '/pilot/log',      'doc')}
+              {pi('Staff',               '/staff',                     'user')}
+              {pi('Roles & Permissions', '/rbac',                      'lock')}
+              {canSeeWhatsApp && pi('WA Monitor', '/admin/whatsapp',   'monitor')}
+              {pi('Ops Log',             '/pilot/log',                 'doc')}
+              {pi('Version History',     '/settings/version-history',  'tag')}
             </SectionGroup>
           )}
 
