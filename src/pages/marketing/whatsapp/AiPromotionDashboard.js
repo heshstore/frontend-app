@@ -110,6 +110,18 @@ function SectionA({ data }) {
           </span>
         </Kv>
         <Kv label="Test-Only Mode"   value={s.test_only_mode ? 'Yes' : 'No'} />
+        <Kv label="Validation Mode">
+          <span style={{ color: s.validation_mode_on ? '#d97706' : '#9ca3af', fontWeight: 700, fontSize: 12 }}>
+            {s.validation_mode_on ? 'ON' : 'OFF'}
+          </span>
+        </Kv>
+        {s.validation_mode_on && (
+          <Kv label="Validation Contacts">
+            <span style={{ color: '#d97706', fontWeight: 700, fontSize: 12 }}>
+              {s.validation_contacts_active} active
+            </span>
+          </Kv>
+        )}
         <Kv label="Numbers">
           <span style={{ color: s.connected_numbers > 0 ? '#16a34a' : '#dc3545', fontWeight: 700 }}>
             {s.connected_numbers} / {s.total_numbers} connected
