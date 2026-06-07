@@ -186,11 +186,59 @@ function SectionB({ data }) {
   );
 }
 
+// ── WhatsApp Message Preview ───────────────────────────────────────────────────
+function WhatsAppMessagePreview({ imageUrl, messageBody, generatedMessage, sku }) {
+  const [imgErr, setImgErr] = useState(false);
+  const body = messageBody || generatedMessage;
+  if (!body && !imageUrl) {
+    return <span style={{ color: '#9ca3af', fontSize: 10 }}>Awaiting generation…</span>;
+  }
+  return (
+    <div style={{
+      background: '#dcf8c6',
+      borderRadius: '0 8px 8px 8px',
+      padding: '0 10px 8px 10px',
+      maxWidth: 260,
+      boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+      border: '1px solid #b7ddb0',
+      position: 'relative',
+    }}>
+      {/* WhatsApp green accent strip */}
+      <div style={{ height: 3, background: '#25D366', borderRadius: '0 0 0 0', margin: '0 -10px 8px -10px' }} />
+
+      {/* Product image thumbnail */}
+      {imageUrl && !imgErr && (
+        <img
+          src={imageUrl}
+          alt={sku || 'product'}
+          onError={() => setImgErr(true)}
+          style={{ width: '100%', maxHeight: 120, objectFit: 'cover', borderRadius: 6, marginBottom: 6, display: 'block' }}
+        />
+      )}
+      {(!imageUrl || imgErr) && sku && sku !== '—' && (
+        <div style={{ fontSize: 9, fontWeight: 700, color: '#6d28d9', background: '#ede9fe', padding: '2px 6px', borderRadius: 4, display: 'inline-block', marginBottom: 6 }}>
+          SKU: {sku}
+        </div>
+      )}
+
+      {/* Message body */}
+      {body && (
+        <div style={{ whiteSpace: 'pre-wrap', color: '#1a1a1a', lineHeight: 1.45, fontSize: 11, wordBreak: 'break-word' }}>
+          {body}
+        </div>
+      )}
+
+      {/* Read receipt ticks */}
+      <div style={{ textAlign: 'right', marginTop: 4, fontSize: 9, color: '#53bdeb' }}>✓✓</div>
+    </div>
+  );
+}
+
 // ── Validation Result Card ─────────────────────────────────────────────────────
 function ValidationResultCard({ runResult, dashData, onDismiss }) {
   if (!runResult) return null;
 
-  const { promo_id, audience_count, queued: initialQueued } = runResult;
+  const { promo_id, audience_count, queued: initialQueued, cleanup } = runResult;
 
   const campaigns  = dashData?.campaigns?.filter(c => c.promo_id === promo_id) ?? [];
   const queueRows  = dashData?.campaign_queue_detail?.filter(r => r.promo_id === promo_id) ?? [];
@@ -223,7 +271,7 @@ function ValidationResultCard({ runResult, dashData, onDismiss }) {
   return (
     <div style={{ ...card, background: cardBg, border: `2px solid ${borderColor}`, marginBottom: 0 }}>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
         <div>
           <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 3 }}>
             Validation Result
@@ -241,6 +289,31 @@ function ValidationResultCard({ runResult, dashData, onDismiss }) {
             ✕
           </button>
         </div>
+      </div>
+
+      {/* Flow status strip */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 14, fontSize: 11 }}>
+        {cleanup && (cleanup.campaigns_deleted > 0 || cleanup.queue_rows_deleted > 0 || cleanup.message_logs_deleted > 0) ? (
+          <span style={{ background: '#f1f5f9', color: '#475569', padding: '2px 8px', borderRadius: 4, fontWeight: 600 }}>
+            ✓ Cleared {cleanup.campaigns_deleted} campaign{cleanup.campaigns_deleted !== 1 ? 's' : ''} · {cleanup.queue_rows_deleted} queue row{cleanup.queue_rows_deleted !== 1 ? 's' : ''} · {cleanup.message_logs_deleted} msg log{cleanup.message_logs_deleted !== 1 ? 's' : ''} · {cleanup.audit_logs_deleted} audit log{cleanup.audit_logs_deleted !== 1 ? 's' : ''}
+          </span>
+        ) : (
+          <span style={{ background: '#f1f5f9', color: '#94a3b8', padding: '2px 8px', borderRadius: 4, fontWeight: 600 }}>
+            ✓ No previous artifacts
+          </span>
+        )}
+        <span style={{ color: '#94a3b8' }}>→</span>
+        <span style={{ background: '#dcfce7', color: '#166534', padding: '2px 8px', borderRadius: 4, fontWeight: 600 }}>
+          ✓ Campaign created
+        </span>
+        <span style={{ color: '#94a3b8' }}>→</span>
+        <span style={{ background: initialQueued > 0 ? '#dcfce7' : '#fee2e2', color: initialQueued > 0 ? '#166534' : '#991b1b', padding: '2px 8px', borderRadius: 4, fontWeight: 600 }}>
+          {initialQueued > 0 ? `✓ Queued ${initialQueued}` : '✗ Queue empty'}
+        </span>
+        <span style={{ color: '#94a3b8' }}>→</span>
+        <span style={{ background: initialQueued > 0 ? '#dbeafe' : '#f3f4f6', color: initialQueued > 0 ? '#1d4ed8' : '#9ca3af', padding: '2px 8px', borderRadius: 4, fontWeight: 600 }}>
+          {initialQueued > 0 ? '▶ Launched — sending on next tick' : '— Not launched'}
+        </span>
       </div>
 
       {/* Summary stats */}
@@ -331,22 +404,13 @@ function ValidationResultCard({ runResult, dashData, onDismiss }) {
                         ? <span title={r.reply_message ?? ''} style={{ color: '#0d6efd', fontWeight: 700, cursor: 'help' }}>✓</span>
                         : <span style={{ color: '#d1d5db' }}>—</span>}
                     </td>
-                    <td style={{ ...td, maxWidth: 280 }}>
-                      {r.message_body ? (
-                        <div style={{
-                          fontFamily: 'monospace', fontSize: 10, color: '#374151',
-                          background: '#f8fafc', borderRadius: 4, padding: '4px 8px',
-                          maxHeight: 72, overflow: 'hidden',
-                          display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical',
-                          whiteSpace: 'pre-wrap',
-                        }}>
-                          {r.message_body}
-                        </div>
-                      ) : (
-                        <span style={{ color: '#9ca3af', fontSize: 10 }}>
-                          {r.queue_status === 'pending' ? 'Awaiting send…' : 'No message logged'}
-                        </span>
-                      )}
+                    <td style={{ ...td, maxWidth: 280, verticalAlign: 'top', paddingTop: 10 }}>
+                      <WhatsAppMessagePreview
+                        imageUrl={r.product_image}
+                        messageBody={r.message_body}
+                        generatedMessage={r.generated_message}
+                        sku={r.product_sku}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -604,11 +668,56 @@ function SectionD({ data }) {
 }
 
 // ── Section E: Telecaller Performance ─────────────────────────────────────────
-function SectionE({ data }) {
-  if (!data?.length) return (
+function SectionE({ data, engineStatus, campaigns, queueDetail }) {
+  // Always use engine_status.numbers as the source of truth — never hides zero-activity telecallers
+  const allNumbers = engineStatus?.numbers ?? [];
+
+  // Lookup: number_id → today's performance row (backend already LEFT JOINs from whatsapp_numbers)
+  const perfMap = new Map((data ?? []).map(r => [r.number_id, r]));
+
+  // Lookup: telecaller_number_id → today's non-validation campaign
+  const campByNumber = new Map();
+  for (const c of (campaigns ?? [])) {
+    if (c.is_today && !c.is_validation && c.telecaller_number_id) {
+      campByNumber.set(c.telecaller_number_id, c);
+    }
+  }
+
+  // Aggregate per telecaller phone from queue detail: read count, last activity, content preview
+  const detailByPhone = {};
+  for (const r of (queueDetail ?? [])) {
+    const key = r.telecaller_phone;
+    if (!key || key === '—') continue;
+    if (!detailByPhone[key]) detailByPhone[key] = { read: 0, lastActivity: null, contentPreview: null };
+    const d = detailByPhone[key];
+    if (r.read) d.read++;
+    if (r.sent_at && (!d.lastActivity || r.sent_at > d.lastActivity)) d.lastActivity = r.sent_at;
+    if (!d.contentPreview && r.message_body) d.contentPreview = r.message_body;
+  }
+
+  const rows = allNumbers.map(n => {
+    const perf   = perfMap.get(n.id) ?? {};
+    const camp   = campByNumber.get(n.id);
+    const detail = detailByPhone[n.phone] ?? {};
+    return {
+      id:             n.id,
+      phone:          n.phone,
+      name:           n.name,
+      campaign:       camp?.promo_id ?? perf.promo_id ?? null,
+      total:          perf.total  ?? 0,
+      sent:           perf.sent   ?? 0,
+      failed:         perf.failed ?? 0,
+      replies:        camp?.replies ?? 0,
+      read:           detail.read ?? 0,
+      contentPreview: detail.contentPreview ?? null,
+      lastActivity:   detail.lastActivity ?? null,
+    };
+  });
+
+  if (!rows.length) return (
     <div style={{ ...card }}>
       <div style={sectionTitle}>E — Telecaller Performance (Today)</div>
-      <div style={{ color: '#9ca3af', fontSize: 13 }}>No telecaller data.</div>
+      <div style={{ color: '#9ca3af', fontSize: 13 }}>No telecallers configured.</div>
     </div>
   );
 
@@ -619,41 +728,52 @@ function SectionE({ data }) {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
             <tr>
-              {['Telecaller', 'Campaign ID', 'Queue', 'Sent', 'Replied', 'Skipped', 'Failed', 'Daily Cap', 'Capacity Remaining'].map(h => (
+              {['Telecaller', 'Campaign', 'Queue', 'Sent', 'Read', 'Replies', 'Failed', 'Content Preview', 'Last Activity'].map(h => (
                 <th key={h} style={th}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {data.map(r => {
-              const capPct = r.daily_cap > 0 ? Math.round(((r.daily_cap - r.capacity_remaining) / r.daily_cap) * 100) : 0;
-              const barColor = capPct > 80 ? '#dc3545' : capPct > 50 ? '#d97706' : '#16a34a';
-              return (
-                <tr key={r.number_id}>
-                  <td style={td}>
-                    <div style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827' }}>{r.phone}</div>
-                    {r.name && <div style={{ fontSize: 10, color: '#94a3b8' }}>{r.name}</div>}
-                  </td>
-                  <td style={{ ...td, fontFamily: 'monospace', fontSize: 11, color: '#0d6efd' }}>
-                    {r.promo_id ?? <span style={{ color: '#9ca3af' }}>—</span>}
-                  </td>
-                  <td style={td}>{r.total}</td>
-                  <td style={{ ...td, color: '#16a34a', fontWeight: 700 }}>{r.sent}</td>
-                  <td style={{ ...td, color: '#0891b2', fontWeight: 700 }}>{r.pending}</td>
-                  <td style={{ ...td, color: '#9ca3af' }}>{r.skipped}</td>
-                  <td style={{ ...td, color: r.failed > 0 ? '#dc3545' : '#94a3b8' }}>{r.failed}</td>
-                  <td style={td}>{r.daily_cap}</td>
-                  <td style={td}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div style={{ width: 60, height: 6, background: '#e2e8f0', borderRadius: 3, overflow: 'hidden' }}>
-                        <div style={{ width: `${capPct}%`, height: '100%', background: barColor, borderRadius: 3 }} />
-                      </div>
-                      <span style={{ fontWeight: 700, color: barColor, fontSize: 11 }}>{r.capacity_remaining} left</span>
+            {rows.map(r => (
+              <tr key={r.id}>
+                <td style={td}>
+                  <div style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827' }}>{r.phone}</div>
+                  {r.name && <div style={{ fontSize: 10, color: '#94a3b8' }}>{r.name}</div>}
+                </td>
+                <td style={{ ...td, fontFamily: 'monospace', fontSize: 11, color: '#0d6efd' }}>
+                  {r.campaign ?? <span style={{ color: '#9ca3af' }}>—</span>}
+                </td>
+                <td style={td}>{r.total}</td>
+                <td style={{ ...td, color: r.sent > 0 ? '#16a34a' : '#94a3b8', fontWeight: r.sent > 0 ? 700 : 400 }}>
+                  {r.sent}
+                </td>
+                <td style={{ ...td, color: r.read > 0 ? '#0891b2' : '#94a3b8' }}>{r.read}</td>
+                <td style={{ ...td, color: r.replies > 0 ? '#0d6efd' : '#94a3b8' }}>{r.replies}</td>
+                <td style={{ ...td, color: r.failed > 0 ? '#dc3545' : '#94a3b8' }}>{r.failed}</td>
+                <td style={{ ...td, maxWidth: 220 }}>
+                  {r.contentPreview ? (
+                    <div
+                      title={r.contentPreview}
+                      style={{
+                        fontFamily: 'monospace', fontSize: 10, color: '#374151',
+                        background: '#f8fafc', borderRadius: 4, padding: '3px 7px',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        maxWidth: 220,
+                      }}
+                    >
+                      {r.contentPreview}
                     </div>
-                  </td>
-                </tr>
-              );
-            })}
+                  ) : (
+                    <span style={{ color: '#9ca3af', fontSize: 10 }}>
+                      {r.total > 0 ? 'Awaiting send…' : '—'}
+                    </span>
+                  )}
+                </td>
+                <td style={{ ...td, color: '#64748b', fontSize: 11, whiteSpace: 'nowrap' }}>
+                  {ago(r.lastActivity)}
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -661,40 +781,40 @@ function SectionE({ data }) {
   );
 }
 
-// ── Section F: Live Queue ──────────────────────────────────────────────────────
-function SectionF({ data }) {
-  if (!data) return null;
-  const { rows = [], oldest_pending_minutes = 0 } = data;
+// ── Section F: Today Validation Queue + Historical Queue ──────────────────────
+const STATUS_ORDER = ['pending', 'processing', 'sent', 'failed', 'skipped'];
+const STATUS_CLR   = { pending: '#0d6efd', processing: '#d97706', sent: '#16a34a', failed: '#dc3545', skipped: '#9ca3af' };
 
+function QueueSummary({ rows, oldest_pending_minutes, accentBg }) {
   const byStatus = {};
   const byNumber = {};
-  for (const r of rows) {
+  for (const r of (rows ?? [])) {
     byStatus[r.status] = (byStatus[r.status] ?? 0) + r.count;
     if (!byNumber[r.number_phone]) byNumber[r.number_phone] = { name: r.number_name, statuses: {} };
     byNumber[r.number_phone].statuses[r.status] = (byNumber[r.number_phone].statuses[r.status] ?? 0) + r.count;
   }
-
-  const STATUS_ORDER = ['pending', 'processing', 'sent', 'failed', 'skipped'];
-  const STATUS_CLR   = { pending: '#0d6efd', processing: '#d97706', sent: '#16a34a', failed: '#dc3545', skipped: '#9ca3af' };
-  const stuckWarning = oldest_pending_minutes > 15;
+  const stuckWarning = (oldest_pending_minutes ?? 0) > 15;
+  const isEmpty      = STATUS_ORDER.every(s => (byStatus[s] ?? 0) === 0);
 
   return (
-    <div style={{ ...card }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <div style={sectionTitle}>F — Live Queue (All-Time)</div>
-        {stuckWarning && (
-          <span style={{ fontSize: 11, background: '#fee2e2', color: '#991b1b', padding: '3px 10px', borderRadius: 6, fontWeight: 700 }}>
-            ⚠ Queue stuck ({oldest_pending_minutes}m)
-          </span>
-        )}
-      </div>
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+    <>
+      {stuckWarning && (
+        <div style={{ marginBottom: 10, fontSize: 11, background: '#fee2e2', color: '#991b1b', padding: '4px 10px', borderRadius: 6, fontWeight: 700 }}>
+          ⚠ Queue stuck — oldest pending {oldest_pending_minutes}m old
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
         {STATUS_ORDER.map(s => (
-          <div key={s} style={{ textAlign: 'center', padding: '8px 14px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0', minWidth: 70 }}>
+          <div key={s} style={{ textAlign: 'center', padding: '8px 14px', background: accentBg ?? '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0', minWidth: 70 }}>
             <div style={{ fontSize: 20, fontWeight: 800, color: STATUS_CLR[s] }}>{byStatus[s] ?? 0}</div>
             <div style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>{s.toUpperCase()}</div>
           </div>
         ))}
+        {isEmpty && (
+          <div style={{ fontSize: 12, color: '#16a34a', fontWeight: 700, alignSelf: 'center', paddingLeft: 8 }}>
+            ✓ Clean baseline — 0 across all statuses
+          </div>
+        )}
       </div>
       {Object.keys(byNumber).length > 0 && (
         <div style={{ overflowX: 'auto' }}>
@@ -720,6 +840,54 @@ function SectionF({ data }) {
           </table>
         </div>
       )}
+    </>
+  );
+}
+
+function SectionF({ live_queue, historical_queue }) {
+  const [showHistorical, setShowHistorical] = useState(false);
+
+  return (
+    <div style={{ ...card }}>
+      {/* F — Today Validation Queue */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+        <div style={sectionTitle}>F — Today Validation Queue</div>
+        <span style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'monospace' }}>
+          is_validation=true · created_at ≥ today
+        </span>
+      </div>
+      <div style={{ fontSize: 11, color: '#64748b', marginBottom: 12 }}>
+        After cleanup all values must be 0. After a validation run, only these rows count.
+      </div>
+      <QueueSummary
+        rows={live_queue?.rows}
+        oldest_pending_minutes={live_queue?.oldest_pending_minutes}
+        accentBg="#f0fdf4"
+      />
+
+      {/* Historical Queue (collapsible) */}
+      <div style={{ marginTop: 8, borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
+        <button
+          onClick={() => setShowHistorical(h => !h)}
+          style={{
+            background: 'none', border: '1px solid #e2e8f0', borderRadius: 6,
+            padding: '3px 10px', fontSize: 11, color: '#475569', fontWeight: 600, cursor: 'pointer',
+          }}
+        >
+          {showHistorical ? '▲ Hide Historical Queue (All-Time)' : '▼ Historical Queue (All-Time)'}
+        </button>
+        {showHistorical && (
+          <div style={{ marginTop: 10 }}>
+            <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 8 }}>
+              All queue rows ever — includes production sends. Not used for validation baseline.
+            </div>
+            <QueueSummary
+              rows={historical_queue?.rows}
+              oldest_pending_minutes={historical_queue?.oldest_pending_minutes}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -835,10 +1003,27 @@ const LOG_COLORS = {
 };
 
 function SectionI({ logs }) {
+  const [expanded, setExpanded] = useState(false);
+  const all     = logs ?? [];
+  const visible = expanded ? all : all.slice(0, 10);
+
   return (
     <div style={{ ...card }}>
-      <div style={sectionTitle}>I — Engine Log Stream (Latest 60)</div>
-      {!logs?.length ? (
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <div style={{ ...sectionTitle, marginBottom: 0 }}>I — Engine Log Stream</div>
+        {all.length > 10 && (
+          <button
+            onClick={() => setExpanded(e => !e)}
+            style={{
+              background: 'none', border: '1px solid #e2e8f0', borderRadius: 6,
+              padding: '3px 10px', fontSize: 11, color: '#475569', fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            {expanded ? 'Collapse' : `Expand Logs (${all.length})`}
+          </button>
+        )}
+      </div>
+      {!visible.length ? (
         <div style={{ color: '#9ca3af', fontSize: 13 }}>No log events found.</div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
@@ -851,7 +1036,7 @@ function SectionI({ logs }) {
               </tr>
             </thead>
             <tbody>
-              {logs.map(l => (
+              {visible.map(l => (
                 <tr key={l.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                   <td style={{ ...td, fontSize: 11, color: '#94a3b8', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{l.log_date}</td>
                   <td style={{ ...td, fontSize: 11, color: '#94a3b8', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{l.log_time}</td>
@@ -1030,8 +1215,13 @@ export default function AiPromotionDashboard() {
               isInconsistent={data.is_inconsistent}
             />
             <SectionD data={data.campaign_queue_detail} />
-            <SectionE data={data.telecaller_performance} />
-            <SectionF data={data.live_queue} />
+            <SectionE
+              data={data.telecaller_performance}
+              engineStatus={data.engine_status}
+              campaigns={data.campaigns}
+              queueDetail={data.campaign_queue_detail}
+            />
+            <SectionF live_queue={data.live_queue} historical_queue={data.historical_queue} />
             <SectionG data={data.product_rotation} />
             <SectionH data={data.number_utilization} />
             <SectionI logs={data.log_stream} />
