@@ -186,10 +186,190 @@ function SectionB({ data }) {
   );
 }
 
+// ── Validation Result Card ─────────────────────────────────────────────────────
+function ValidationResultCard({ runResult, dashData, onDismiss }) {
+  if (!runResult) return null;
+
+  const { promo_id, audience_count, queued: initialQueued } = runResult;
+
+  const campaigns  = dashData?.campaigns?.filter(c => c.promo_id === promo_id) ?? [];
+  const queueRows  = dashData?.campaign_queue_detail?.filter(r => r.promo_id === promo_id) ?? [];
+
+  const totalQueued  = campaigns.reduce((s, c) => s + c.total_queue, 0) || initialQueued || 0;
+  const totalSent    = campaigns.reduce((s, c) => s + c.sent,        0);
+  const totalReplies = campaigns.reduce((s, c) => s + c.replies,     0);
+  const totalFailed  = campaigns.reduce((s, c) => s + c.failed,      0);
+  const totalPending = campaigns.reduce((s, c) => s + c.pending,     0);
+  const totalSkipped = campaigns.reduce((s, c) => s + c.skipped,     0);
+
+  const isComplete = totalPending === 0 && totalQueued > 0;
+  const verdict    = !isComplete ? 'PENDING'
+    : totalQueued > 0 && totalFailed === 0 ? 'PASS' : 'FAIL';
+  const verdictColor = verdict === 'PASS' ? '#16a34a' : verdict === 'FAIL' ? '#dc3545' : '#d97706';
+  const verdictBg    = verdict === 'PASS' ? '#dcfce7' : verdict === 'FAIL' ? '#fee2e2' : '#fef9c3';
+  const cardBg       = verdict === 'PASS' ? '#f0fdf4' : verdict === 'FAIL' ? '#fff5f5' : '#fffbeb';
+  const borderColor  = verdict === 'PASS' ? '#86efac' : verdict === 'FAIL' ? '#fca5a5' : '#fde68a';
+
+  // Telecaller distribution: one row per campaign/number
+  const byTelecaller = campaigns.map(c => ({
+    phone:   c.telecaller_phone ?? '—',
+    queue:   c.total_queue,
+    sent:    c.sent,
+    replies: c.replies,
+    failed:  c.failed,
+    pending: c.pending,
+  }));
+
+  return (
+    <div style={{ ...card, background: cardBg, border: `2px solid ${borderColor}`, marginBottom: 0 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 3 }}>
+            Validation Result
+          </div>
+          <div style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 14, color: '#111827' }}>{promo_id}</div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ background: verdictBg, color: verdictColor, fontWeight: 800, fontSize: 15, padding: '5px 18px', borderRadius: 8 }}>
+            {verdict === 'PASS' ? '✓ PASS' : verdict === 'FAIL' ? '✗ FAIL' : '⌛ PENDING'}
+          </span>
+          <button
+            onClick={onDismiss}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 18, lineHeight: 1, padding: '2px 4px' }}
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+
+      {/* Summary stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(90px, 1fr))', gap: 8, marginBottom: 16 }}>
+        {[
+          { label: 'Queue Created', value: totalQueued,  color: '#6d28d9' },
+          { label: 'Audience',      value: audience_count, color: '#0891b2' },
+          { label: 'Sent',          value: totalSent,    color: '#16a34a' },
+          { label: 'Replies',       value: totalReplies, color: '#0d6efd' },
+          { label: 'Failures',      value: totalFailed,  color: totalFailed > 0 ? '#dc3545' : '#9ca3af' },
+          { label: 'Skipped',       value: totalSkipped, color: '#9ca3af' },
+          { label: 'Pending',       value: totalPending, color: '#d97706' },
+        ].map(({ label, value, color }) => (
+          <div key={label} style={{ textAlign: 'center', padding: '10px 6px', background: '#fff', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color }}>{value ?? 0}</div>
+            <div style={{ fontSize: 10, color: '#64748b', fontWeight: 600, marginTop: 3 }}>{label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Telecaller Distribution */}
+      {byTelecaller.length > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 6 }}>
+            Telecaller Distribution
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr>
+                  {['Telecaller', 'Queue', 'Sent', 'Replies', 'Failures', 'Pending'].map(h => (
+                    <th key={h} style={th}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {byTelecaller.map((r, i) => (
+                  <tr key={i}>
+                    <td style={{ ...td, fontFamily: 'monospace', fontWeight: 700, color: '#111827' }}>{r.phone}</td>
+                    <td style={td}>{r.queue}</td>
+                    <td style={{ ...td, color: '#16a34a', fontWeight: 700 }}>{r.sent}</td>
+                    <td style={{ ...td, color: '#0d6efd' }}>{r.replies}</td>
+                    <td style={{ ...td, color: r.failed > 0 ? '#dc3545' : '#94a3b8' }}>{r.failed}</td>
+                    <td style={{ ...td, color: '#d97706' }}>{r.pending}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Per-contact detail with AI Message Preview */}
+      {queueRows.length > 0 && (
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 6 }}>
+            Per-Contact Detail
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr>
+                  {['Customer', 'Telecaller', 'Product', 'Status', 'Sent', 'Read', 'Replied', 'AI Message Preview'].map(h => (
+                    <th key={h} style={th}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {queueRows.map(r => (
+                  <tr key={r.queue_id} style={{ background: r.replied ? '#f0fdf4' : undefined }}>
+                    <td style={td}>
+                      <div style={{ fontWeight: 600, color: '#111827' }}>{r.customer_name}</div>
+                      <div style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'monospace' }}>{r.customer_phone}</div>
+                    </td>
+                    <td style={{ ...td, fontFamily: 'monospace', fontSize: 11 }}>{r.telecaller_phone}</td>
+                    <td style={{ ...td, fontFamily: 'monospace', fontSize: 11, color: '#6d28d9' }}>
+                      {r.product_sku !== '—' ? r.product_sku : <span style={{ color: '#9ca3af' }}>—</span>}
+                    </td>
+                    <td style={td}><StatusPill status={r.queue_status} /></td>
+                    <td style={{ ...td, color: '#64748b', fontSize: 11 }}>{r.sent_at ? fmtTime(r.sent_at) : '—'}</td>
+                    <td style={{ ...td, textAlign: 'center' }}>
+                      {r.read
+                        ? <span style={{ color: '#16a34a', fontWeight: 700 }}>✓</span>
+                        : <span style={{ color: '#d1d5db' }}>—</span>}
+                    </td>
+                    <td style={{ ...td, textAlign: 'center' }}>
+                      {r.replied
+                        ? <span title={r.reply_message ?? ''} style={{ color: '#0d6efd', fontWeight: 700, cursor: 'help' }}>✓</span>
+                        : <span style={{ color: '#d1d5db' }}>—</span>}
+                    </td>
+                    <td style={{ ...td, maxWidth: 280 }}>
+                      {r.message_body ? (
+                        <div style={{
+                          fontFamily: 'monospace', fontSize: 10, color: '#374151',
+                          background: '#f8fafc', borderRadius: 4, padding: '4px 8px',
+                          maxHeight: 72, overflow: 'hidden',
+                          display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical',
+                          whiteSpace: 'pre-wrap',
+                        }}>
+                          {r.message_body}
+                        </div>
+                      ) : (
+                        <span style={{ color: '#9ca3af', fontSize: 10 }}>
+                          {r.queue_status === 'pending' ? 'Awaiting send…' : 'No message logged'}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {queueRows.length === 0 && totalQueued > 0 && (
+        <div style={{ fontSize: 12, color: '#64748b', textAlign: 'center', padding: '12px 0' }}>
+          Queue created — refreshing contact detail… (auto-updates every 15s)
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Section C: AI Campaigns ────────────────────────────────────────────────────
 function SectionC({ campaigns, todayQueueByTelecaller, isInconsistent }) {
-  const today = campaigns?.filter(c => c.is_today) ?? [];
-  const history = campaigns?.filter(c => !c.is_today) ?? [];
+  const validationToday = campaigns?.filter(c => c.is_validation && c.is_today) ?? [];
+  const regularToday    = campaigns?.filter(c => !c.is_validation && c.is_today) ?? [];
+  const history         = campaigns?.filter(c => !c.is_today) ?? [];
 
   return (
     <div style={{ ...card }}>
@@ -200,6 +380,31 @@ function SectionC({ campaigns, todayQueueByTelecaller, isInconsistent }) {
         <div style={{ fontSize: 11, color: '#16a34a', fontWeight: 700, letterSpacing: '0.04em', marginBottom: 8 }}>
           TODAY — {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}
         </div>
+
+        {/* Validation campaigns (today) */}
+        {validationToday.length > 0 && (
+          <div style={{ marginBottom: 12, background: '#eff6ff', border: '1.5px solid #93c5fd', borderRadius: 8, padding: '10px 12px' }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#1e40af', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>
+              Validation Campaigns ({validationToday.length})
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr>
+                    {['Campaign ID', 'Status', 'Telecaller', 'Created', 'Queue', 'Sent', 'Replies', 'Failed', 'Products'].map(h => (
+                      <th key={h} style={{ ...th, background: '#dbeafe', color: '#1e40af' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {validationToday.map(c => (
+                    <CampaignRow key={c.id} c={c} highlight validation />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* DASHBOARD DATA INCONSISTENT banner */}
         {isInconsistent && (
@@ -251,11 +456,11 @@ function SectionC({ campaigns, todayQueueByTelecaller, isInconsistent }) {
           </div>
         )}
 
-        {today.length === 0 && !isInconsistent ? (
+        {regularToday.length === 0 && !isInconsistent ? (
           <div style={{ color: '#9ca3af', fontSize: 13, padding: '8px 0' }}>
             No autonomous campaigns created today — engine will create them on next run at 8:30 AM IST.
           </div>
-        ) : today.length > 0 ? (
+        ) : regularToday.length > 0 ? (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
@@ -266,7 +471,7 @@ function SectionC({ campaigns, todayQueueByTelecaller, isInconsistent }) {
                 </tr>
               </thead>
               <tbody>
-                {today.map(c => (
+                {regularToday.map(c => (
                   <CampaignRow key={c.id} c={c} highlight />
                 ))}
               </tbody>
@@ -303,13 +508,15 @@ function SectionC({ campaigns, todayQueueByTelecaller, isInconsistent }) {
   );
 }
 
-function CampaignRow({ c, highlight }) {
+function CampaignRow({ c, highlight, validation }) {
   const sentPct = c.total_queue > 0 ? Math.round((c.sent / c.total_queue) * 100) : 0;
+  const rowBg   = validation ? '#eff6ff' : highlight ? '#f0fdf4' : undefined;
   return (
-    <tr style={{ background: highlight ? '#f0fdf4' : undefined }}>
-      <td style={{ ...td, fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: '#0d6efd' }}>
+    <tr style={{ background: rowBg }}>
+      <td style={{ ...td, fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: validation ? '#1d4ed8' : '#0d6efd' }}>
         {c.promo_id}
-        {c.test_mode && <span style={{ marginLeft: 5, fontSize: 9, background: '#fef9c3', color: '#854d0e', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>TEST</span>}
+        {validation && <span style={{ marginLeft: 5, fontSize: 9, background: '#dbeafe', color: '#1e40af', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>VALIDATION</span>}
+        {c.test_mode && !validation && <span style={{ marginLeft: 5, fontSize: 9, background: '#fef9c3', color: '#854d0e', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>TEST</span>}
       </td>
       <td style={td}><StatusPill status={c.status} /></td>
       <td style={{ ...td, fontFamily: 'monospace', fontSize: 11 }}>
@@ -697,11 +904,14 @@ function Kv({ label, value, children }) {
 
 // ── Main page ──────────────────────────────────────────────────────────────────
 export default function AiPromotionDashboard() {
-  const [data,        setData]        = useState(null);
-  const [loading,     setLoading]     = useState(true);
-  const [lastUpdated, setLastUpdated] = useState(null);
-  const [secondsAgo,  setSecondsAgo]  = useState(0);
-  const [error,       setError]       = useState(null);
+  const [data,              setData]              = useState(null);
+  const [loading,           setLoading]           = useState(true);
+  const [lastUpdated,       setLastUpdated]        = useState(null);
+  const [secondsAgo,        setSecondsAgo]         = useState(0);
+  const [error,             setError]             = useState(null);
+  const [validationRunning, setValidationRunning]  = useState(false);
+  const [validationResult,  setValidationResult]   = useState(null);
+  const [validationError,   setValidationError]    = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -719,6 +929,22 @@ export default function AiPromotionDashboard() {
     }
   }, []);
 
+  const runValidation = useCallback(async () => {
+    setValidationRunning(true);
+    setValidationError(null);
+    try {
+      const res = await apiFetch('/marketing/whatsapp-engine/ai/validation-run', { method: 'POST' });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.message ?? `Server error ${res.status}`);
+      setValidationResult(body);
+      await load();
+    } catch (e) {
+      setValidationError(e?.message ?? 'Validation run failed');
+    } finally {
+      setValidationRunning(false);
+    }
+  }, [load]);
+
   useEffect(() => { load(); const t = setInterval(load, 15_000); return () => clearInterval(t); }, [load]);
   useEffect(() => {
     const t = setInterval(() => {
@@ -735,6 +961,24 @@ export default function AiPromotionDashboard() {
       subtitle="Operational visibility — what ran, who received it, what products were used"
       actions={
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <button
+            onClick={runValidation}
+            disabled={validationRunning}
+            style={{
+              background:   validationRunning ? '#dbeafe' : '#1d4ed8',
+              color:        validationRunning ? '#1e40af' : '#fff',
+              border:       'none',
+              borderRadius: 8,
+              padding:      '6px 14px',
+              fontWeight:   700,
+              fontSize:     12,
+              cursor:       validationRunning ? 'default' : 'pointer',
+              letterSpacing: '0.02em',
+              whiteSpace:   'nowrap',
+            }}
+          >
+            {validationRunning ? '⌛ Running…' : '▶ Run AI Validation Test'}
+          </button>
           {data?.engine_status && (
             <span style={{
               background: runningStatus ? '#dcfce7' : '#fee2e2',
@@ -758,6 +1002,12 @@ export default function AiPromotionDashboard() {
           </div>
         )}
 
+        {validationError && (
+          <div style={{ background: '#fff5f5', border: '1px solid #fca5a5', borderRadius: 8, padding: '10px 16px', color: '#dc3545', fontSize: 13 }}>
+            Validation run failed: {validationError}
+          </div>
+        )}
+
         {loading && !data && (
           <div style={{ textAlign: 'center', padding: 48, color: '#94a3b8', fontSize: 14 }}>Loading AI dashboard…</div>
         )}
@@ -766,6 +1016,13 @@ export default function AiPromotionDashboard() {
           <>
             <WarningsBanner warnings={data.warnings} />
             <SectionA data={data.engine_status} />
+            {validationResult && (
+              <ValidationResultCard
+                runResult={validationResult}
+                dashData={data}
+                onDismiss={() => setValidationResult(null)}
+              />
+            )}
             <SectionB data={data.today_activity} />
             <SectionC
               campaigns={data.campaigns}
