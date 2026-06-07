@@ -1,7 +1,18 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import PageLayout from '../../../components/layout/PageLayout';
 import { apiFetch } from '../../../utils/api';
 import { resolveWarmup, waSessionChip } from '../utils/whatsappStatus';
+
+// ── Animation keyframes (injected once at module load) ────────────────────────
+if (typeof document !== 'undefined' && !document.getElementById('qa-promo-styles')) {
+  const s = document.createElement('style');
+  s.id = 'qa-promo-styles';
+  s.textContent = `
+    @keyframes skeletonPulse{0%,100%{opacity:1}50%{opacity:.45}}
+    @keyframes qaSlideIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+  `;
+  document.head.appendChild(s);
+}
 
 // ── Style tokens ──────────────────────────────────────────────────────────────
 const card = {
@@ -79,6 +90,216 @@ const STATUS_COLORS = {
 function StatusPill({ status }) {
   const c = STATUS_COLORS[status] ?? STATUS_COLORS.draft;
   return pill(status.toUpperCase().replace(/_/g, ' '), c.bg, c.fg);
+}
+
+// ── Mobile detection ──────────────────────────────────────────────────────────
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+  useEffect(() => {
+    const h = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', h);
+    return () => window.removeEventListener('resize', h);
+  }, []);
+  return isMobile;
+}
+
+// ── Preview view button ────────────────────────────────────────────────────────
+function PreviewButton({ isOpen, hasContent, onClick }) {
+  if (!hasContent) return <span style={{ color: '#d1d5db', fontSize: 11 }}>—</span>;
+  return (
+    <button
+      onClick={onClick}
+      title={isOpen ? 'Close preview' : 'View message preview'}
+      style={{
+        background: isOpen ? '#ede9fe' : '#f1f5f9',
+        border: 'none',
+        borderRadius: 6,
+        padding: '4px 10px',
+        cursor: 'pointer',
+        fontSize: 12,
+        color: isOpen ? '#7c3aed' : '#64748b',
+        fontWeight: 600,
+        transition: 'background 0.15s, color 0.15s',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {isOpen ? '✕ Close' : '👁 View'}
+    </button>
+  );
+}
+
+// ── Preview skeleton (shown briefly on expand) ────────────────────────────────
+function PreviewSkeleton() {
+  const pulse = { background: '#e2e8f0', borderRadius: 6, animation: 'skeletonPulse 1.4s ease infinite' };
+  return (
+    <div style={{ display: 'flex', gap: 16, padding: '16px 20px', alignItems: 'flex-start' }}>
+      <div style={{ ...pulse, width: 220, height: 200, flexShrink: 0 }} />
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 4 }}>
+        <div style={{ ...pulse, height: 12, width: '55%' }} />
+        <div style={{ ...pulse, height: 10, width: '35%' }} />
+        <div style={{ ...pulse, height: 10, width: '70%' }} />
+        <div style={{ ...pulse, height: 10, width: '45%' }} />
+      </div>
+    </div>
+  );
+}
+
+// ── Metadata row inside expanded panel ────────────────────────────────────────
+function ExpandMeta({ label, value, mono }) {
+  return (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12 }}>
+      <span style={{ color: '#64748b', fontWeight: 600, minWidth: 72, flexShrink: 0 }}>{label}</span>
+      <span style={{ color: '#1e293b', fontFamily: mono ? 'monospace' : undefined }}>{value}</span>
+    </div>
+  );
+}
+
+// ── Expandable preview row (desktop) ──────────────────────────────────────────
+function ExpandedPreviewRow({ row, colSpan, isLoading }) {
+  const [visible, setVisible] = useState(false);
+  const rowRef = useRef(null);
+  const hasPreview = !!(row.message_body || row.generated_message || row.product_image);
+
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      setVisible(true);
+      rowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  return (
+    <tr ref={rowRef}>
+      <td colSpan={colSpan} style={{ padding: 0, background: '#fafbff' }}>
+        <div style={{
+          maxHeight: visible ? '700px' : '0',
+          overflow: 'hidden',
+          opacity: visible ? 1 : 0,
+          transition: 'max-height 0.26s ease, opacity 0.2s ease',
+          borderLeft: '3px solid #25D366',
+          borderBottom: '2px solid #e2e8f0',
+        }}>
+          {isLoading ? <PreviewSkeleton /> : (
+            <div style={{ padding: '16px 20px', display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+              {hasPreview && (
+                <div style={{ flexShrink: 0 }}>
+                  <WhatsAppMessagePreview
+                    imageUrl={row.product_image}
+                    messageBody={row.message_body}
+                    generatedMessage={row.generated_message}
+                    sku={row.product_sku}
+                  />
+                </div>
+              )}
+              <div style={{ flex: 1, minWidth: 200, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
+                  Message Detail
+                </div>
+                <ExpandMeta label="Customer"   value={`${row.customer_name} · ${row.customer_phone}`} />
+                {row.product_title && (
+                  <ExpandMeta
+                    label="Product"
+                    value={row.product_title !== row.product_sku ? `${row.product_title} (${row.product_sku ?? '—'})` : (row.product_sku ?? '—')}
+                    mono
+                  />
+                )}
+                {row.telecaller_phone && <ExpandMeta label="Telecaller" value={row.telecaller_phone} mono />}
+                <ExpandMeta label="Status"    value={<StatusPill status={row.queue_status} />} />
+                {row.sent_at && <ExpandMeta label="Sent" value={fmt(row.sent_at)} />}
+                {row.product_url && (
+                  <a
+                    href={row.product_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ marginTop: 4, color: '#0d6efd', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                  >
+                    🛍 View Product
+                  </a>
+                )}
+                {row.replied && row.reply_message && (
+                  <div style={{ marginTop: 6, padding: '8px 12px', background: '#f0fdf4', borderRadius: 8, fontSize: 11, color: '#166534', border: '1px solid #bbf7d0' }}>
+                    <div style={{ fontWeight: 700, marginBottom: 2 }}>Reply received:</div>
+                    {row.reply_message}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+// ── Mobile bottom sheet preview ────────────────────────────────────────────────
+function MobilePreviewSheet({ row, onClose }) {
+  const hasPreview = !!(row.message_body || row.generated_message || row.product_image);
+
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
+  return (
+    <>
+      <div
+        onClick={onClose}
+        style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000 }}
+      />
+      <div style={{
+        position: 'fixed', bottom: 0, left: 0, right: 0,
+        background: '#fff',
+        borderRadius: '16px 16px 0 0',
+        padding: '14px 16px 36px',
+        zIndex: 1001,
+        maxHeight: '86vh',
+        overflowY: 'auto',
+        boxShadow: '0 -4px 24px rgba(0,0,0,0.15)',
+        animation: 'qaSlideIn 0.22s ease',
+      }}>
+        <div style={{ width: 36, height: 4, background: '#e2e8f0', borderRadius: 2, margin: '0 auto 14px' }} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+          <div>
+            <div style={{ fontWeight: 700, color: '#111827', fontSize: 14 }}>{row.customer_name}</div>
+            <div style={{ fontSize: 11, color: '#64748b', fontFamily: 'monospace' }}>
+              {row.product_sku && row.product_sku !== '—' ? row.product_sku : ''}
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#9ca3af', lineHeight: 1, padding: '2px 4px' }}>✕</button>
+        </div>
+        {hasPreview && (
+          <div style={{ marginBottom: 16 }}>
+            <WhatsAppMessagePreview
+              imageUrl={row.product_image}
+              messageBody={row.message_body}
+              generatedMessage={row.generated_message}
+              sku={row.product_sku}
+            />
+          </div>
+        )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <ExpandMeta label="Status"     value={<StatusPill status={row.queue_status} />} />
+          <ExpandMeta label="Sent"       value={row.sent_at ? fmt(row.sent_at) : '—'} />
+          {row.telecaller_phone && <ExpandMeta label="Telecaller" value={row.telecaller_phone} mono />}
+          {row.product_url && (
+            <a href={row.product_url} target="_blank" rel="noreferrer" style={{ color: '#0d6efd', fontSize: 12, marginTop: 4 }}>
+              🛍 View Product
+            </a>
+          )}
+          {row.replied && row.reply_message && (
+            <div style={{ marginTop: 8, padding: '8px 12px', background: '#f0fdf4', borderRadius: 8, fontSize: 12, color: '#166534', border: '1px solid #bbf7d0' }}>
+              <div style={{ fontWeight: 700, marginBottom: 2 }}>Reply received:</div>
+              {row.reply_message}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
 }
 
 // ── Section A: Engine Status ───────────────────────────────────────────────────
@@ -236,6 +457,10 @@ function WhatsAppMessagePreview({ imageUrl, messageBody, generatedMessage, sku }
 
 // ── Validation Result Card ─────────────────────────────────────────────────────
 function ValidationResultCard({ runResult, dashData, onDismiss }) {
+  const [expandedId, setExpandedId] = useState(null);
+  const [loadingId, setLoadingId] = useState(null);
+  const isMobile = useIsMobile();
+
   if (!runResult) return null;
 
   const { promo_id, audience_count, queued: initialQueued, cleanup } = runResult;
@@ -267,6 +492,17 @@ function ValidationResultCard({ runResult, dashData, onDismiss }) {
     failed:  c.failed,
     pending: c.pending,
   }));
+
+  const handleToggle = (id) => {
+    if (expandedId === id) { setExpandedId(null); return; }
+    setExpandedId(id);
+    setLoadingId(id);
+    setTimeout(() => setLoadingId(null), 220);
+  };
+
+  const mobileRow = isMobile && expandedId
+    ? queueRows.find(r => r.queue_id === expandedId) ?? null
+    : null;
 
   return (
     <div style={{ ...card, background: cardBg, border: `2px solid ${borderColor}`, marginBottom: 0 }}>
@@ -366,7 +602,7 @@ function ValidationResultCard({ runResult, dashData, onDismiss }) {
         </div>
       )}
 
-      {/* Per-contact detail with AI Message Preview */}
+      {/* Per-contact detail — compact rows with expandable preview */}
       {queueRows.length > 0 && (
         <div>
           <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 6 }}>
@@ -376,43 +612,47 @@ function ValidationResultCard({ runResult, dashData, onDismiss }) {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr>
-                  {['Customer', 'Telecaller', 'Product', 'Status', 'Sent', 'Read', 'Replied', 'AI Message Preview'].map(h => (
+                  {['Customer', 'Telecaller', 'Product', 'Status', 'Sent', 'Read', 'Replied', 'Preview'].map(h => (
                     <th key={h} style={th}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {queueRows.map(r => (
-                  <tr key={r.queue_id} style={{ background: r.replied ? '#f0fdf4' : undefined }}>
-                    <td style={td}>
-                      <div style={{ fontWeight: 600, color: '#111827' }}>{r.customer_name}</div>
-                      <div style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'monospace' }}>{r.customer_phone}</div>
-                    </td>
-                    <td style={{ ...td, fontFamily: 'monospace', fontSize: 11 }}>{r.telecaller_phone}</td>
-                    <td style={{ ...td, fontFamily: 'monospace', fontSize: 11, color: '#6d28d9' }}>
-                      {r.product_sku !== '—' ? r.product_sku : <span style={{ color: '#9ca3af' }}>—</span>}
-                    </td>
-                    <td style={td}><StatusPill status={r.queue_status} /></td>
-                    <td style={{ ...td, color: '#64748b', fontSize: 11 }}>{r.sent_at ? fmtTime(r.sent_at) : '—'}</td>
-                    <td style={{ ...td, textAlign: 'center' }}>
-                      {r.read
-                        ? <span style={{ color: '#16a34a', fontWeight: 700 }}>✓</span>
-                        : <span style={{ color: '#d1d5db' }}>—</span>}
-                    </td>
-                    <td style={{ ...td, textAlign: 'center' }}>
-                      {r.replied
-                        ? <span title={r.reply_message ?? ''} style={{ color: '#0d6efd', fontWeight: 700, cursor: 'help' }}>✓</span>
-                        : <span style={{ color: '#d1d5db' }}>—</span>}
-                    </td>
-                    <td style={{ ...td, maxWidth: 280, verticalAlign: 'top', paddingTop: 10 }}>
-                      <WhatsAppMessagePreview
-                        imageUrl={r.product_image}
-                        messageBody={r.message_body}
-                        generatedMessage={r.generated_message}
-                        sku={r.product_sku}
-                      />
-                    </td>
-                  </tr>
+                  <React.Fragment key={r.queue_id}>
+                    <tr style={{ background: r.replied ? '#f0fdf4' : undefined }}>
+                      <td style={td}>
+                        <div style={{ fontWeight: 600, color: '#111827' }}>{r.customer_name}</div>
+                        <div style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'monospace' }}>{r.customer_phone}</div>
+                      </td>
+                      <td style={{ ...td, fontFamily: 'monospace', fontSize: 11 }}>{r.telecaller_phone}</td>
+                      <td style={{ ...td, fontFamily: 'monospace', fontSize: 11, color: '#6d28d9' }}>
+                        {r.product_sku !== '—' ? r.product_sku : <span style={{ color: '#9ca3af' }}>—</span>}
+                      </td>
+                      <td style={td}><StatusPill status={r.queue_status} /></td>
+                      <td style={{ ...td, color: '#64748b', fontSize: 11 }}>{r.sent_at ? fmtTime(r.sent_at) : '—'}</td>
+                      <td style={{ ...td, textAlign: 'center' }}>
+                        {r.read
+                          ? <span style={{ color: '#16a34a', fontWeight: 700 }}>✓</span>
+                          : <span style={{ color: '#d1d5db' }}>—</span>}
+                      </td>
+                      <td style={{ ...td, textAlign: 'center' }}>
+                        {r.replied
+                          ? <span title={r.reply_message ?? ''} style={{ color: '#0d6efd', fontWeight: 700, cursor: 'help' }}>✓</span>
+                          : <span style={{ color: '#d1d5db' }}>—</span>}
+                      </td>
+                      <td style={{ ...td, textAlign: 'center' }}>
+                        <PreviewButton
+                          isOpen={expandedId === r.queue_id}
+                          hasContent={!!(r.message_body || r.generated_message || r.product_image)}
+                          onClick={() => handleToggle(r.queue_id)}
+                        />
+                      </td>
+                    </tr>
+                    {!isMobile && expandedId === r.queue_id && (
+                      <ExpandedPreviewRow row={r} colSpan={8} isLoading={loadingId === r.queue_id} />
+                    )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
@@ -425,6 +665,8 @@ function ValidationResultCard({ runResult, dashData, onDismiss }) {
           Queue created — refreshing contact detail… (auto-updates every 15s)
         </div>
       )}
+
+      {mobileRow && <MobilePreviewSheet row={mobileRow} onClose={() => setExpandedId(null)} />}
     </div>
   );
 }
@@ -607,6 +849,21 @@ function CampaignRow({ c, highlight, validation }) {
 
 // ── Section D: Campaign Queue Detail ──────────────────────────────────────────
 function SectionD({ data }) {
+  const [expandedId, setExpandedId] = useState(null);
+  const [loadingId,  setLoadingId]  = useState(null);
+  const isMobile = useIsMobile();
+
+  const handleToggle = (id) => {
+    if (expandedId === id) { setExpandedId(null); return; }
+    setExpandedId(id);
+    setLoadingId(id);
+    setTimeout(() => setLoadingId(null), 220);
+  };
+
+  const mobileRow = isMobile && expandedId
+    ? (data ?? []).find(r => r.queue_id === expandedId) ?? null
+    : null;
+
   if (!data?.length) return (
     <div style={{ ...card }}>
       <div style={sectionTitle}>D — Campaign Queue Detail (Today)</div>
@@ -624,45 +881,58 @@ function SectionD({ data }) {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
             <tr>
-              {['Customer', 'Product SKU', 'Product Title', 'Status', 'Sent Time', 'Read', 'Replied', 'Lead', 'Telecaller'].map(h => (
+              {['Customer', 'Product SKU', 'Product Title', 'Status', 'Sent Time', 'Read', 'Replied', 'Lead', 'Telecaller', 'Preview'].map(h => (
                 <th key={h} style={th}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {data.map(r => (
-              <tr key={r.queue_id} style={{ background: r.replied ? '#f0fdf4' : r.lead_created ? '#fffbeb' : undefined }}>
-                <td style={td}>
-                  <div style={{ fontWeight: 600, color: '#111827' }}>{r.customer_name}</div>
-                  <div style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'monospace' }}>{r.customer_phone}</div>
-                </td>
-                <td style={{ ...td, fontFamily: 'monospace', fontSize: 11, color: '#6d28d9' }}>{r.product_sku}</td>
-                <td style={{ ...td, maxWidth: 160 }}>
-                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>
-                    {r.product_title !== r.product_sku ? r.product_title : '—'}
-                  </div>
-                </td>
-                <td style={td}><StatusPill status={r.queue_status} /></td>
-                <td style={{ ...td, color: '#64748b', fontSize: 11 }}>{r.sent_at ? fmtTime(r.sent_at) : '—'}</td>
-                <td style={{ ...td, textAlign: 'center' }}>
-                  {r.read ? <span style={{ color: '#16a34a', fontWeight: 700 }}>✓</span> : <span style={{ color: '#d1d5db' }}>—</span>}
-                </td>
-                <td style={{ ...td, textAlign: 'center' }}>
-                  {r.replied ? (
-                    <span title={r.reply_message ?? ''} style={{ color: '#0d6efd', fontWeight: 700, cursor: 'help' }}>✓</span>
-                  ) : (
-                    <span style={{ color: '#d1d5db' }}>—</span>
-                  )}
-                </td>
-                <td style={{ ...td, textAlign: 'center' }}>
-                  {r.lead_created ? <span style={{ color: '#d97706', fontWeight: 700 }}>✓</span> : <span style={{ color: '#d1d5db' }}>—</span>}
-                </td>
-                <td style={{ ...td, fontFamily: 'monospace', fontSize: 11 }}>{r.telecaller_phone}</td>
-              </tr>
+              <React.Fragment key={r.queue_id}>
+                <tr style={{ background: r.replied ? '#f0fdf4' : r.lead_created ? '#fffbeb' : undefined }}>
+                  <td style={td}>
+                    <div style={{ fontWeight: 600, color: '#111827' }}>{r.customer_name}</div>
+                    <div style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'monospace' }}>{r.customer_phone}</div>
+                  </td>
+                  <td style={{ ...td, fontFamily: 'monospace', fontSize: 11, color: '#6d28d9' }}>{r.product_sku}</td>
+                  <td style={{ ...td, maxWidth: 160 }}>
+                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>
+                      {r.product_title !== r.product_sku ? r.product_title : '—'}
+                    </div>
+                  </td>
+                  <td style={td}><StatusPill status={r.queue_status} /></td>
+                  <td style={{ ...td, color: '#64748b', fontSize: 11 }}>{r.sent_at ? fmtTime(r.sent_at) : '—'}</td>
+                  <td style={{ ...td, textAlign: 'center' }}>
+                    {r.read ? <span style={{ color: '#16a34a', fontWeight: 700 }}>✓</span> : <span style={{ color: '#d1d5db' }}>—</span>}
+                  </td>
+                  <td style={{ ...td, textAlign: 'center' }}>
+                    {r.replied ? (
+                      <span title={r.reply_message ?? ''} style={{ color: '#0d6efd', fontWeight: 700, cursor: 'help' }}>✓</span>
+                    ) : (
+                      <span style={{ color: '#d1d5db' }}>—</span>
+                    )}
+                  </td>
+                  <td style={{ ...td, textAlign: 'center' }}>
+                    {r.lead_created ? <span style={{ color: '#d97706', fontWeight: 700 }}>✓</span> : <span style={{ color: '#d1d5db' }}>—</span>}
+                  </td>
+                  <td style={{ ...td, fontFamily: 'monospace', fontSize: 11 }}>{r.telecaller_phone}</td>
+                  <td style={{ ...td, textAlign: 'center' }}>
+                    <PreviewButton
+                      isOpen={expandedId === r.queue_id}
+                      hasContent={!!(r.message_body || r.generated_message || r.product_image)}
+                      onClick={() => handleToggle(r.queue_id)}
+                    />
+                  </td>
+                </tr>
+                {!isMobile && expandedId === r.queue_id && (
+                  <ExpandedPreviewRow row={r} colSpan={10} isLoading={loadingId === r.queue_id} />
+                )}
+              </React.Fragment>
             ))}
           </tbody>
         </table>
       </div>
+      {mobileRow && <MobilePreviewSheet row={mobileRow} onClose={() => setExpandedId(null)} />}
     </div>
   );
 }
