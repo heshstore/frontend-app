@@ -522,6 +522,7 @@ export default function Sidebar({ onClose }) {
               {pi('Roles & Permissions', '/rbac',                      'lock')}
               {canSeeWhatsApp && pi('WA Monitor', '/admin/whatsapp',   'monitor')}
               {pi('Ops Log',             '/pilot/log',                 'doc')}
+              {pi('Environment',         '/settings/environment',      'database')}
               {pi('Version History',     '/settings/version-history',  'tag')}
             </SectionGroup>
           )}

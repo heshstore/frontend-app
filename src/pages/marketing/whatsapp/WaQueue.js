@@ -30,12 +30,13 @@ const STATUS_COLORS = {
   skipped:    { bg: '#f3f4f6', color: '#6b7280' },
 };
 
-function StatusBadge({ status }) {
+function StatusBadge({ status, reason }) {
   const s = (status || '').toLowerCase();
   const c = STATUS_COLORS[s] || { bg: '#e2e8f0', color: '#374151' };
+  const label = s === 'skipped' && reason ? reason : (status || '—');
   return (
     <span style={{ background: c.bg, color: c.color, padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>
-      {status || '—'}
+      {label}
     </span>
   );
 }
@@ -176,7 +177,7 @@ export default function WaQueue() {
       const res = await apiFetch(`/marketing/whatsapp-engine/queue/${item.id}/skip`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason: 'Manually skipped' }),
+        body: JSON.stringify({ reason: 'UNKNOWN_ERROR' }),
       });
       if (!res.ok) throw new Error(`Server error ${res.status}`);
       showFeedback('Item skipped');
@@ -332,7 +333,7 @@ export default function WaQueue() {
                       <td style={{ ...td, whiteSpace: 'nowrap', fontSize: 12 }}>{formatTime(item.scheduled_at || item.created_at)}</td>
                       <td style={td}><span style={{ fontWeight: 600 }}>{item.customer_phone || '—'}</span></td>
                       <td style={td}><SenderCell item={item} numberMap={numberMap} /></td>
-                      <td style={td}><StatusBadge status={item.status || 'pending'} /></td>
+                      <td style={td}><StatusBadge status={item.status || 'pending'} reason={item.error_message} /></td>
                       <td style={{ ...td, fontSize: 12, color: '#475569' }}>
                         {item.campaign_id ? (campaignMap[item.campaign_id] || truncate(item.campaign_id, 12)) : <span style={{ color: '#9ca3af' }}>—</span>}
                       </td>

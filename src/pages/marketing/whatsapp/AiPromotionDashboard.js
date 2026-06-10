@@ -87,9 +87,12 @@ const STATUS_COLORS = {
   pending:             { bg: '#dbeafe', fg: '#1d4ed8' },
   skipped:             { bg: '#f3f4f6', fg: '#6b7280' },
 };
-function StatusPill({ status }) {
+function StatusPill({ status, skipReason }) {
   const c = STATUS_COLORS[status] ?? STATUS_COLORS.draft;
-  return pill(status.toUpperCase().replace(/_/g, ' '), c.bg, c.fg);
+  const label = status === 'skipped' && skipReason
+    ? skipReason
+    : status.toUpperCase().replace(/_/g, ' ');
+  return pill(label, c.bg, c.fg);
 }
 
 // ── Mobile detection ──────────────────────────────────────────────────────────
@@ -207,7 +210,7 @@ function ExpandedPreviewRow({ row, colSpan, isLoading }) {
                   />
                 )}
                 {row.telecaller_phone && <ExpandMeta label="Telecaller" value={row.telecaller_phone} mono />}
-                <ExpandMeta label="Status"    value={<StatusPill status={row.queue_status} />} />
+                <ExpandMeta label="Status"    value={<StatusPill status={row.queue_status} skipReason={row.skip_reason} />} />
                 {row.sent_at && <ExpandMeta label="Sent" value={fmt(row.sent_at)} />}
                 {row.product_url && (
                   <a
@@ -282,7 +285,7 @@ function MobilePreviewSheet({ row, onClose }) {
           </div>
         )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <ExpandMeta label="Status"     value={<StatusPill status={row.queue_status} />} />
+          <ExpandMeta label="Status"     value={<StatusPill status={row.queue_status} skipReason={row.skip_reason} />} />
           <ExpandMeta label="Sent"       value={row.sent_at ? fmt(row.sent_at) : '—'} />
           {row.telecaller_phone && <ExpandMeta label="Telecaller" value={row.telecaller_phone} mono />}
           {row.product_url && (
@@ -376,29 +379,53 @@ function SectionA({ data }) {
   );
 }
 
-// ── Section B: Today's Activity ────────────────────────────────────────────────
-function SectionB({ data }) {
-  if (!data) return null;
-  const cards = [
-    { label: 'Queue Items Built',  value: data.queue_items,       color: '#6d28d9' },
-    { label: 'Messages Sent',      value: data.messages_sent,     color: '#16a34a' },
-    { label: 'Replies',            value: data.replies,           color: '#0891b2' },
-    { label: 'Leads Created',      value: data.leads_created,     color: '#d97706' },
-    { label: 'Failures',           value: data.failures,          color: data.failures > 0 ? '#dc3545' : '#9ca3af' },
-    { label: 'Skipped',            value: data.skipped,           color: '#9ca3af' },
+// ── Section B: Today's Activity (per telecaller) ──────────────────────────────
+function SectionB({ byTelecaller, fleetSummary }) {
+  if (!byTelecaller?.length) {
+    return (
+      <div style={{ ...card }}>
+        <div style={sectionTitle}>B — Today's Activity</div>
+        <div style={{ color: '#9ca3af', fontSize: 13 }}>No active telecallers configured.</div>
+      </div>
+    );
+  }
+
+  const metricDefs = [
+    { key: 'messages_sent',   label: 'Messages Sent Today', color: '#16a34a' },
+    { key: 'replies',         label: 'Replies',             color: '#0891b2' },
+    { key: 'leads_created',   label: 'Leads Created',       color: '#d97706' },
+    { key: 'not_on_whatsapp', label: 'Not On WhatsApp',     color: '#9ca3af' },
+    { key: 'failures',        label: 'Failures',            color: '#dc3545' },
+    { key: 'pending_queue',   label: 'Pending Queue',       color: '#6d28d9' },
   ];
+
   return (
     <div style={{ ...card }}>
       <div style={sectionTitle}>B — Today's Activity</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 12 }}>
-        {cards.map(({ label, value, color }) => (
-          <div key={label} style={{ textAlign: 'center', padding: '12px 8px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
-            <div style={{ fontSize: 26, fontWeight: 800, color }}>{value ?? 0}</div>
-            <div style={{ fontSize: 10, color: '#64748b', fontWeight: 600, marginTop: 4, lineHeight: 1.3 }}>{label}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {byTelecaller.map((tc, idx) => (
+          <div key={tc.number_id} style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 14px', background: '#fafbfc' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8' }}>Telecaller {idx + 1}</span>
+              <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 14, color: '#111827' }}>{tc.phone}</span>
+              {tc.name && <span style={{ fontSize: 11, color: '#64748b' }}>{tc.name}</span>}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 8 }}>
+              {metricDefs.map(({ key, label, color }) => {
+                const value = tc[key] ?? 0;
+                const valColor = key === 'failures' && value === 0 ? '#9ca3af' : color;
+                return (
+                  <div key={key} style={{ textAlign: 'center', padding: '10px 6px', background: '#fff', borderRadius: 6, border: '1px solid #e2e8f0' }}>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: valColor }}>{value}</div>
+                    <div style={{ fontSize: 9, color: '#64748b', fontWeight: 600, marginTop: 3, lineHeight: 1.3 }}>{label}</div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         ))}
       </div>
-      {data.queue_items > 0 && data.campaigns_created === 0 && (
+      {fleetSummary?.queue_items > 0 && fleetSummary?.campaigns_created === 0 && (
         <div style={{ marginTop: 10, fontSize: 12, color: '#854d0e', background: '#fef9c3', padding: '6px 10px', borderRadius: 6 }}>
           Queue rows exist but no autonomous campaigns created yet — campaigns will be created on next engine run.
         </div>
@@ -629,7 +656,7 @@ function ValidationResultCard({ runResult, dashData, onDismiss }) {
                       <td style={{ ...td, fontFamily: 'monospace', fontSize: 11, color: '#6d28d9' }}>
                         {r.product_sku !== '—' ? r.product_sku : <span style={{ color: '#9ca3af' }}>—</span>}
                       </td>
-                      <td style={td}><StatusPill status={r.queue_status} /></td>
+                      <td style={td}><StatusPill status={r.queue_status} skipReason={r.skip_reason} /></td>
                       <td style={{ ...td, color: '#64748b', fontSize: 11 }}>{r.sent_at ? fmtTime(r.sent_at) : '—'}</td>
                       <td style={{ ...td, textAlign: 'center' }}>
                         {r.read
@@ -671,11 +698,35 @@ function ValidationResultCard({ runResult, dashData, onDismiss }) {
   );
 }
 
+// ── Audience Status bar ────────────────────────────────────────────────────────
+function SectionAudienceStatus({ status, dbCounts, queueBuiltToday }) {
+  // status = audience_status (new backend) or fall back to database_counts (current VPS)
+  const resolved = status ?? dbCounts ?? null;
+  if (!resolved) return null;
+  const { promotional_db_count, customer_db_count, eligible_audience_today } = resolved;
+  const chip = (label, value, color) => (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '10px 22px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0', minWidth: 120 }}>
+      <div style={{ fontSize: 22, fontWeight: 800, color: color ?? '#1e293b', lineHeight: 1.1 }}>{value?.toLocaleString() ?? '—'}</div>
+      <div style={{ fontSize: 10, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase', marginTop: 3, textAlign: 'center' }}>{label}</div>
+    </div>
+  );
+  return (
+    <div style={{ ...card, padding: '14px 18px' }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 10 }}>Audience Overview</div>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        {chip('Promotional DB', promotional_db_count, '#1e293b')}
+        {chip('Customer DB', customer_db_count, '#374151')}
+        {chip('Eligible Today', eligible_audience_today, '#16a34a')}
+        {chip('Queue Built Today', queueBuiltToday, '#0d6efd')}
+      </div>
+    </div>
+  );
+}
+
 // ── Section C: AI Campaigns ────────────────────────────────────────────────────
 function SectionC({ campaigns, todayQueueByTelecaller, isInconsistent }) {
   const validationToday = campaigns?.filter(c => c.is_validation && c.is_today) ?? [];
   const regularToday    = campaigns?.filter(c => !c.is_validation && c.is_today) ?? [];
-  const history         = campaigns?.filter(c => !c.is_today) ?? [];
 
   return (
     <div style={{ ...card }}>
@@ -697,7 +748,7 @@ function SectionC({ campaigns, todayQueueByTelecaller, isInconsistent }) {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                 <thead>
                   <tr>
-                    {['Campaign ID', 'Status', 'Telecaller', 'Created', 'Queue', 'Sent', 'Replies', 'Failed', 'Products'].map(h => (
+                    {['Campaign ID', 'Status', 'Telecaller', 'Created', 'Queued', 'Sent', 'Replies', 'Failed', 'Products'].map(h => (
                       <th key={h} style={{ ...th, background: '#dbeafe', color: '#1e40af' }}>{h}</th>
                     ))}
                   </tr>
@@ -771,7 +822,7 @@ function SectionC({ campaigns, todayQueueByTelecaller, isInconsistent }) {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr>
-                  {['Campaign ID', 'Status', 'Telecaller', 'Created', 'Queue', 'Sent', 'Replies', 'Failed', 'Products Used'].map(h => (
+                  {['Campaign ID', 'Status', 'Telecaller', 'Created', 'Queued', 'Sent', 'Replies', 'Failed', 'Products Used'].map(h => (
                     <th key={h} style={th}>{h}</th>
                   ))}
                 </tr>
@@ -785,31 +836,6 @@ function SectionC({ campaigns, todayQueueByTelecaller, isInconsistent }) {
           </div>
         ) : null}
       </div>
-
-      {/* History block */}
-      {history.length > 0 && (
-        <details>
-          <summary style={{ cursor: 'pointer', fontSize: 11, color: '#64748b', fontWeight: 700, userSelect: 'none', marginBottom: 8 }}>
-            PREVIOUS CAMPAIGNS ({history.length})
-          </summary>
-          <div style={{ overflowX: 'auto', marginTop: 8 }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-              <thead>
-                <tr>
-                  {['Campaign ID', 'Status', 'Telecaller', 'Date', 'Queue', 'Sent', 'Replies', 'Failed', 'Products Used'].map(h => (
-                    <th key={h} style={{ ...th, background: '#fafafa' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {history.map(c => (
-                  <CampaignRow key={c.id} c={c} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </details>
-      )}
     </div>
   );
 }
@@ -831,7 +857,7 @@ function CampaignRow({ c, highlight, validation }) {
       <td style={{ ...td, color: '#64748b', fontSize: 11 }}>
         {highlight ? fmtTime(c.created_at) : fmtDate(c.created_at)}
       </td>
-      <td style={td}>{c.total_queue}</td>
+      <td style={td} title="Actual queue rows built in DB (150 planned per number; sending limited by warmup stage budget)">{c.total_queue}</td>
       <td style={td}>
         <span style={{ color: '#16a34a', fontWeight: 700 }}>{c.sent}</span>
         <span style={{ color: '#94a3b8', fontSize: 10, marginLeft: 3 }}>({sentPct}%)</span>
@@ -848,7 +874,7 @@ function CampaignRow({ c, highlight, validation }) {
 }
 
 // ── Section D: Campaign Queue Detail ──────────────────────────────────────────
-function SectionD({ data }) {
+function SectionD({ data, nested }) {
   const [expandedId, setExpandedId] = useState(null);
   const [loadingId,  setLoadingId]  = useState(null);
   const isMobile = useIsMobile();
@@ -864,17 +890,20 @@ function SectionD({ data }) {
     ? (data ?? []).find(r => r.queue_id === expandedId) ?? null
     : null;
 
-  if (!data?.length) return (
-    <div style={{ ...card }}>
-      <div style={sectionTitle}>D — Campaign Queue Detail (Today)</div>
-      <div style={{ color: '#9ca3af', fontSize: 13, padding: '8px 0' }}>No queue items for today.</div>
-    </div>
-  );
-
-  return (
-    <div style={{ ...card }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+  if (!data?.length) {
+    if (nested) return <div style={{ color: '#9ca3af', fontSize: 12, padding: '4px 0' }}>No rows found.</div>;
+    return (
+      <div style={{ ...card }}>
         <div style={sectionTitle}>D — Campaign Queue Detail (Today)</div>
+        <div style={{ color: '#9ca3af', fontSize: 13, padding: '8px 0' }}>No queue items for today.</div>
+      </div>
+    );
+  }
+
+  const inner = (
+    <>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        {!nested && <div style={sectionTitle}>D — Campaign Queue Detail (Today)</div>}
         <span style={{ fontSize: 11, color: '#64748b' }}>{data.length} messages</span>
       </div>
       <div style={{ overflowX: 'auto' }}>
@@ -900,7 +929,7 @@ function SectionD({ data }) {
                       {r.product_title !== r.product_sku ? r.product_title : '—'}
                     </div>
                   </td>
-                  <td style={td}><StatusPill status={r.queue_status} /></td>
+                  <td style={td}><StatusPill status={r.queue_status} skipReason={r.skip_reason} /></td>
                   <td style={{ ...td, color: '#64748b', fontSize: 11 }}>{r.sent_at ? fmtTime(r.sent_at) : '—'}</td>
                   <td style={{ ...td, textAlign: 'center' }}>
                     {r.read ? <span style={{ color: '#16a34a', fontWeight: 700 }}>✓</span> : <span style={{ color: '#d1d5db' }}>—</span>}
@@ -933,12 +962,16 @@ function SectionD({ data }) {
         </table>
       </div>
       {mobileRow && <MobilePreviewSheet row={mobileRow} onClose={() => setExpandedId(null)} />}
-    </div>
+    </>
   );
+
+  return nested
+    ? <div style={{ marginTop: 4 }}>{inner}</div>
+    : <div style={{ ...card }}>{inner}</div>;
 }
 
 // ── Section E: Telecaller Performance ─────────────────────────────────────────
-function SectionE({ data, engineStatus, campaigns, queueDetail }) {
+function SectionE({ data, engineStatus, campaigns }) {
   // Always use engine_status.numbers as the source of truth — never hides zero-activity telecallers
   const allNumbers = engineStatus?.numbers ?? [];
 
@@ -953,34 +986,33 @@ function SectionE({ data, engineStatus, campaigns, queueDetail }) {
     }
   }
 
-  // Aggregate per telecaller phone from queue detail: read count, last activity, content preview
-  const detailByPhone = {};
-  for (const r of (queueDetail ?? [])) {
-    const key = r.telecaller_phone;
-    if (!key || key === '—') continue;
-    if (!detailByPhone[key]) detailByPhone[key] = { read: 0, lastActivity: null, contentPreview: null };
-    const d = detailByPhone[key];
-    if (r.read) d.read++;
-    if (r.sent_at && (!d.lastActivity || r.sent_at > d.lastActivity)) d.lastActivity = r.sent_at;
-    if (!d.contentPreview && r.message_body) d.contentPreview = r.message_body;
-  }
-
   const rows = allNumbers.map(n => {
     const perf   = perfMap.get(n.id) ?? {};
     const camp   = campByNumber.get(n.id);
-    const detail = detailByPhone[n.phone] ?? {};
     return {
       id:             n.id,
       phone:          n.phone,
       name:           n.name,
+      connection:     perf.connection_status ?? n.number_state ?? (n.connected ? 'CONNECTED' : 'DISCONNECTED'),
+      connected:      perf.connected ?? n.connected,
+      wa_state:       perf.wa_state ?? n.wa_state,
+      warmup_level:   perf.warmup_level ?? n.warmup_level,
+      warmup_label:   perf.warmup_label ?? `L${perf.warmup_level ?? n.warmup_level}`,
+      release_allowance: perf.release_allowance ?? perf.daily_cap ?? 0,
+      daily_cap:      perf.release_allowance ?? perf.daily_cap ?? 0,
+      health_score:   perf.health_score ?? null,
+      warnings:       perf.warnings ?? [],
       campaign:       camp?.promo_id ?? perf.promo_id ?? null,
-      total:          perf.total  ?? 0,
-      sent:           perf.sent   ?? 0,
-      failed:         perf.failed ?? 0,
-      replies:        camp?.replies ?? 0,
-      read:           detail.read ?? 0,
-      contentPreview: detail.contentPreview ?? null,
-      lastActivity:   detail.lastActivity ?? null,
+      sent:           perf.sent_today ?? perf.sent ?? 0,
+      delivered:      perf.delivered_today ?? 0,
+      read:           perf.read_today ?? 0,
+      replies:        perf.replies_today ?? camp?.replies ?? 0,
+      failed:         perf.failed_today ?? perf.failed ?? 0,
+      remaining:      perf.remaining_allowance ?? perf.remaining_today ?? perf.capacity_remaining ?? 0,
+      queueAssigned:  perf.queue_assigned ?? perf.total ?? 0,
+      queueWaiting:   perf.queue_waiting ?? perf.queue_pending ?? perf.pending ?? 0,
+      queuePending:   perf.queue_waiting ?? perf.queue_pending ?? perf.pending ?? 0,
+      lastActivity:   perf.last_activity ?? null,
     };
   });
 
@@ -993,18 +1025,23 @@ function SectionE({ data, engineStatus, campaigns, queueDetail }) {
 
   return (
     <div style={{ ...card }}>
-      <div style={sectionTitle}>E — Telecaller Performance (Today)</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+        <div style={sectionTitle}>E — Telecaller Performance (Today)</div>
+        <span style={{ fontSize: 10, color: '#94a3b8' }}>Read &amp; Reply counts shown for information only — cold outreach may take 3–5 days</span>
+      </div>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
             <tr>
-              {['Telecaller', 'Campaign', 'Queue', 'Sent', 'Read', 'Replies', 'Failed', 'Content Preview', 'Last Activity'].map(h => (
+              {['Telecaller', 'Campaign', 'Connection', 'Warmup', 'Send Budget', 'Sent', 'Delivered', 'Read', 'Replies', 'Failed', 'Remaining', 'Queue Waiting', 'Health', 'Warnings', 'Last Activity'].map(h => (
                 <th key={h} style={th}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {rows.map(r => (
+            {rows.map(r => {
+              const stateChip = waSessionChip(r.connection, r.connected);
+              return (
               <tr key={r.id}>
                 <td style={td}>
                   <div style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827' }}>{r.phone}</div>
@@ -1013,37 +1050,31 @@ function SectionE({ data, engineStatus, campaigns, queueDetail }) {
                 <td style={{ ...td, fontFamily: 'monospace', fontSize: 11, color: '#0d6efd' }}>
                   {r.campaign ?? <span style={{ color: '#9ca3af' }}>—</span>}
                 </td>
-                <td style={td}>{r.total}</td>
+                <td style={td}>
+                  <span style={{ background: stateChip.bg, color: stateChip.color, padding: '2px 8px', borderRadius: 10, fontWeight: 700, fontSize: 10 }}>
+                    {stateChip.label}
+                  </span>
+                </td>
+                <td style={td}>{r.warmup_label ?? `L${r.warmup_level}`}</td>
+                <td style={td}>{r.release_allowance ?? r.daily_cap}</td>
                 <td style={{ ...td, color: r.sent > 0 ? '#16a34a' : '#94a3b8', fontWeight: r.sent > 0 ? 700 : 400 }}>
                   {r.sent}
                 </td>
+                <td style={{ ...td, color: r.delivered > 0 ? '#0f766e' : '#94a3b8' }}>{r.delivered}</td>
                 <td style={{ ...td, color: r.read > 0 ? '#0891b2' : '#94a3b8' }}>{r.read}</td>
                 <td style={{ ...td, color: r.replies > 0 ? '#0d6efd' : '#94a3b8' }}>{r.replies}</td>
                 <td style={{ ...td, color: r.failed > 0 ? '#dc3545' : '#94a3b8' }}>{r.failed}</td>
-                <td style={{ ...td, maxWidth: 220 }}>
-                  {r.contentPreview ? (
-                    <div
-                      title={r.contentPreview}
-                      style={{
-                        fontFamily: 'monospace', fontSize: 10, color: '#374151',
-                        background: '#f8fafc', borderRadius: 4, padding: '3px 7px',
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                        maxWidth: 220,
-                      }}
-                    >
-                      {r.contentPreview}
-                    </div>
-                  ) : (
-                    <span style={{ color: '#9ca3af', fontSize: 10 }}>
-                      {r.total > 0 ? 'Awaiting send…' : '—'}
-                    </span>
-                  )}
+                <td style={td}>{r.remaining}</td>
+                <td style={td}>{r.queueWaiting}</td>
+                <td style={td}>{r.health_score != null ? r.health_score : '—'}</td>
+                <td style={{ ...td, fontSize: 10, color: r.warnings?.length ? '#c2410c' : '#94a3b8' }}>
+                  {r.warnings?.length ? r.warnings.join(', ') : '—'}
                 </td>
                 <td style={{ ...td, color: '#64748b', fontSize: 11, whiteSpace: 'nowrap' }}>
                   {ago(r.lastActivity)}
                 </td>
               </tr>
-            ))}
+            );})}
           </tbody>
         </table>
       </div>
@@ -1051,7 +1082,7 @@ function SectionE({ data, engineStatus, campaigns, queueDetail }) {
   );
 }
 
-// ── Section F: Today Validation Queue + Historical Queue ──────────────────────
+// ── Section F: Today's Queue ──────────────────────────────────────────────────
 const STATUS_ORDER = ['pending', 'processing', 'sent', 'failed', 'skipped'];
 const STATUS_CLR   = { pending: '#0d6efd', processing: '#d97706', sent: '#16a34a', failed: '#dc3545', skipped: '#9ca3af' };
 
@@ -1114,89 +1145,84 @@ function QueueSummary({ rows, oldest_pending_minutes, accentBg }) {
   );
 }
 
-function SectionF({ live_queue, historical_queue }) {
-  const [showHistorical, setShowHistorical] = useState(false);
+function SectionF({ queueByTelecaller, activityByTelecaller }) {
+  const [detailOpen,    setDetailOpen]    = useState(false);
+  const [queueDetail,   setQueueDetail]   = useState(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+
+  const notOnWaMap = new Map((activityByTelecaller ?? []).map(a => [a.number_id, a.not_on_whatsapp ?? 0]));
+  const rows = (queueByTelecaller ?? []).map(q => ({
+    number_id:       q.number_id,
+    phone:           q.telecaller_phone,
+    name:            q.number_name,
+    queued:          q.total,
+    sent:            q.sent,
+    pending:         q.pending,
+    failed:          q.failed,
+    not_on_whatsapp: notOnWaMap.get(q.number_id) ?? 0,
+  }));
+
+  const handleToggleDetail = async () => {
+    if (!detailOpen && !queueDetail) {
+      setLoadingDetail(true);
+      try {
+        const res = await apiFetch('/marketing/whatsapp-engine/ai/queue-detail');
+        setQueueDetail(Array.isArray(res) ? res : []);
+      } catch {
+        setQueueDetail([]);
+      } finally {
+        setLoadingDetail(false);
+      }
+    }
+    setDetailOpen(v => !v);
+  };
 
   return (
     <div style={{ ...card }}>
-      {/* F — Today Validation Queue */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-        <div style={sectionTitle}>F — Today Validation Queue</div>
-        <span style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'monospace' }}>
-          is_validation=true · created_at ≥ today
-        </span>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <div style={sectionTitle}>D — Today's Queue Summary</div>
+        <span style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'monospace' }}>created_at ≥ today</span>
       </div>
-      <div style={{ fontSize: 11, color: '#64748b', marginBottom: 12 }}>
-        After cleanup all values must be 0. After a validation run, only these rows count.
-      </div>
-      <QueueSummary
-        rows={live_queue?.rows}
-        oldest_pending_minutes={live_queue?.oldest_pending_minutes}
-        accentBg="#f0fdf4"
-      />
 
-      {/* Historical Queue (collapsible) */}
-      <div style={{ marginTop: 8, borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
+      {rows.length === 0 ? (
+        <div style={{ color: '#9ca3af', fontSize: 13 }}>No queue activity today.</div>
+      ) : (
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <thead>
+            <tr>
+              {['Telecaller', 'Queued', 'Sent', 'Pending', 'Not On WhatsApp', 'Failed'].map(h => (
+                <th key={h} style={th}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.number_id}>
+                <td style={{ ...td, fontFamily: 'monospace', fontWeight: 700, color: '#111827' }}>{r.phone}</td>
+                <td style={td}>{r.queued}</td>
+                <td style={{ ...td, color: '#16a34a', fontWeight: 700 }}>{r.sent}</td>
+                <td style={{ ...td, color: '#0d6efd' }}>{r.pending}</td>
+                <td style={{ ...td, color: r.not_on_whatsapp > 0 ? '#d97706' : '#94a3b8' }}>{r.not_on_whatsapp}</td>
+                <td style={{ ...td, color: r.failed > 0 ? '#dc3545' : '#94a3b8' }}>{r.failed}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {/* Per-contact detail — collapsed by default, fetched on demand */}
+      <div style={{ marginTop: 14, borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
         <button
-          onClick={() => setShowHistorical(h => !h)}
-          style={{
-            background: 'none', border: '1px solid #e2e8f0', borderRadius: 6,
-            padding: '3px 10px', fontSize: 11, color: '#475569', fontWeight: 600, cursor: 'pointer',
-          }}
+          onClick={handleToggleDetail}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: 11, padding: 0, display: 'flex', alignItems: 'center', gap: 5 }}
         >
-          {showHistorical ? '▲ Hide Historical Queue (All-Time)' : '▼ Historical Queue (All-Time)'}
+          <span style={{ fontSize: 9 }}>{detailOpen ? '▼' : '▶'}</span>
+          {loadingDetail ? 'Loading per-contact rows…' : detailOpen ? 'Hide per-contact rows' : 'Show per-contact rows (today)'}
         </button>
-        {showHistorical && (
-          <div style={{ marginTop: 10 }}>
-            <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 8 }}>
-              All queue rows ever — includes production sends. Not used for validation baseline.
-            </div>
-            <QueueSummary
-              rows={historical_queue?.rows}
-              oldest_pending_minutes={historical_queue?.oldest_pending_minutes}
-            />
-          </div>
+        {detailOpen && !loadingDetail && (
+          <SectionD data={queueDetail} nested />
         )}
       </div>
-    </div>
-  );
-}
-
-// ── Section G: Product Rotation ────────────────────────────────────────────────
-function SectionG({ data }) {
-  return (
-    <div style={{ ...card }}>
-      <div style={sectionTitle}>G — Product Rotation (Today)</div>
-      {!data?.length ? (
-        <div style={{ color: '#9ca3af', fontSize: 13 }}>No product rotation data for today.</div>
-      ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-            <thead>
-              <tr>
-                {['Campaign ID', 'Telecaller', 'SKU', 'Product', 'Customers Reached'].map(h => (
-                  <th key={h} style={th}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {data.map((p, i) => (
-                <tr key={i}>
-                  <td style={{ ...td, fontFamily: 'monospace', fontSize: 11, color: '#0d6efd' }}>
-                    {p.promo_id ?? <span style={{ color: '#9ca3af' }}>—</span>}
-                  </td>
-                  <td style={{ ...td, fontFamily: 'monospace', fontSize: 11 }}>{p.telecaller_phone}</td>
-                  <td style={{ ...td, fontFamily: 'monospace', fontSize: 11, color: '#6d28d9' }}>{p.sku}</td>
-                  <td style={td}>{p.product_name}</td>
-                  <td style={td}>
-                    <span style={{ fontWeight: 700, color: '#0d6efd' }}>{p.customers_reached}</span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
     </div>
   );
 }
@@ -1205,14 +1231,19 @@ function SectionG({ data }) {
 function SectionH({ data }) {
   return (
     <div style={{ ...card }}>
-      <div style={sectionTitle}>H — Number Utilization</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
+        <div style={sectionTitle}>F — Today's Number Utilization</div>
+        <span style={{ fontSize: 10, color: '#94a3b8' }}>
+          Send Budget = warmup stage limit · Queue Planned = always 150/number
+        </span>
+      </div>
       {!data?.length ? (
         <div style={{ color: '#9ca3af', fontSize: 13 }}>No numbers found.</div>
       ) : (
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
             <tr>
-              {['Phone', 'State', 'Warmup', 'Daily Cap', 'Sent', 'Remaining', 'Utilization'].map(h => (
+              {['Phone', 'State', 'Warmup', 'Send Budget', 'Queue Planned', 'Sent Today', 'Queue Waiting', 'Remaining', 'Health', 'Budget Used'].map(h => (
                 <th key={h} style={th}>{h}</th>
               ))}
             </tr>
@@ -1221,6 +1252,8 @@ function SectionH({ data }) {
             {data.map(n => {
               const barColor  = n.utilization_pct > 80 ? '#dc3545' : n.utilization_pct > 50 ? '#d97706' : '#16a34a';
               const stateChip = waSessionChip(n.wa_state, n.connected);
+              const sentToday = n.sent_today ?? n.daily_sent ?? 0;
+              const budget    = n.release_allowance ?? 0;
               return (
                 <tr key={n.id} style={{ opacity: n.is_active ? 1 : 0.5 }}>
                   <td style={{ ...td, fontFamily: 'monospace' }}>{n.phone}</td>
@@ -1235,15 +1268,28 @@ function SectionH({ data }) {
                       : <span style={{ fontSize: 11, fontWeight: 700, color: '#0d6efd' }}>{w.label}</span>;
                     })()}
                   </td>
-                  <td style={td}>{n.daily_cap}</td>
-                  <td style={td}><span style={{ fontWeight: 700, color: '#0d6efd' }}>{n.daily_sent}</span></td>
-                  <td style={td}>{n.remaining_today}</td>
+                  <td style={td}>
+                    <span title="Warmup stage release limit — sender stops when this is reached">
+                      {budget}
+                    </span>
+                  </td>
+                  <td style={{ ...td, color: '#64748b' }}>
+                    <span title="Queue rows built each day (always 150 per connected number regardless of warmup stage)">
+                      {n.queue_capacity ?? 150}
+                    </span>
+                  </td>
+                  <td style={td}><span style={{ fontWeight: 700, color: '#0d6efd' }}>{sentToday}</span></td>
+                  <td style={td}>{n.queue_waiting ?? 0}</td>
+                  <td style={td}>{n.remaining_allowance ?? n.remaining_today}</td>
+                  <td style={td}>{n.health_score != null ? n.health_score : '—'}</td>
                   <td style={td}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <div style={{ width: 60, height: 6, background: '#e2e8f0', borderRadius: 3, overflow: 'hidden' }}>
                         <div style={{ width: `${n.utilization_pct}%`, height: '100%', background: barColor, borderRadius: 3 }} />
                       </div>
-                      <span style={{ fontSize: 11, color: barColor, fontWeight: 700 }}>{n.utilization_pct}%</span>
+                      <span style={{ fontSize: 11, color: barColor, fontWeight: 700 }}>
+                        {sentToday}/{budget}
+                      </span>
                     </div>
                   </td>
                 </tr>
@@ -1256,88 +1302,12 @@ function SectionH({ data }) {
   );
 }
 
-// ── Section I: Log Stream ──────────────────────────────────────────────────────
-const LOG_COLORS = {
-  QUEUE_CREATED:     '#0d6efd',
-  AUDIENCE_SELECTED: '#7c3aed',
-  TEMPLATE_SELECTED: '#0891b2',
-  AUTO_PAUSE:        '#dc3545',
-  HOURLY_CAP_HIT:    '#d97706',
-  FINGERPRINT_SKIP:  '#9ca3af',
-  HARD_LIMIT_HIT:    '#dc3545',
-  LEAD_CREATED:      '#16a34a',
-  RISK_BLOCKED:      '#dc3545',
-  DRY_RUN_SEND:      '#6b7280',
-  SCALE_UP:          '#0d6efd',
-  NUMBER_RECOVERED:  '#059669',
-};
-
-function SectionI({ logs }) {
-  const [expanded, setExpanded] = useState(false);
-  const all     = logs ?? [];
-  const visible = expanded ? all : all.slice(0, 10);
-
-  return (
-    <div style={{ ...card }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <div style={{ ...sectionTitle, marginBottom: 0 }}>I — Engine Log Stream</div>
-        {all.length > 10 && (
-          <button
-            onClick={() => setExpanded(e => !e)}
-            style={{
-              background: 'none', border: '1px solid #e2e8f0', borderRadius: 6,
-              padding: '3px 10px', fontSize: 11, color: '#475569', fontWeight: 600, cursor: 'pointer',
-            }}
-          >
-            {expanded ? 'Collapse' : `Expand Logs (${all.length})`}
-          </button>
-        )}
-      </div>
-      {!visible.length ? (
-        <div style={{ color: '#9ca3af', fontSize: 13 }}>No log events found.</div>
-      ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, fontFamily: 'monospace' }}>
-            <thead>
-              <tr>
-                {['Date', 'Time', 'Campaign ID', 'Telecaller', 'Action', 'Message'].map(h => (
-                  <th key={h} style={{ ...th, fontFamily: 'sans-serif', fontSize: 10 }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {visible.map(l => (
-                <tr key={l.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                  <td style={{ ...td, fontSize: 11, color: '#94a3b8', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{l.log_date}</td>
-                  <td style={{ ...td, fontSize: 11, color: '#94a3b8', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{l.log_time}</td>
-                  <td style={{ ...td, fontSize: 10, color: '#0d6efd', whiteSpace: 'nowrap' }}>
-                    {l.promo_id ?? (l.campaign_id ? l.campaign_id.slice(0, 8) + '…' : '—')}
-                  </td>
-                  <td style={{ ...td, fontSize: 11, color: '#374151', whiteSpace: 'nowrap' }}>
-                    {l.telecaller_phone ?? '—'}
-                  </td>
-                  <td style={{ ...td, fontWeight: 700, color: LOG_COLORS[l.event] ?? '#374151', whiteSpace: 'nowrap' }}>
-                    {l.event}
-                  </td>
-                  <td style={{ ...td, color: '#475569', maxWidth: 360, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {l.reason || (l.customer_phone ? `phone=${l.customer_phone}` : '—')}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── Warnings Banner ────────────────────────────────────────────────────────────
 function WarningsBanner({ warnings }) {
   if (!warnings?.length) return null;
   return (
     <div style={{ background: '#fff5f5', border: '1px solid #fca5a5', borderRadius: 8, padding: '10px 16px', marginBottom: 16 }}>
-      <div style={{ fontWeight: 700, color: '#dc3545', fontSize: 13, marginBottom: 6 }}>⚠ Warnings</div>
+      <div style={{ fontWeight: 700, color: '#dc3545', fontSize: 13, marginBottom: 6 }}>Warnings</div>
       {warnings.map((w, i) => (
         <div key={i} style={{ fontSize: 13, color: '#374151', marginBottom: 2 }}>• {w}</div>
       ))}
@@ -1470,6 +1440,11 @@ export default function AiPromotionDashboard() {
         {data && (
           <>
             <WarningsBanner warnings={data.warnings} />
+            <SectionAudienceStatus
+              status={data.audience_status}
+              dbCounts={data.database_counts}
+              queueBuiltToday={data.today_activity?.queue_items ?? 0}
+            />
             <SectionA data={data.engine_status} />
             {validationResult && (
               <ValidationResultCard
@@ -1478,30 +1453,32 @@ export default function AiPromotionDashboard() {
                 onDismiss={() => setValidationResult(null)}
               />
             )}
-            <SectionB data={data.today_activity} />
+            <SectionB
+              byTelecaller={data.today_activity_by_telecaller}
+              fleetSummary={data.today_activity}
+            />
             <SectionC
               campaigns={data.campaigns}
               todayQueueByTelecaller={data.today_queue_by_telecaller}
               isInconsistent={data.is_inconsistent}
             />
-            <SectionD data={data.campaign_queue_detail} />
             <SectionE
               data={data.telecaller_performance}
               engineStatus={data.engine_status}
               campaigns={data.campaigns}
-              queueDetail={data.campaign_queue_detail}
             />
-            <SectionF live_queue={data.live_queue} historical_queue={data.historical_queue} />
-            <SectionG data={data.product_rotation} />
+            <SectionF
+              queueByTelecaller={data.today_queue_by_telecaller}
+              activityByTelecaller={data.today_activity_by_telecaller}
+            />
             <SectionH data={data.number_utilization} />
-            <SectionI logs={data.log_stream} />
           </>
         )}
 
         <div style={{ fontSize: 11, color: '#9ca3af', paddingBottom: 24 }}>
           Auto-refreshes every 15s · {data?.as_of ? `As of ${fmt(data.as_of)}` : ''}
           <br />
-          Sections: A Engine Status · B Today Activity · C AI Campaigns · D Queue Detail · E Telecaller Performance · F Live Queue · G Product Rotation · H Number Utilization · I Log Stream
+          Sections: A Engine Status · B Today's Activity · C Today's Campaigns · D Today's Queue · E Telecaller Performance · F Number Utilization
         </div>
       </div>
     </PageLayout>

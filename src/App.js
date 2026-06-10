@@ -95,6 +95,7 @@ import OperationsLog              from "./pages/pilot/OperationsLog";
 import DailyOps                  from "./pages/ops/DailyOps";
 import CommissionPage             from "./pages/workforce/CommissionPage";
 import VersionHistory             from "./pages/settings/VersionHistory";
+import EnvironmentDashboard       from "./pages/settings/EnvironmentDashboard";
 
 console.log('[FRONTEND_BUILD]', '2026-05-21-v2');
 
@@ -255,6 +256,7 @@ function App() {
               <Route path="/marketing/whatsapp-engine/pilot" element={<Navigate to="/marketing/whatsapp" replace />} />
               <Route path="/pilot/log" element={<PermissionRoute permission={["admin"]}><OperationsLog /></PermissionRoute>} />
               <Route path="/settings/version-history" element={<PermissionRoute permission="rbac.manage"><VersionHistory /></PermissionRoute>} />
+              <Route path="/settings/environment" element={<PermissionRoute permission="rbac.manage"><EnvironmentDashboard /></PermissionRoute>} />
               <Route path="/daily-ops" element={<PermissionRoute permission={["order.view"]}><DailyOps /></PermissionRoute>} />
               <Route path="/commission" element={<PermissionRoute permission="staff.view"><CommissionPage /></PermissionRoute>} />
 

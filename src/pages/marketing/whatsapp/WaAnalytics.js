@@ -49,6 +49,7 @@ export default function WaAnalytics() {
   const [overallStats, setOverallStats] = useState(null);
   const [templatePerf, setTemplatePerf] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
+  const [historical, setHistorical] = useState(null);
   const [funnel, setFunnel] = useState(null);
   const [funnelDays, setFunnelDays] = useState(7);
   const [loading, setLoading] = useState(true);
@@ -60,20 +61,23 @@ export default function WaAnalytics() {
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const [statsRes, tplPerfRes, campRes] = await Promise.all([
+      const [statsRes, tplPerfRes, campRes, histRes] = await Promise.all([
         apiFetch('/marketing/whatsapp-engine/analytics/dashboard'),
         apiFetch('/marketing/whatsapp-engine/analytics/template-performance'),
         apiFetch('/marketing/whatsapp-engine/campaigns'),
+        apiFetch('/marketing/whatsapp-engine/analytics/historical?days=90'),
       ]);
       if (!statsRes.ok) throw new Error(`Stats error ${statsRes.status}`);
-      const [statsData, tplData, campData] = await Promise.all([
+      const [statsData, tplData, campData, histData] = await Promise.all([
         statsRes.json(),
         tplPerfRes.ok ? tplPerfRes.json() : [],
         campRes.ok ? campRes.json() : [],
+        histRes.ok ? histRes.json() : null,
       ]);
       setOverallStats(statsData);
       setTemplatePerf(Array.isArray(tplData) ? tplData : []);
       setCampaigns(Array.isArray(campData) ? campData : []);
+      setHistorical(histData);
     } catch (e) {
       setError(e?.message || 'Failed to load analytics');
     } finally {
@@ -128,6 +132,38 @@ export default function WaAnalytics() {
     completed: { bg: '#dbeafe', color: '#1d4ed8' },
     cancelled: { bg: '#fee2e2', color: '#991b1b' },
   };
+
+  function MiniTable({ title, rows, columns }) {
+    return (
+      <div style={sectionCard}>
+        <div style={{ fontWeight: 700, fontSize: 14, color: '#111827', marginBottom: 14 }}>{title}</div>
+        {!rows?.length ? (
+          <div style={{ color: '#6c757d', fontSize: 13 }}>No records found.</div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr>
+                  {columns.map(c => <th key={c.key} style={{ padding: '8px 10px', background: '#f8fafc', color: '#475569', textAlign: 'left', borderBottom: '1px solid #e2e8f0' }}>{c.label}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.slice(0, 20).map((r, i) => (
+                  <tr key={i}>
+                    {columns.map(c => (
+                      <td key={c.key} style={{ padding: '8px 10px', borderBottom: '1px solid #f1f5f9' }}>
+                        {c.render ? c.render(r) : (r[c.key] ?? '—')}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <PageLayout
@@ -195,7 +231,8 @@ export default function WaAnalytics() {
 
         {/* Overall Delivery Stats */}
         <div style={sectionCard}>
-          <div style={{ fontWeight: 700, fontSize: 14, color: '#111827', marginBottom: 14 }}>Overall Delivery Stats</div>
+          <div style={{ fontWeight: 700, fontSize: 14, color: '#111827', marginBottom: 4 }}>Overall Delivery Stats</div>
+          <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 14 }}>All-time cumulative — for today&apos;s ops use the Engine or AI Campaigns dashboard.</div>
           {loading ? (
             <div style={{ color: '#6c757d', fontSize: 13 }}>Loading…</div>
           ) : overallStats ? (
@@ -330,6 +367,118 @@ export default function WaAnalytics() {
             );
           })()}
         </div>
+
+        <MiniTable
+          title="Previous Campaigns"
+          rows={historical?.previous_campaigns}
+          columns={[
+            { key: 'promo_id', label: 'Campaign ID' },
+            { key: 'telecaller_phone', label: 'Telecaller' },
+            { key: 'status', label: 'Status' },
+            { key: 'queue_total', label: 'Queue' },
+            { key: 'queue_pending', label: 'Pending' },
+            { key: 'created_at', label: 'Created', render: r => r.created_at ? new Date(r.created_at).toLocaleDateString('en-IN') : '—' },
+          ]}
+        />
+
+        <MiniTable
+          title="Historical Queue"
+          rows={historical?.historical_queue}
+          columns={[
+            { key: 'telecaller_phone', label: 'Telecaller' },
+            { key: 'status', label: 'Status' },
+            { key: 'skip_reason', label: 'Skip Reason' },
+            { key: 'count', label: 'Count' },
+          ]}
+        />
+
+        <MiniTable
+          title="Product Rotation History"
+          rows={historical?.product_rotation_history}
+          columns={[
+            { key: 'promo_id', label: 'Campaign ID' },
+            { key: 'telecaller_phone', label: 'Telecaller' },
+            { key: 'sku', label: 'SKU' },
+            { key: 'product_name', label: 'Product' },
+            { key: 'times_used', label: 'Used' },
+            { key: 'last_sent_at', label: 'Last Sent', render: r => r.last_sent_at ? new Date(r.last_sent_at).toLocaleString('en-IN') : '—' },
+          ]}
+        />
+
+        <MiniTable
+          title="Validation History"
+          rows={historical?.validation_history}
+          columns={[
+            { key: 'promo_id', label: 'Validation ID' },
+            { key: 'status', label: 'Status' },
+            { key: 'queue_total', label: 'Queue' },
+            { key: 'sent', label: 'Sent' },
+            { key: 'failed', label: 'Failed' },
+            { key: 'skipped', label: 'Skipped' },
+            { key: 'created_at', label: 'Created', render: r => r.created_at ? new Date(r.created_at).toLocaleString('en-IN') : '—' },
+          ]}
+        />
+
+        <MiniTable
+          title="Warmup & Promotion History"
+          rows={historical?.warmup_history}
+          columns={[
+            { key: 'created_at', label: 'When', render: r => r.created_at ? new Date(r.created_at).toLocaleString('en-IN') : '—' },
+            { key: 'telecaller_phone', label: 'Telecaller' },
+            { key: 'event', label: 'Event' },
+            { key: 'reason', label: 'Reason' },
+          ]}
+        />
+
+        <MiniTable
+          title="Health Warnings History"
+          rows={historical?.promotion_history}
+          columns={[
+            { key: 'created_at', label: 'When', render: r => r.created_at ? new Date(r.created_at).toLocaleString('en-IN') : '—' },
+            { key: 'telecaller_phone', label: 'Telecaller' },
+            { key: 'event', label: 'Warning' },
+            { key: 'reason', label: 'Reason' },
+          ]}
+        />
+
+        <MiniTable
+          title="Daily Trends"
+          rows={historical?.daily_trends}
+          columns={[
+            { key: 'period', label: 'Date', render: r => r.period ? new Date(r.period).toLocaleDateString('en-IN') : '—' },
+            { key: 'sent', label: 'Sent' },
+            { key: 'delivered', label: 'Delivered' },
+            { key: 'read', label: 'Read' },
+            { key: 'replies', label: 'Replies' },
+            { key: 'failed', label: 'Failed' },
+          ]}
+        />
+
+        <MiniTable
+          title="Weekly Trends"
+          rows={historical?.weekly_trends}
+          columns={[
+            { key: 'period', label: 'Week', render: r => r.period ? new Date(r.period).toLocaleDateString('en-IN') : '—' },
+            { key: 'sent', label: 'Sent' },
+            { key: 'delivered', label: 'Delivered' },
+            { key: 'read', label: 'Read' },
+            { key: 'replies', label: 'Replies' },
+            { key: 'failed', label: 'Failed' },
+          ]}
+        />
+
+        <MiniTable
+          title="Monthly Trends"
+          rows={historical?.monthly_trends}
+          columns={[
+            { key: 'period', label: 'Month', render: r => r.period ? new Date(r.period).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }) : '—' },
+            { key: 'sent', label: 'Sent' },
+            { key: 'delivered', label: 'Delivered' },
+            { key: 'read', label: 'Read' },
+            { key: 'replies', label: 'Replies' },
+            { key: 'failed', label: 'Failed' },
+          ]}
+        />
       </div>
     </PageLayout>
   );

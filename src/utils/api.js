@@ -24,7 +24,7 @@ export function logout() {
 /**
  * Authenticated fetch wrapper.
  * - Injects Bearer token
- * - Aborts after 20 s (prevents infinite hang on Render cold-start)
+ * - Aborts after timeoutMs (default 20 s; pass timeoutMs: 0 to disable)
  * - Logs request + outcome to console for diagnostics
  * - Calls logout() on 401
  */
@@ -39,17 +39,23 @@ export async function apiFetch(path, options = {}) {
   const relPath = path.startsWith('/') ? path : `/${path}`;
   const url     = path.startsWith('http') ? path : `${API_URL}${relPath}`;
 
+  const timeoutMs = options.timeoutMs ?? 20_000;
   const controller = new AbortController();
-  const timeoutId  = setTimeout(() => controller.abort(), 20_000);
+  let timeoutId;
+  if (timeoutMs > 0) {
+    timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  }
+
+  const { timeoutMs: _omit, ...fetchOptions } = options;
 
   try {
     console.debug(`[API] ${options.method || 'GET'} ${url}`);
     const res = await fetch(url, {
-      ...options,
+      ...fetchOptions,
       headers,
       signal: controller.signal,
     });
-    clearTimeout(timeoutId);
+    if (timeoutId) clearTimeout(timeoutId);
 
     if (res.status === 401) {
       logout();
@@ -59,9 +65,10 @@ export async function apiFetch(path, options = {}) {
     console.debug(`[API] ${res.status} ${url}`);
     return res;
   } catch (err) {
-    clearTimeout(timeoutId);
+    if (timeoutId) clearTimeout(timeoutId);
     if (err.name === 'AbortError') {
-      const msg = `Request timed out after 20 s — ${url}`;
+      const secs = timeoutMs > 0 ? Math.round(timeoutMs / 1000) : 20;
+      const msg = `Request timed out after ${secs} s — ${url}`;
       console.error('[API] timeout:', msg);
       throw new Error(msg);
     }

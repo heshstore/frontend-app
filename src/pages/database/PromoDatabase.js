@@ -3,6 +3,9 @@ import PageLayout from '../../components/layout/PageLayout';
 import { apiFetch } from '../../utils/api';
 
 const API = '/marketing/whatsapp-engine/audience';
+const MAX_UPLOAD_ROWS = 5000;
+/** Bulk import batches can take 30–90s — longer than default apiFetch timeout. */
+const IMPORT_TIMEOUT_MS = 120_000;
 
 // ── Style tokens ───────────────────────────────────────────────────────────────
 const btn = (bg, color = '#fff', disabled = false) => ({
@@ -159,7 +162,17 @@ function ImportModal({ onClose, onDone }) {
   const [result,    setResult]    = useState(null);
   const [busy,      setBusy]      = useState(false);
   const [err,       setErr]       = useState('');
+  const [envInfo,   setEnvInfo]   = useState(null);
+  const [prodConfirm, setProdConfirm] = useState(false);
   const fileRef = useRef(null);
+  const IMPORT_BATCH = 400;
+
+  useEffect(() => {
+    apiFetch('/health/environment')
+      .then(r => r.json())
+      .then(setEnvInfo)
+      .catch(() => {});
+  }, []);
 
   const handleFile = (e) => {
     const file = e.target.files?.[0];
@@ -168,6 +181,10 @@ function ImportModal({ onClose, onDone }) {
     reader.onload = (ev) => {
       const parsed = parseCSV(ev.target.result);
       if (!parsed.length) { setErr('No valid rows found. Check format.'); return; }
+      if (parsed.length > MAX_UPLOAD_ROWS) {
+        setErr(`File has ${parsed.length} rows — maximum ${MAX_UPLOAD_ROWS} per upload. Split the file and import in parts.`);
+        return;
+      }
       setRows(parsed); setErr('');
     };
     reader.readAsText(file);
@@ -178,12 +195,19 @@ function ImportModal({ onClose, onDone }) {
     if (!rows.length) return;
     setBusy(true); setErr('');
     try {
-      const r = await apiFetch(`${API}/check-conflicts`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phones: rows.map(r => r.phone) }),
-      });
-      const existing = await r.json();   // [{phone, id, name, city, business_type, customer_id}]
+      const phones = rows.map(r => r.phone);
+      const existing = [];
+      for (let i = 0; i < phones.length; i += IMPORT_BATCH) {
+        const r = await apiFetch(`${API}/check-conflicts`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phones: phones.slice(i, i + IMPORT_BATCH) }),
+          timeoutMs: IMPORT_TIMEOUT_MS,
+        });
+        const batch = await r.json();
+        if (!r.ok) throw new Error(batch?.message || 'Conflict check failed');
+        if (Array.isArray(batch)) existing.push(...batch);
+      }
       if (!Array.isArray(existing) || !existing.length) {
         // No conflicts → import directly
         await doImport(rows);
@@ -231,14 +255,49 @@ function ImportModal({ onClose, onDone }) {
   const doImport = async (finalRows) => {
     setBusy(true); setErr('');
     try {
-      const r = await apiFetch(`${API}/bulk`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows: finalRows }),
-      });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d?.message || 'Import failed');
-      setResult(d);
+      const totals = {
+        created: 0, updated: 0, errors: [],
+        duplicates_found: 0, duplicates_removed: 0,
+        rows_inserted: 0, rows_updated: 0, rows_skipped: 0,
+        new_contacts: 0, updated_contacts: 0, merged_contacts: 0,
+        duplicate_phones_removed: 0, duplicate_emails_detected: 0,
+        skipped_contacts: 0, email_duplicate_warnings: [],
+        geo_valid: 0, geo_partial: 0, junk_rejected: 0, geo_corrections: [],
+      };
+      for (let i = 0; i < finalRows.length; i += IMPORT_BATCH) {
+        const chunk = finalRows.slice(i, i + IMPORT_BATCH);
+        const r = await apiFetch(`${API}/bulk`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            rows: chunk,
+            confirm_production: envInfo?.environment === 'PRODUCTION' ? prodConfirm : false,
+          }),
+          timeoutMs: IMPORT_TIMEOUT_MS,
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d?.message || `Import failed (batch ${Math.floor(i / IMPORT_BATCH) + 1})`);
+        totals.created += d.created ?? d.rows_inserted ?? 0;
+        totals.updated += d.updated ?? d.rows_updated ?? 0;
+        totals.duplicates_found += d.duplicates_found ?? 0;
+        totals.duplicates_removed += d.duplicates_removed ?? 0;
+        totals.rows_inserted += d.rows_inserted ?? d.created ?? 0;
+        totals.rows_updated += d.rows_updated ?? d.updated ?? 0;
+        totals.rows_skipped += d.rows_skipped ?? 0;
+        totals.new_contacts += d.new_contacts ?? d.rows_inserted ?? 0;
+        totals.updated_contacts += d.updated_contacts ?? d.rows_updated ?? 0;
+        totals.merged_contacts += d.merged_contacts ?? 0;
+        totals.duplicate_phones_removed += d.duplicate_phones_removed ?? d.duplicates_removed ?? 0;
+        totals.duplicate_emails_detected += d.duplicate_emails_detected ?? 0;
+        totals.skipped_contacts += d.skipped_contacts ?? d.rows_skipped ?? 0;
+        if (Array.isArray(d.email_duplicate_warnings)) totals.email_duplicate_warnings.push(...d.email_duplicate_warnings);
+        if (Array.isArray(d.errors)) totals.errors.push(...d.errors);
+        totals.geo_valid += d.geo_valid ?? 0;
+        totals.geo_partial += d.geo_partial ?? 0;
+        totals.junk_rejected += d.junk_rejected ?? 0;
+        if (Array.isArray(d.geo_corrections)) totals.geo_corrections.push(...d.geo_corrections);
+      }
+      setResult(totals);
       setStage('done');
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
@@ -251,14 +310,29 @@ function ImportModal({ onClose, onDone }) {
       <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
         <div style={{ background: '#fff', borderRadius: 10, padding: 28, width: 380, maxWidth: '95vw' }}>
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16 }}>Import Complete</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 16 }}>
-            {[{ label: 'Created', value: result.created, color: '#166534' }, { label: 'Updated', value: result.updated, color: '#1d4ed8' }, { label: 'Skipped', value: (result.errors?.length ?? 0) + conflicts.filter(c => resolutions[c.phone] === 'skip').length, color: '#9ca3af' }].map(({ label, value, color }) => (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(90px, 1fr))', gap: 10, marginBottom: 16 }}>
+            {[
+              { label: 'New', value: result.new_contacts ?? result.rows_inserted ?? result.created, color: '#166534' },
+              { label: 'Updated', value: result.updated_contacts ?? result.rows_updated ?? result.updated, color: '#1d4ed8' },
+              { label: 'Merged', value: result.merged_contacts ?? 0, color: '#0891b2' },
+              { label: 'Dup Phones', value: result.duplicate_phones_removed ?? result.duplicates_removed ?? 0, color: '#d97706' },
+              { label: 'Dup Emails', value: result.duplicate_emails_detected ?? 0, color: '#dc2626' },
+              { label: 'Skipped', value: (result.skipped_contacts ?? result.rows_skipped ?? 0) + conflicts.filter(c => resolutions[c.phone] === 'skip').length, color: '#9ca3af' },
+              { label: 'Valid Geo', value: result.geo_valid ?? 0, color: '#059669' },
+              { label: 'Partial', value: result.geo_partial ?? 0, color: '#7c3aed' },
+              { label: 'Junk', value: result.junk_rejected ?? 0, color: '#b91c1c' },
+            ].map(({ label, value, color }) => (
               <div key={label} style={{ textAlign: 'center', background: '#f8fafc', borderRadius: 8, padding: '12px 8px' }}>
                 <div style={{ fontSize: 22, fontWeight: 800, color }}>{value ?? 0}</div>
                 <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{label}</div>
               </div>
             ))}
           </div>
+          {result.geo_corrections?.length > 0 && (
+            <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 6, padding: '8px 12px', marginBottom: 12, fontSize: 11, color: '#166534' }}>
+              {result.geo_corrections.length} geo correction(s) — imported state/country replaced with verified values.
+            </div>
+          )}
           {result.errors?.filter(e => e.reason.includes('customer')).length > 0 && (
             <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 6, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: '#1d4ed8' }}>
               {result.errors.filter(e => e.reason.includes('customer')).length} contact(s) skipped — linked to Customer DB (protected).
@@ -364,10 +438,39 @@ function ImportModal({ onClose, onDone }) {
             {rows.length > 3 && <div style={{ color: '#9ca3af' }}>…and {rows.length - 3} more</div>}
           </div>
         )}
+        {envInfo && (
+          <div style={{
+            marginBottom: 12, padding: '10px 12px', borderRadius: 6, fontSize: 12,
+            background: envInfo.environment === 'PRODUCTION' ? '#fef2f2' : '#f0fdf4',
+            border: `1px solid ${envInfo.environment === 'PRODUCTION' ? '#fecaca' : '#bbf7d0'}`,
+          }}>
+            <div style={{ fontWeight: 700, color: envInfo.environment === 'PRODUCTION' ? '#b91c1c' : '#166534' }}>
+              Environment: {envInfo.environment} · DB {envInfo.database_status}
+            </div>
+            {envInfo.environment === 'PRODUCTION' && (
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 10, cursor: 'pointer', color: '#7f1d1d' }}>
+                <input
+                  type="checkbox"
+                  checked={prodConfirm}
+                  onChange={e => setProdConfirm(e.target.checked)}
+                  style={{ marginTop: 2 }}
+                />
+                <span>
+                  I confirm this import targets the <strong>production</strong> promotional database
+                  ({envInfo.promotional_db_count ?? '?'} records).
+                </span>
+              </label>
+            )}
+          </div>
+        )}
         {err && <div style={{ fontSize: 12, color: '#dc3545', marginBottom: 10 }}>{err}</div>}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button style={btn('#f3f4f6', '#374151')} onClick={onClose}>Cancel</button>
-          <button style={btn('#0d6efd', '#fff', busy || !rows.length)} onClick={checkAndProceed} disabled={busy || !rows.length}>
+          <button
+            style={btn('#0d6efd', '#fff', busy || !rows.length || (envInfo?.environment === 'PRODUCTION' && !prodConfirm))}
+            onClick={checkAndProceed}
+            disabled={busy || !rows.length || (envInfo?.environment === 'PRODUCTION' && !prodConfirm)}
+          >
             {busy ? 'Checking…' : `Next: Check ${rows.length} contacts`}
           </button>
         </div>

@@ -1,15 +1,14 @@
 /**
  * Single source of truth for WhatsApp number connection status.
  *
- * Rule: a number is CONNECTED iff its live waState is 'ready'.
- * Everything else — idle, initializing, authenticating, failed,
- * disconnecting, awaiting_scan — is NOT CONNECTED.
+ * Rule: prefer backend number_state. Legacy waState remains as fallback.
  *
  * Do NOT use: is_active, status (DB enum), connected, engineActive,
  * wa_active, or any derived "session" flags.
  */
 
 export function isNumberConnected(number) {
+  if (number?.number_state) return number.number_state === 'CONNECTED';
   return (number?.waState ?? number?.wa_state) === 'ready';
 }
 
@@ -28,6 +27,9 @@ export function waStatusChip(number) {
 // WA session state → chip key (canonical mapping, single source of truth).
 // waState is the live backend state string; connected is the precomputed boolean.
 export function waStateToChipKey(waState, connected) {
+  if (waState === 'CONNECTED') return 'connected';
+  if (waState === 'RECONNECT_REQUIRED') return 'reconnect_required';
+  if (waState === 'DISCONNECTED') return 'disconnected';
   if (connected || waState === 'ready')                                     return 'connected';
   if (waState === 'initializing' || waState === 'authenticating')           return 'connecting';
   if (waState === 'awaiting_scan')                                           return 'scan_required';
@@ -50,9 +52,9 @@ export function waSessionChip(waState, connected) {
   return WA_SESSION_CHIP[waStateToChipKey(waState, connected)] ?? WA_SESSION_CHIP.disconnected;
 }
 
-// Warmup levels — must match sender.service.ts WARMUP_LIMITS.
+// Warmup release allowances — must match backend shared/number-limits.ts
 const WARMUP = {
-  1: { label: 'L1 Cold',   daily: 20,  pacing: 'Slow'     },
+  1: { label: 'L1 Cool',   daily: 20,  pacing: 'Slow'     },
   2: { label: 'L2 Warm',   daily: 50,  pacing: 'Moderate' },
   3: { label: 'L3 Hot',    daily: 100, pacing: 'Fast'      },
   4: { label: 'L4 Mature', daily: 150, pacing: 'Fast'      },

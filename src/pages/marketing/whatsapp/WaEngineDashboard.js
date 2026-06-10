@@ -150,6 +150,8 @@ export default function WaEngineDashboard() {
         { label: 'Read Today', value: stats.read_today, color: '#7c3aed' },
         { label: 'Replies Today', value: stats.replied_today, color: '#059669' },
         { label: 'CRM Leads Today', value: stats.crm_leads_today, color: '#dc3545' },
+        { label: 'Not On WhatsApp', value: stats.not_on_whatsapp_today, color: '#9ca3af' },
+        { label: 'Failed Today', value: stats.failed_today, color: '#dc3545' },
       ]
     : [];
 

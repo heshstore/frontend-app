@@ -183,7 +183,7 @@ function ReenableModal({ onConfirm, onClose, busy }) {
       <div style={{ background: '#fff', borderRadius: 12, padding: 28, maxWidth: 480, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
         <div style={{ fontWeight: 700, fontSize: 16, color: '#111827', marginBottom: 6 }}>Re-enable Engine</div>
         <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 16, lineHeight: 1.5 }}>
-          The engine was auto-paused due to a safety trigger. Before re-enabling, you must document your investigation outcome.
+          The engine is disabled. Before re-enabling, you must document your investigation outcome.
         </div>
         <div style={{ background: '#fef9c3', border: '1px solid #fde68a', borderRadius: 6, padding: '10px 12px', marginBottom: 16, fontSize: 12, color: '#92400e' }}>
           This does not persist across restarts. Set <code>WHATSAPP_ENGINE_ENABLED=true</code> in .env to make it permanent.
@@ -447,7 +447,7 @@ export default function WaGovernance() {
             </div>
             {engineDisabled && (
               <div style={{ marginTop: 12, fontSize: 13, color: '#b91c1c', lineHeight: 1.5 }}>
-                The engine was auto-paused by the safety system. Check the stability report below for failure details. Investigate root cause before re-enabling.
+                The engine is currently disabled. Check the stability report below for failure details before re-enabling.
               </div>
             )}
           </div>
@@ -576,7 +576,8 @@ export default function WaGovernance() {
               <div style={card}>
                 <div style={{ fontWeight: 700, fontSize: 13, color: '#111827', marginBottom: 10 }}>Operational Events</div>
                 {[
-                  { label: 'Auto-pause triggers', value: stability.events?.auto_pause_count ?? 0, color: stability.events?.auto_pause_count > 0 ? '#dc3545' : '#6b7280' },
+                  { label: 'Delivery warnings', value: stability.events?.low_delivery_warning_count ?? 0, color: stability.events?.low_delivery_warning_count > 0 ? '#d97706' : '#6b7280' },
+                  { label: 'Read warnings', value: stability.events?.low_read_warning_count ?? 0, color: stability.events?.low_read_warning_count > 0 ? '#d97706' : '#6b7280' },
                   { label: 'Number recoveries', value: stability.events?.number_recovered_count ?? 0, color: '#059669' },
                   { label: 'Scale-up events', value: stability.events?.scale_up_count ?? 0, color: '#0d6efd' },
                   { label: 'Manual re-enables', value: stability.events?.manual_reenable_count ?? 0, color: '#fd7e14' },
@@ -588,9 +589,9 @@ export default function WaGovernance() {
                     <span style={{ fontSize: 14, fontWeight: 700, color: ev.color }}>{ev.value}</span>
                   </div>
                 ))}
-                {stability.events?.auto_pause_reasons?.length > 0 && (
-                  <div style={{ marginTop: 10, fontSize: 11, color: '#dc3545', background: '#fff5f5', borderRadius: 5, padding: '6px 8px', lineHeight: 1.5 }}>
-                    Pause reasons: {stability.events.auto_pause_reasons.join(', ')}
+                {stability.events?.warning_reasons?.length > 0 && (
+                  <div style={{ marginTop: 10, fontSize: 11, color: '#92400e', background: '#fffbeb', borderRadius: 5, padding: '6px 8px', lineHeight: 1.5 }}>
+                    Warning reasons: {stability.events.warning_reasons.join(', ')}
                   </div>
                 )}
               </div>
@@ -648,7 +649,7 @@ export default function WaGovernance() {
         <div style={{ ...card, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
           <div>
             <div style={{ fontWeight: 600, fontSize: 13, color: '#111827', marginBottom: 2 }}>Engine Audit Events</div>
-            <div style={{ fontSize: 12, color: '#6b7280' }}>Full audit log: auto-pauses, re-enables, scale-ups, fingerprint skips, hard limit hits</div>
+            <div style={{ fontSize: 12, color: '#6b7280' }}>Full audit log: warnings, re-enables, scale-ups, fingerprint skips, hard limit hits</div>
           </div>
           <button style={btn('#6366f1')} onClick={() => navigate('/marketing/whatsapp/connections')}>
             Open Connections →
