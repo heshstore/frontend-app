@@ -1,7 +1,7 @@
 /**
  * API base URL (no trailing slash).
  * Set REACT_APP_API_URL in .env.production (prod build) or .env (dev).
- * e.g. REACT_APP_API_URL=http://158.220.110.75:4000
+ * e.g. REACT_APP_API_URL=https://crmhesh.duckdns.org
  */
 export const API_URL = (process.env.REACT_APP_API_URL || "").replace(/\/$/, "");
 

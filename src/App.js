@@ -90,12 +90,14 @@ import WaGovernance               from "./pages/marketing/whatsapp/WaGovernance"
 import PilotDashboard             from "./pages/marketing/whatsapp/PilotDashboard";
 import AiPromotionDashboard       from "./pages/marketing/whatsapp/AiPromotionDashboard";
 import PromoDatabase              from "./pages/database/PromoDatabase";
+import SkipRecoveryDashboard      from "./pages/database/SkipRecoveryDashboard";
 import VisitingCardReader         from "./pages/database/VisitingCardReader";
 import OperationsLog              from "./pages/pilot/OperationsLog";
 import DailyOps                  from "./pages/ops/DailyOps";
 import CommissionPage             from "./pages/workforce/CommissionPage";
 import VersionHistory             from "./pages/settings/VersionHistory";
 import EnvironmentDashboard       from "./pages/settings/EnvironmentDashboard";
+import SystemHealth               from "./pages/settings/SystemHealth";
 
 console.log('[FRONTEND_BUILD]', '2026-05-21-v2');
 
@@ -226,8 +228,9 @@ function App() {
               <Route path="/admin/whatsapp" element={<PermissionRoute permission="whatsapp.manage"><WhatsAppMonitor /></PermissionRoute>} />
 
               {/* ── Database group ── */}
-              <Route path="/database/promotional"    element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><PromoDatabase /></PermissionRoute>} />
-              <Route path="/database/visiting-card"  element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><VisitingCardReader /></PermissionRoute>} />
+              <Route path="/database/promotional"          element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><PromoDatabase /></PermissionRoute>} />
+              <Route path="/database/skip-recovery"        element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><SkipRecoveryDashboard /></PermissionRoute>} />
+              <Route path="/database/visiting-card"        element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><VisitingCardReader /></PermissionRoute>} />
 
               {/* ── WhatsApp Promotional Engine — canonical routes ── */}
               <Route path="/marketing/whatsapp" element={<PermissionRoute permission={["whatsapp.manage", "lead.view"]}><WaEngineDashboard /></PermissionRoute>} />
@@ -255,8 +258,9 @@ function App() {
               <Route path="/marketing/whatsapp-engine/governance" element={<Navigate to="/marketing/whatsapp" replace />} />
               <Route path="/marketing/whatsapp-engine/pilot" element={<Navigate to="/marketing/whatsapp" replace />} />
               <Route path="/pilot/log" element={<PermissionRoute permission={["admin"]}><OperationsLog /></PermissionRoute>} />
-              <Route path="/settings/version-history" element={<PermissionRoute permission="rbac.manage"><VersionHistory /></PermissionRoute>} />
-              <Route path="/settings/environment" element={<PermissionRoute permission="rbac.manage"><EnvironmentDashboard /></PermissionRoute>} />
+              <Route path="/settings/system-health"  element={<PermissionRoute permission="rbac.manage"><SystemHealth /></PermissionRoute>} />
+              <Route path="/settings/version-history" element={<Navigate to="/settings/system-health" replace />} />
+              <Route path="/settings/environment"     element={<Navigate to="/settings/system-health" replace />} />
               <Route path="/daily-ops" element={<PermissionRoute permission={["order.view"]}><DailyOps /></PermissionRoute>} />
               <Route path="/commission" element={<PermissionRoute permission="staff.view"><CommissionPage /></PermissionRoute>} />
 

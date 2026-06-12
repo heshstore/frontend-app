@@ -1145,10 +1145,149 @@ function QueueSummary({ rows, oldest_pending_minutes, accentBg }) {
   );
 }
 
+// ── Level 3: Expanded queue row — full AI message ─────────────────────────────
+function QueueRowDetail({ row }) {
+  const hasMessage = !!row.generated_message;
+  const meta = row.ai_metadata ?? {};
+  const qual = row.quality ?? {};
+  return (
+    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '10px 14px', marginTop: 4, fontSize: 11 }}>
+      {hasMessage ? (
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ fontWeight: 700, color: '#475569', marginBottom: 4 }}>AI Generated Message</div>
+          <div style={{ whiteSpace: 'pre-wrap', color: '#111827', lineHeight: 1.5, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 4, padding: '8px 10px', maxHeight: 220, overflowY: 'auto' }}>
+            {row.generated_message}
+          </div>
+        </div>
+      ) : (
+        <div style={{ color: '#9ca3af', marginBottom: 8 }}>Message not yet generated (pending).</div>
+      )}
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+        {row.proposed_send_time && (
+          <div><span style={{ color: '#94a3b8' }}>Proposed: </span><span style={{ fontFamily: 'monospace' }}>{fmt(row.proposed_send_time)}</span></div>
+        )}
+        {row.actual_send_time && (
+          <div><span style={{ color: '#94a3b8' }}>Sent: </span><span style={{ fontFamily: 'monospace', color: '#16a34a' }}>{fmt(row.actual_send_time)}</span></div>
+        )}
+        {row.campaign_id && (
+          <div><span style={{ color: '#94a3b8' }}>Campaign: </span><span style={{ fontFamily: 'monospace', fontSize: 10 }}>{row.campaign_id.slice(0, 8)}…</span></div>
+        )}
+        {qual.grade && (
+          <div><span style={{ color: '#94a3b8' }}>Quality: </span><span style={{ fontWeight: 700, color: qual.grade === 'A' ? '#16a34a' : qual.grade === 'B' ? '#d97706' : '#dc3545' }}>{qual.grade}</span>
+            {qual.finalScore != null && <span style={{ color: '#64748b' }}> ({qual.finalScore})</span>}
+          </div>
+        )}
+        {meta.hookType && (
+          <div><span style={{ color: '#94a3b8' }}>Hook: </span>{meta.hookType}</div>
+        )}
+        {meta.contentCategory && (
+          <div><span style={{ color: '#94a3b8' }}>Category: </span>{meta.contentCategory}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Level 2: Per-telecaller expandable queue rows ─────────────────────────────
+function TelecallerQueueRows({ numberId }) {
+  const [data,       setData]       = useState(null);
+  const [loading,    setLoading]    = useState(false);
+  const [offset,     setOffset]     = useState(0);
+  const [expandedId, setExpandedId] = useState(null);
+  const LIMIT = 10;
+
+  const load = useCallback(async (newOffset) => {
+    setLoading(true);
+    try {
+      const res = await apiFetch(
+        `/marketing/whatsapp-engine/ai/queue-inspection?number_id=${encodeURIComponent(numberId)}&offset=${newOffset}&limit=${LIMIT}`
+      );
+      if (newOffset === 0) {
+        setData(res);
+      } else {
+        setData(prev => prev ? { ...res, rows: [...(prev.rows ?? []), ...(res.rows ?? [])] } : res);
+      }
+      setOffset(newOffset);
+    } catch {
+      if (newOffset === 0) setData({ total: 0, rows: [] });
+    } finally {
+      setLoading(false);
+    }
+  }, [numberId]);
+
+  useEffect(() => { load(0); }, [load]);
+
+  if (!data && loading) {
+    return <div style={{ color: '#94a3b8', fontSize: 11, padding: '6px 0' }}>Loading queue rows…</div>;
+  }
+  if (!data?.rows?.length) {
+    return <div style={{ color: '#9ca3af', fontSize: 11, padding: '4px 0' }}>No queue rows found.</div>;
+  }
+
+  const loadedCount = data.rows.length;
+  const hasMore = loadedCount < data.total;
+
+  return (
+    <div style={{ marginTop: 6 }}>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+          <thead>
+            <tr>
+              {['#', 'Customer', 'Product SKU', 'Status', 'Proposed', 'Sent At', ''].map(h => (
+                <th key={h} style={{ ...th, fontSize: 10, padding: '6px 10px' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {data.rows.map((r, idx) => (
+              <React.Fragment key={r.queue_id}>
+                <tr
+                  style={{ cursor: 'pointer', background: expandedId === r.queue_id ? '#f0f9ff' : undefined }}
+                  onClick={() => setExpandedId(expandedId === r.queue_id ? null : r.queue_id)}
+                >
+                  <td style={{ ...td, padding: '6px 10px', color: '#94a3b8', fontSize: 10 }}>{offset === 0 ? idx + 1 : idx + 1}</td>
+                  <td style={{ ...td, padding: '6px 10px', fontFamily: 'monospace' }}>{r.customer_phone_masked}</td>
+                  <td style={{ ...td, padding: '6px 10px', fontFamily: 'monospace', color: '#6d28d9', fontSize: 10 }}>{r.product_sku ?? '—'}</td>
+                  <td style={{ ...td, padding: '6px 10px' }}>
+                    <StatusPill status={r.status} />
+                  </td>
+                  <td style={{ ...td, padding: '6px 10px', color: '#64748b', fontSize: 10 }}>{fmtTime(r.proposed_send_time)}</td>
+                  <td style={{ ...td, padding: '6px 10px', color: '#16a34a', fontSize: 10 }}>{fmtTime(r.actual_send_time)}</td>
+                  <td style={{ ...td, padding: '6px 10px', textAlign: 'center', fontSize: 9, color: '#94a3b8' }}>
+                    {expandedId === r.queue_id ? '▲' : '▼'}
+                  </td>
+                </tr>
+                {expandedId === r.queue_id && (
+                  <tr>
+                    <td colSpan={7} style={{ padding: '4px 10px 10px 10px', background: '#f8fafc' }}>
+                      <QueueRowDetail row={r} />
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 6, fontSize: 11, color: '#64748b' }}>
+        <span>{loadedCount} of {data.total} rows</span>
+        {hasMore && (
+          <button
+            onClick={() => load(loadedCount)}
+            disabled={loading}
+            style={{ background: 'none', border: '1px solid #cbd5e1', borderRadius: 4, cursor: 'pointer', padding: '2px 10px', fontSize: 11, color: '#475569' }}
+          >
+            {loading ? 'Loading…' : `Load next ${Math.min(LIMIT, data.total - loadedCount)}`}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Section F: Today's Queue Summary (3-level AI Queue Inspection) ────────────
 function SectionF({ queueByTelecaller, activityByTelecaller }) {
-  const [detailOpen,    setDetailOpen]    = useState(false);
-  const [queueDetail,   setQueueDetail]   = useState(null);
-  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [expandedNumberId, setExpandedNumberId] = useState(null);
 
   const notOnWaMap = new Map((activityByTelecaller ?? []).map(a => [a.number_id, a.not_on_whatsapp ?? 0]));
   const rows = (queueByTelecaller ?? []).map(q => ({
@@ -1159,29 +1298,15 @@ function SectionF({ queueByTelecaller, activityByTelecaller }) {
     sent:            q.sent,
     pending:         q.pending,
     failed:          q.failed,
+    skipped:         q.skipped ?? 0,
     not_on_whatsapp: notOnWaMap.get(q.number_id) ?? 0,
   }));
-
-  const handleToggleDetail = async () => {
-    if (!detailOpen && !queueDetail) {
-      setLoadingDetail(true);
-      try {
-        const res = await apiFetch('/marketing/whatsapp-engine/ai/queue-detail');
-        setQueueDetail(Array.isArray(res) ? res : []);
-      } catch {
-        setQueueDetail([]);
-      } finally {
-        setLoadingDetail(false);
-      }
-    }
-    setDetailOpen(v => !v);
-  };
 
   return (
     <div style={{ ...card }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <div style={sectionTitle}>D — Today's Queue Summary</div>
-        <span style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'monospace' }}>created_at ≥ today</span>
+        <span style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'monospace' }}>created_at ≥ today · click row to inspect</span>
       </div>
 
       {rows.length === 0 ? (
@@ -1190,39 +1315,41 @@ function SectionF({ queueByTelecaller, activityByTelecaller }) {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
             <tr>
-              {['Telecaller', 'Queued', 'Sent', 'Pending', 'Not On WhatsApp', 'Failed'].map(h => (
+              {['Telecaller', 'Queued', 'Sent', 'Pending', 'Skipped', 'Not On WA', 'Failed', ''].map(h => (
                 <th key={h} style={th}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {rows.map(r => (
-              <tr key={r.number_id}>
-                <td style={{ ...td, fontFamily: 'monospace', fontWeight: 700, color: '#111827' }}>{r.phone}</td>
-                <td style={td}>{r.queued}</td>
-                <td style={{ ...td, color: '#16a34a', fontWeight: 700 }}>{r.sent}</td>
-                <td style={{ ...td, color: '#0d6efd' }}>{r.pending}</td>
-                <td style={{ ...td, color: r.not_on_whatsapp > 0 ? '#d97706' : '#94a3b8' }}>{r.not_on_whatsapp}</td>
-                <td style={{ ...td, color: r.failed > 0 ? '#dc3545' : '#94a3b8' }}>{r.failed}</td>
-              </tr>
+              <React.Fragment key={r.number_id}>
+                <tr
+                  style={{ cursor: 'pointer', background: expandedNumberId === r.number_id ? '#f0f9ff' : undefined }}
+                  onClick={() => setExpandedNumberId(expandedNumberId === r.number_id ? null : r.number_id)}
+                >
+                  <td style={{ ...td, fontFamily: 'monospace', fontWeight: 700, color: '#111827' }}>{r.phone}</td>
+                  <td style={td}>{r.queued}</td>
+                  <td style={{ ...td, color: '#16a34a', fontWeight: 700 }}>{r.sent}</td>
+                  <td style={{ ...td, color: '#0d6efd' }}>{r.pending}</td>
+                  <td style={{ ...td, color: r.skipped > 0 ? '#d97706' : '#94a3b8' }}>{r.skipped}</td>
+                  <td style={{ ...td, color: r.not_on_whatsapp > 0 ? '#d97706' : '#94a3b8' }}>{r.not_on_whatsapp}</td>
+                  <td style={{ ...td, color: r.failed > 0 ? '#dc3545' : '#94a3b8' }}>{r.failed}</td>
+                  <td style={{ ...td, textAlign: 'center', fontSize: 9, color: '#94a3b8' }}>
+                    {expandedNumberId === r.number_id ? '▲' : '▼'}
+                  </td>
+                </tr>
+                {expandedNumberId === r.number_id && (
+                  <tr>
+                    <td colSpan={8} style={{ padding: '4px 12px 12px 12px', background: '#f8fafc' }}>
+                      <TelecallerQueueRows numberId={r.number_id} />
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
             ))}
           </tbody>
         </table>
       )}
-
-      {/* Per-contact detail — collapsed by default, fetched on demand */}
-      <div style={{ marginTop: 14, borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
-        <button
-          onClick={handleToggleDetail}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: 11, padding: 0, display: 'flex', alignItems: 'center', gap: 5 }}
-        >
-          <span style={{ fontSize: 9 }}>{detailOpen ? '▼' : '▶'}</span>
-          {loadingDetail ? 'Loading per-contact rows…' : detailOpen ? 'Hide per-contact rows' : 'Show per-contact rows (today)'}
-        </button>
-        {detailOpen && !loadingDetail && (
-          <SectionD data={queueDetail} nested />
-        )}
-      </div>
     </div>
   );
 }
