@@ -785,7 +785,7 @@ export default function WaInbox() {
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    const t = setInterval(() => load(true), 30000);
+    const t = setInterval(() => load(true), 90000);
     return () => clearInterval(t);
   }, [load]);
 

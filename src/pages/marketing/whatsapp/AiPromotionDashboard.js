@@ -714,8 +714,8 @@ function SectionAudienceStatus({ status, dbCounts, queueBuiltToday }) {
     <div style={{ ...card, padding: '14px 18px' }}>
       <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 10 }}>Audience Overview</div>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        {chip('Promotional DB', promotional_db_count, '#1e293b')}
-        {chip('Customer DB', customer_db_count, '#374151')}
+        {chip('Promotional Contacts', promotional_db_count, '#1e293b')}
+        {chip('Customer Contacts', customer_db_count, '#374151')}
         {chip('Eligible Today', eligible_audience_today, '#16a34a')}
         {chip('Queue Built Today', queueBuiltToday, '#0d6efd')}
       </div>
@@ -1497,7 +1497,7 @@ export default function AiPromotionDashboard() {
     }
   }, [load]);
 
-  useEffect(() => { load(); const t = setInterval(load, 15_000); return () => clearInterval(t); }, [load]);
+  useEffect(() => { load(); const t = setInterval(load, 60_000); return () => clearInterval(t); }, [load]);
   useEffect(() => {
     const t = setInterval(() => {
       if (lastUpdated) setSecondsAgo(Math.floor((Date.now() - lastUpdated) / 1000));

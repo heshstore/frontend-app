@@ -6,6 +6,7 @@ import { SkeletonList } from "./components/ui/SkeletonCard";
 import { apiFetch } from "./utils/api";
 import { toast } from "./utils/toast";
 import { useConfirm } from "./components/ui/ConfirmModal";
+import { API_URL } from "./config";
 
 const btn = (extra = {}) => ({
   padding: '5px 12px', fontSize: 12, fontWeight: 600, borderRadius: 5,
@@ -131,6 +132,19 @@ export default function ItemList() {
               alignItems: 'flex-start',
               gap: 12,
             }}>
+              {/* Photo */}
+              {item.imageUrl ? (
+                <img
+                  src={item.imageUrl.startsWith('http') ? item.imageUrl : `${API_URL}${item.imageUrl}`}
+                  alt=""
+                  style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 6, flexShrink: 0, border: '1px solid #e5e7eb' }}
+                />
+              ) : (
+                <div style={{ width: 40, height: 40, borderRadius: 6, flexShrink: 0, background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
+                  📦
+                </div>
+              )}
+
               {/* SKU badge */}
               <div style={{
                 background: '#dbeafe', color: '#1d4ed8',

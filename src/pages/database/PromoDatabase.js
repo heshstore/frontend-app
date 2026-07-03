@@ -324,7 +324,7 @@ function ImportModal({ onClose, onDone }) {
                     { label: 'Missing phone/email', key: 'missing_contact_info', color: '#6b7280' },
                     { label: 'Invalid phone format', key: 'invalid_phone', color: '#d97706' },
                     { label: 'Junk quality', key: 'junk_rejected', color: '#b91c1c' },
-                    { label: 'Customer DB protected', key: 'crm_protected', color: '#1d4ed8' },
+                    { label: 'Customer Contacts protected', key: 'crm_protected', color: '#1d4ed8' },
                     { label: 'Linked to customer', key: 'crm_linked', color: '#7c3aed' },
                   ].filter(row => (bd[row.key] ?? 0) > 0).map(row => (
                     <tr key={row.key}>
@@ -374,7 +374,7 @@ function ImportModal({ onClose, onDone }) {
                   <div style={{ background: '#f8fafc', padding: '6px 8px', borderRadius: 6 }}><div style={{ fontWeight: 700, color: '#374151', marginBottom: 3 }}>Existing</div><div style={{ color: '#6b7280' }}>{c.existing.name || '—'} · {c.existing.city || '—'}</div></div>
                   <div style={{ background: '#f0fdf4', padding: '6px 8px', borderRadius: 6 }}><div style={{ fontWeight: 700, color: '#374151', marginBottom: 3 }}>From CSV</div><div style={{ color: '#6b7280' }}>{c.newRow.name || '—'} · {c.newRow.city || '—'}</div></div>
                 </div>
-                {isCustomerLinked ? <div style={{ fontSize: 11, color: '#9ca3af', fontStyle: 'italic' }}>Will be skipped — Customer DB takes priority.</div> : (
+                {isCustomerLinked ? <div style={{ fontSize: 11, color: '#9ca3af', fontStyle: 'italic' }}>Will be skipped — Customer Contacts take priority.</div> : (
                   <div style={{ display: 'flex', gap: 6 }}>
                     {[{ key: 'skip', label: 'Skip', color: '#6b7280', bg: '#f3f4f6' }, { key: 'update', label: 'Update', color: '#1d4ed8', bg: '#dbeafe' }, { key: 'merge', label: 'Merge', color: '#166534', bg: '#dcfce7' }].map(({ key, label, color, bg }) => (
                       <button key={key} onClick={() => setRes(c.phone, key)} style={{ ...btn(res === key ? bg : '#f9fafb', res === key ? color : '#6b7280'), border: `1px solid ${res === key ? bg : '#e2e8f0'}`, padding: '4px 10px', fontSize: 11 }}>{label}</button>
@@ -424,7 +424,7 @@ function ImportModal({ onClose, onDone }) {
             {envInfo.environment === 'PRODUCTION' && (
               <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 10, cursor: 'pointer', color: '#7f1d1d' }}>
                 <input type="checkbox" checked={prodConfirm} onChange={e => setProdConfirm(e.target.checked)} style={{ marginTop: 2 }} />
-                <span>I confirm this import targets the <strong>production</strong> promotional database ({envInfo.promotional_db_count ?? '?'} records).</span>
+                <span>I confirm this import targets <strong>production</strong> Promotional Contacts ({envInfo.promotional_db_count ?? '?'} records).</span>
               </label>
             )}
           </div>
@@ -816,7 +816,7 @@ export default function PromoDatabase() {
 
   return (
     <PageLayout
-      title="Promotional DB"
+      title="Promotional Contacts"
       subtitle="Contacts for WhatsApp promotional campaigns"
       actions={
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -852,9 +852,9 @@ export default function PromoDatabase() {
           </div>
         )}
 
-        {/* Customer DB banner */}
+        {/* Customer Contacts banner */}
         <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '8px 14px', marginBottom: 14, fontSize: 12, color: '#1d4ed8' }}>
-          <strong>Customer DB takes priority.</strong> Customer-linked contacts are protected — imports cannot overwrite them.
+          <strong>Customer Contacts take priority.</strong> Customer-linked contacts are protected — imports cannot overwrite them.
         </div>
 
         {/* Search + Filters */}

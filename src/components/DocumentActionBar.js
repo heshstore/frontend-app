@@ -32,6 +32,8 @@ import { theme, buttonStyle } from '../theme';
 import { toast } from '../utils/toast';
 import { normalizePhoneForWhatsApp } from '../utils/phone';
 import { company } from '../config/company';
+import { trackDocAction } from '../utils/trackDocAction';
+import CountBadge from './CountBadge';
 
 const fmtDate = (iso) =>
   iso ? new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
@@ -42,6 +44,7 @@ const fmtAmt = (n) =>
 export default function DocumentActionBar({
   type, id, docNo, docDate, amount, status,
   customerMobile, customerName, customerEmail, publicPdfUrl,
+  emailCount = 0, editCount = 0, printCount = 0, pdfCount = 0, whatsappCount = 0,
   onBack, onEdit, onConvert,
   convertLabel = 'Convert to order',
   isEditable    = false,
@@ -55,9 +58,15 @@ export default function DocumentActionBar({
 
   /* ── Actions ────────────────────────────────────────────────────── */
   const handlePrint = () => {
+    trackDocAction(type, id, 'print');
     if (type === 'quotation') window.open(`/quotations/${id}/print`, '_blank');
     else if (type === 'order') window.open(`/orders/${id}/print`, '_blank');
     else window.print();
+  };
+
+  const handleEdit = () => {
+    trackDocAction(type, id, 'edit');
+    onEdit();
   };
 
   const handlePdf = async () => {
@@ -86,6 +95,7 @@ export default function DocumentActionBar({
   };
 
   const handleWhatsApp = () => {
+    trackDocAction(type, id, 'whatsapp');
     const name    = customerName || 'there';
     const refNo   = docNo || `#${id}`;
     const dateStr = fmtDate(docDate);
@@ -190,20 +200,30 @@ export default function DocumentActionBar({
 
         {/* Edit */}
         {isEditable && onEdit && (
-          <button onClick={onEdit} style={btn('#059669')}>✏ Edit</button>
+          <button onClick={handleEdit} style={btn('#059669')}>
+            ✏ Edit<CountBadge n={editCount} color="#059669" />
+          </button>
         )}
 
         {/* Print */}
-        <button onClick={handlePrint} style={btn('rgba(255,255,255,.18)', '#fff')}>🖨 Print</button>
+        <button onClick={handlePrint} style={btn('rgba(255,255,255,.18)', '#fff')}>
+          🖨 Print<CountBadge n={printCount} color={theme.primary} />
+        </button>
 
         {/* PDF */}
-        <button onClick={handlePdf}   style={btn('rgba(255,255,255,.18)', '#fff')}>⬇ PDF</button>
+        <button onClick={handlePdf}   style={btn('rgba(255,255,255,.18)', '#fff')}>
+          ⬇ PDF<CountBadge n={pdfCount} color={theme.primary} />
+        </button>
 
         {/* WhatsApp */}
-        <button onClick={handleWhatsApp} style={btn('#25d366')}>💬 WhatsApp</button>
+        <button onClick={handleWhatsApp} style={btn('#25d366')}>
+          💬 WhatsApp<CountBadge n={whatsappCount} color="#1a8a4a" />
+        </button>
 
         {/* Email */}
-        <button onClick={() => { setEmailTo(customerEmail || ''); setEmailModal(true); }} style={btn('#0d6efd')}>✉ Email</button>
+        <button onClick={() => { setEmailTo(customerEmail || ''); setEmailModal(true); }} style={btn('#0d6efd')}>
+          ✉ Email<CountBadge n={emailCount} color="#0d6efd" />
+        </button>
 
         {/* Convert */}
         {isConvertible && onConvert && (

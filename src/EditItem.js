@@ -5,11 +5,12 @@ import {
   FormSection, FormCard, FormGrid, FormField, FormActions,
   inputStyle, selectStyle,
 } from "./components/ui/FormComponents";
-import { apiFetch } from "./utils/api";
+import { apiFetch, getToken } from "./utils/api";
 import { toast } from "./utils/toast";
 import { hasAnyPermission } from "./utils/usePermission";
 import BoqManager from "./pages/boq/BoqManager";
 import { GST_OPTIONS, getEditGstOptions } from "./config/gstOptions";
+import { API_URL } from "./config";
 const UNIT_OPTIONS = ['pcs', 'box', 'doz', 'pair', 'set', 'kg', 'ltr'];
 
 const CATEGORY_OPTIONS = [
@@ -191,6 +192,7 @@ export default function EditItem() {
   const [form, setForm] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving,  setSaving]  = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   useEffect(() => {
     apiFetch(`/service-items/${id}`)
@@ -211,6 +213,7 @@ export default function EditItem() {
           isRawMaterial:     Boolean(item.isRawMaterial),
           requiresProduction: Boolean(item.requiresProduction),
           requiresPurchase:   item.requiresPurchase !== false,
+          imageUrl:          item.imageUrl ?? '',
         });
       })
       .catch(() => toast.error('Failed to load item'))
@@ -220,6 +223,30 @@ export default function EditItem() {
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setForm(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+  };
+
+  const handlePhotoChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploadingPhoto(true);
+    try {
+      const body = new FormData();
+      body.append('photo', file);
+      const res = await fetch(`${API_URL}/service-items/upload-photo`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${getToken()}` },
+        body,
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setForm(prev => ({ ...prev, imageUrl: data.url }));
+      toast.success('Photo uploaded');
+    } catch {
+      toast.error('Photo upload failed');
+    } finally {
+      setUploadingPhoto(false);
+      e.target.value = '';
+    }
   };
 
   const handleCategoryChange = (e) => {
@@ -366,6 +393,25 @@ export default function EditItem() {
               <RupeeField name="costPrice"    label="Cost price"    help="Your purchase price" />
               <RupeeField name="sellingPrice" label="Selling price" required help="Retail / default price" />
             </FormGrid>
+          </FormCard>
+        </FormSection>
+
+        {/* ── Photo ──────────────────────────────────────────── */}
+        <FormSection title="Photo">
+          <FormCard>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              {form.imageUrl && (
+                <img
+                  src={form.imageUrl.startsWith('http') ? form.imageUrl : `${API_URL}${form.imageUrl}`}
+                  alt="Item"
+                  style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 8, border: '1px solid #e5e7eb' }}
+                />
+              )}
+              <FormField label="Item photo" help="JPEG, PNG, WebP, or GIF, up to 5MB">
+                <input type="file" accept="image/*" onChange={handlePhotoChange} disabled={uploadingPhoto} style={inputStyle} />
+              </FormField>
+              {uploadingPhoto && <span style={{ fontSize: 12, color: '#6b7280' }}>Uploading…</span>}
+            </div>
           </FormCard>
         </FormSection>
 

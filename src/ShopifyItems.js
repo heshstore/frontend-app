@@ -3,6 +3,8 @@ import { apiFetch } from "./utils/api";
 import { toast } from "./utils/toast";
 import { GST_OPTIONS } from "./config/gstOptions";
 
+const UNIT_OPTIONS = ["Nos", "pcs", "box", "doz", "pair", "set", "kg", "ltr"];
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 function isSalesReady(item) {
@@ -195,7 +197,7 @@ function InlineConfigForm({ item, mainData, selectedItems, selectedVariants,
         sku: v.sku, hsnCode: data.hsn,
         gst: gstValue, costPrice: costValue,
         wholesalePrice: calcWholesalePrice(data, retail),
-        unit: "Nos",
+        unit: data.unit || "Nos",
         mainCategoryType: data.categoryType  || null,
         serviceSubtype:   data.categoryType === "SERVICE" ? (data.serviceSubtype || null) : null,
       };
@@ -254,6 +256,15 @@ function InlineConfigForm({ item, mainData, selectedItems, selectedVariants,
             disabled={!fieldsEnabled}
             style={{ padding: 8, borderRadius: 6, border: "1px solid #ccc" }}
           />
+          <select
+            value={data.unit || "Nos"}
+            onClick={e => e.stopPropagation()}
+            onChange={e => setMainData(p => ({ ...p, [item.sku]: { ...(p[item.sku] || {}), unit: e.target.value } }))}
+            disabled={!fieldsEnabled}
+            style={{ padding: 8, borderRadius: 6, border: "1px solid #ccc" }}
+          >
+            {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
+          </select>
 
           {/* Category classification */}
           <div onClick={e => e.stopPropagation()}>
@@ -806,6 +817,7 @@ export default function ShopifyItems() {
             hsn: item.hsnCode || "",
             gst: item.gst ? String(item.gst) : "",
             cost: item.costPrice || "",
+            unit: item.unit || "Nos",
             wholesale: item.wholesalePrice > 0 ? String(item.wholesalePrice) : "",
             wholesaleMode: "rs",
             categoryType: item.mainCategoryType || "",

@@ -62,13 +62,13 @@ export default function EnvironmentDashboard() {
           </div>
 
           <div style={CARD}>
-            <div style={LABEL}>Customer DB</div>
+            <div style={LABEL}>Customer Contacts</div>
             <div style={{ ...VALUE, color: '#1d4ed8' }}>{data.customer_db_count ?? '—'}</div>
             <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 6 }}>records</div>
           </div>
 
           <div style={CARD}>
-            <div style={LABEL}>Promotional DB</div>
+            <div style={LABEL}>Promotional Contacts</div>
             <div style={{ ...VALUE, color: '#7c3aed' }}>{data.promotional_db_count ?? '—'}</div>
             <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 6 }}>records</div>
           </div>

@@ -102,7 +102,7 @@ export default function BusinessSummary() {
 
   useEffect(() => {
     load();
-    const t = setInterval(load, 60_000); // refresh every minute
+    const t = setInterval(load, 300_000); // refresh every 5 minutes
     return () => clearInterval(t);
   }, [load]);
 

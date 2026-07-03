@@ -123,9 +123,9 @@ export default function WaLogs() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Auto-refresh every 60 seconds
+  // Auto-refresh every 5 minutes — logs are historical, not live
   useEffect(() => {
-    const t = setInterval(load, 60000);
+    const t = setInterval(load, 300000);
     return () => clearInterval(t);
   }, [load]);
 

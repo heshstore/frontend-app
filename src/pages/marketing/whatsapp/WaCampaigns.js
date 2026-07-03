@@ -41,7 +41,7 @@ const STATUS_META = {
 };
 
 const PROMOTION_RULES_DISPLAY = [
-  { icon: '✓', label: 'Customer Database Audience' },
+  { icon: '✓', label: 'Customer Contacts Audience' },
   { icon: '✓', label: 'Auto Telecaller Rotation' },
   { icon: '✓', label: '10AM–6PM Window' },
   { icon: '✓', label: 'Random Delay Enabled (30–120s)' },

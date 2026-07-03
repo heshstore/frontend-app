@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ORDER_STATUS } from "./constants/orderStatus";
 import DocActions from "./components/DocActions";
+import CountBadge from "./components/CountBadge";
+import { trackDocAction } from "./utils/trackDocAction";
 import StatusBadge, { PricingBadge } from "./components/ui/StatusBadge";
 import EmptyState from "./components/ui/EmptyState";
 import { SkeletonList } from "./components/ui/SkeletonCard";
@@ -257,13 +259,13 @@ export default function OrderList() {
                     onClick={() => openPanel(`Order #${row.order_number || row.id}`, <OrderDetail orderId={row.id} />)}
                     style={btn({ background: '#f8fafc', color: '#374151', border: '1px solid #e2e8f0' })}
                   >
-                    👁 View
+                    👁 View<CountBadge n={row.view_count} color="#374151" />
                   </button>
                   <button
-                    onClick={() => navigate(`/edit-order/${row.id}`)}
+                    onClick={() => { trackDocAction('order', row.id, 'edit'); navigate(`/edit-order/${row.id}`); }}
                     style={btn({ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' })}
                   >
-                    ✏ Edit
+                    ✏ Edit<CountBadge n={row.edit_count} color="#15803d" />
                   </button>
                   {(row.status === ORDER_STATUS.GENERATED || row.status === ORDER_STATUS.REJECTED) && (
                     <button
@@ -288,8 +290,13 @@ export default function OrderList() {
                   docNo={row.order_number}
                   docDate={row.created_at}
                   amount={row.total_amount}
-                  customerMobile={row.mobile}
+                  customerMobile={row.customer_phone}
                   customerName={row.customer_name}
+                  customerEmail={row.customer_email}
+                  emailCount={row.email_sent_count}
+                  printCount={row.print_count}
+                  pdfCount={row.pdf_count}
+                  whatsappCount={row.whatsapp_count}
                 />
               </div>
             </div>

@@ -47,6 +47,10 @@ function flattenResults(results, getLabel, getSub, getPath) {
   return flat;
 }
 
+// 30-second results cache — avoids refetching identical queries
+const _resultsCache = new Map();
+const RESULTS_TTL = 30_000;
+
 export default function UniversalSearch({ placeholder = 'Search… ⌘K for actions' }) {
   const navigate = useNavigate();
   const [query,   setQuery]   = useState('');
@@ -88,16 +92,24 @@ export default function UniversalSearch({ placeholder = 'Search… ⌘K for acti
   }, []);
 
   const search = useCallback(async (q) => {
+    const cacheKey = q.trim().toLowerCase();
+    const cached = _resultsCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < RESULTS_TTL) {
+      setResults(cached.data);
+      setOpen(true);
+      setActiveIdx(-1);
+      return;
+    }
+
     const enc = encodeURIComponent(q.trim());
-    const lower = q.toLowerCase();
     setLoading(true);
     try {
       const [custRes, itemRes, ordRes, quotRes, leadRes] = await Promise.allSettled([
         apiFetch(`/customers/search?q=${enc}`),
         apiFetch(`/items/search?q=${enc}`),
-        apiFetch(`/orders`),
-        apiFetch(`/quotations`),
-        apiFetch(`/crm/leads`),
+        apiFetch(`/orders?q=${enc}&limit=5`),
+        apiFetch(`/quotations?q=${enc}`),
+        apiFetch(`/crm/leads?search=${enc}&limit=5`),
       ]);
 
       const customers = custRes.status === 'fulfilled' && custRes.value.ok
@@ -108,39 +120,27 @@ export default function UniversalSearch({ placeholder = 'Search… ⌘K for acti
 
       let orders = [];
       if (ordRes.status === 'fulfilled' && ordRes.value.ok) {
-        const all = await ordRes.value.json();
-        orders = (Array.isArray(all) ? all : [])
-          .filter(o =>
-            String(o.id).includes(lower) ||
-            (o.customer_name || '').toLowerCase().includes(lower) ||
-            (o.order_number || '').toLowerCase().includes(lower)
-          ).slice(0, 4);
+        const payload = await ordRes.value.json();
+        const arr = Array.isArray(payload) ? payload : (payload.data || []);
+        orders = arr.slice(0, 4);
       }
 
       let quotations = [];
       if (quotRes.status === 'fulfilled' && quotRes.value.ok) {
-        const all = await quotRes.value.json();
-        quotations = (Array.isArray(all) ? all : [])
-          .filter(q =>
-            String(q.id).includes(lower) ||
-            (q.customer_name || '').toLowerCase().includes(lower) ||
-            (q.quotation_no || '').toLowerCase().includes(lower)
-          ).slice(0, 4);
+        const arr = await quotRes.value.json();
+        quotations = (Array.isArray(arr) ? arr : []).slice(0, 4);
       }
 
       let leads = [];
       if (leadRes.status === 'fulfilled' && leadRes.value.ok) {
         const all = await leadRes.value.json();
         const arr = Array.isArray(all) ? all : (all.leads || []);
-        leads = arr
-          .filter(l =>
-            (l.name || '').toLowerCase().includes(lower) ||
-            (l.company_name || '').toLowerCase().includes(lower) ||
-            (l.mobile || '').includes(lower)
-          ).slice(0, 4);
+        leads = arr.slice(0, 4);
       }
 
-      setResults({ customers, orders, quotations, leads, items });
+      const data = { customers, orders, quotations, leads, items };
+      _resultsCache.set(cacheKey, { data, ts: Date.now() });
+      setResults(data);
       setOpen(true);
       setActiveIdx(-1);
     } catch {

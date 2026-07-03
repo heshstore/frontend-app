@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import PageLayout from "./components/layout/PageLayout";
 import {
@@ -48,6 +48,7 @@ const CUSTOMER_TYPES = [
 ];
 
 export default function AddCustomer() {
+  console.log("ADDCUSTOMER BUILD VERIFIED", new Date().toISOString());
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const leadId = searchParams.get('leadId');
@@ -76,6 +77,9 @@ export default function AddCustomer() {
   const [loading,      setLoading]      = useState(false);
 
   const selectedCityRef = useRef({ name: '', state: '', country: '' });
+  const geocoderRef = useRef(null);
+  const geoLookupCacheRef = useRef(new Map());
+  const autoFilledAddressRef = useRef({ state: '', country: '' });
 
   const toSentenceCase = (str) =>
     str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : '';
@@ -105,6 +109,166 @@ export default function AddCustomer() {
     } catch {}
   };
 
+  const logGeoLookupDebug = (...args) => {
+    console.log('[Address lookup]', ...args);
+  };
+
+  const getGoogleGeocoder = () => {
+    if (!window.google?.maps?.Geocoder) return null;
+    if (!geocoderRef.current) geocoderRef.current = new window.google.maps.Geocoder();
+    return geocoderRef.current;
+  };
+
+  const geocodeAddress = (request) => new Promise((resolve) => {
+    const geocoder = getGoogleGeocoder();
+    if (!geocoder) {
+      logGeoLookupDebug('Google Geocoder unavailable');
+      resolve(null);
+      return;
+    }
+    logGeoLookupDebug('Geocoder request', request);
+    console.log('[DEBUG] REQUEST SENT', request);
+    geocoder.geocode(request, (results, status) => {
+      console.log('[DEBUG] GEOCODER CALLBACK status:', status, 'results:', results);
+      if (status === window.google.maps.GeocoderStatus.OK && results?.length) {
+        console.log('[DEBUG] STATUS OK results[0].formatted_address:', results[0]?.formatted_address, 'address_components:', results[0]?.address_components);
+        logGeoLookupDebug('Google Geocoder response', {
+          status,
+          resultCount: results.length,
+          results,
+        });
+        results.forEach((result, index) => {
+          logGeoLookupDebug(`Result ${index} address_components`, result.address_components || []);
+          (result.address_components || []).forEach((component) => {
+            logGeoLookupDebug('Component', {
+              types: component.types,
+              long_name: component.long_name,
+              short_name: component.short_name,
+            });
+          });
+        });
+        const selectedResult =
+          results.find((result) =>
+            result.address_components?.some((component) =>
+              component.types?.includes('administrative_area_level_1'),
+            ),
+          ) || results[0];
+        logGeoLookupDebug('Selected Geocoder result', {
+          formatted_address: selectedResult.formatted_address,
+          has_administrative_area_level_1: !!selectedResult.address_components?.some((component) =>
+            component.types?.includes('administrative_area_level_1'),
+          ),
+        });
+        resolve(selectedResult);
+      } else {
+        console.log('[DEBUG] EARLY RETURN: geocode failed status:', status, 'request:', request);
+        logGeoLookupDebug('geocode failed', status, request);
+        resolve(null);
+      }
+    });
+  });
+
+  const addressComponent = (components, type, field = 'long_name') =>
+    components?.find((c) => c.types?.includes(type))?.[field] || '';
+
+  const normalizeGeocodeResult = (result) => {
+    const components = result?.address_components || [];
+    const resolved = {
+      city:
+        addressComponent(components, 'locality') ||
+        addressComponent(components, 'postal_town') ||
+        addressComponent(components, 'administrative_area_level_3') ||
+        addressComponent(components, 'administrative_area_level_2') ||
+        addressComponent(components, 'sublocality') ||
+        '',
+      state: addressComponent(components, 'administrative_area_level_1'),
+      country: addressComponent(components, 'country'),
+      countryISO: addressComponent(components, 'country', 'short_name'),
+      postalCode: addressComponent(components, 'postal_code'),
+    };
+    logGeoLookupDebug('Resolved address fields', resolved);
+    logGeoLookupDebug('Resolved State:', resolved.state || '(blank)');
+    return resolved;
+  };
+
+  const normalizeText = (value) =>
+    String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+
+  const cityMatches = (typedCity, googleCity) => {
+    const typed = normalizeText(typedCity);
+    const found = normalizeText(googleCity);
+    return !!typed && !!found && (typed === found || found.includes(typed) || typed.includes(found));
+  };
+
+  const updateAutoAddressFields = (resolved, options = {}) => {
+    if (!resolved) return false;
+
+    const currentCity = city.trim();
+    if (options.requireCityMatch && currentCity && (!resolved.city || !cityMatches(currentCity, resolved.city))) {
+      logGeoLookupDebug('city/pincode mismatch', { city: currentCity, resolvedCity: resolved.city || '' });
+      console.log('[DEBUG] EARLY RETURN: city/pincode mismatch', { currentCity, resolvedCity: resolved.city || '' });
+      return false;
+    }
+
+    const nextCity = resolved.city || currentCity;
+    if (options.updateCity && resolved.city) {
+      setCity((prev) => {
+        if (!prev.trim() || cityMatches(prev, resolved.city)) return resolved.city;
+        return prev;
+      });
+    }
+
+    if (resolved.state) {
+      console.log('[DEBUG] SETTING STATE', resolved.state);
+      setState((prev) => {
+        logGeoLookupDebug('State update attempt', {
+          previous_state: prev,
+          previous_auto_state: autoFilledAddressRef.current.state,
+          resolved_state: resolved.state,
+        });
+        if (prev && autoFilledAddressRef.current.state && prev !== autoFilledAddressRef.current.state) {
+          logGeoLookupDebug('State update skipped: existing state appears manually edited', {
+            kept_state: prev,
+            resolved_state: resolved.state,
+          });
+          console.log('[DEBUG] EARLY RETURN: setState skipped — manually edited', { kept: prev, resolved: resolved.state });
+          return prev;
+        }
+        autoFilledAddressRef.current.state = resolved.state;
+        logGeoLookupDebug('React setState(state) writing', resolved.state);
+        return resolved.state;
+      });
+    }
+
+    if (resolved.country) {
+      console.log('[DEBUG] SETTING COUNTRY', resolved.country);
+      setCountry((prev) => {
+        if (prev && autoFilledAddressRef.current.country && prev !== autoFilledAddressRef.current.country) {
+          console.log('[DEBUG] EARLY RETURN: setCountry skipped — manually edited', { kept: prev, resolved: resolved.country });
+          return prev;
+        }
+        autoFilledAddressRef.current.country = resolved.country;
+        return resolved.country;
+      });
+    }
+
+    if (resolved.countryISO) {
+      const callingCode = ISO_TO_CALLING_CODE[resolved.countryISO] || '+91';
+      setForm(prev => ({ ...prev, countryCode1: callingCode, countryCode2: callingCode }));
+    }
+
+    selectedCityRef.current = {
+      name: nextCity || selectedCityRef.current.name || '',
+      state: resolved.state || state || selectedCityRef.current.state || '',
+      country: resolved.country || country || selectedCityRef.current.country || 'India',
+    };
+    return true;
+  };
+
+  useEffect(() => {
+    logGeoLookupDebug('Rendered State input value', state || '(blank)');
+  }, [state]);
+
   const handleCitySelect = (place) => {
     if (place.address_components) {
       let cityName = '', stateName = '', countryName = '', countryISO = '';
@@ -118,6 +282,7 @@ export default function AddCustomer() {
       setCity(cityName);
       setState(stateName);
       setCountry(countryName);
+      autoFilledAddressRef.current = { state: stateName, country: countryName };
       setForm(prev => ({ ...prev, countryCode1: callingCode, countryCode2: callingCode }));
       selectedCityRef.current = { name: cityName, state: stateName, country: countryName };
       syncCityToDB({ name: cityName, state: stateName, country: countryName, countryISO, countryCode: callingCode });
@@ -126,12 +291,15 @@ export default function AddCustomer() {
       setCity(place.name);
       setState(place.state || '');
       setCountry(place.country || 'India');
+      autoFilledAddressRef.current = { state: place.state || '', country: place.country || 'India' };
       setForm(prev => ({ ...prev, countryCode1: callingCode, countryCode2: callingCode }));
       selectedCityRef.current = { name: place.name, state: place.state || '', country: place.country || 'India' };
     }
   };
 
   const handleCitySearch = async (value) => {
+    console.log("HANDLE CITY SEARCH EXECUTED");
+    console.log('[DEBUG] CITY SEARCH START', value);
     setCity(value);
     if (!value) {
       setCityResults([]);
@@ -167,6 +335,72 @@ export default function AddCustomer() {
       );
     }
   };
+
+  useEffect(() => {
+    const value = city.trim();
+    if (value.length < 3) return undefined;
+    if (
+      selectedCityRef.current.name &&
+      normalizeText(selectedCityRef.current.name) === normalizeText(value) &&
+      selectedCityRef.current.state &&
+      selectedCityRef.current.country
+    ) {
+      return undefined;
+    }
+
+    const cacheKey = `city:${normalizeText(value)}`;
+    const cached = geoLookupCacheRef.current.get(cacheKey);
+    if (cached) {
+      updateAutoAddressFields(cached);
+      return undefined;
+    }
+
+    const timer = setTimeout(async () => {
+      console.log('[DEBUG] CALLING GEOCODER', { address: value });
+      const result = await geocodeAddress({ address: value });
+      console.log('[DEBUG] RAW RESULT', result);
+      const resolved = normalizeGeocodeResult(result);
+      console.log('[DEBUG] NORMALIZED city:', resolved.city, 'state:', resolved.state, 'country:', resolved.country);
+      if (!resolved.state && !resolved.country) {
+        console.log('[DEBUG] EARLY RETURN: no state and no country in normalized result');
+        return;
+      }
+      geoLookupCacheRef.current.set(cacheKey, resolved);
+      updateAutoAddressFields(resolved);
+    }, 600);
+
+    return () => clearTimeout(timer);
+    // Only city changes should trigger the manual city lookup debounce.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [city]);
+
+  useEffect(() => {
+    const pin = String(form.pincode || '').replace(/\D/g, '').slice(0, 6);
+    if (pin.length < 6) return undefined;
+
+    const cacheKey = `pincode:${pin}`;
+    const cached = geoLookupCacheRef.current.get(cacheKey);
+    if (cached) {
+      updateAutoAddressFields(cached, { updateCity: true, requireCityMatch: !!city.trim() });
+      return undefined;
+    }
+
+    const timer = setTimeout(async () => {
+      const address = [pin, country || 'India'].filter(Boolean).join(', ');
+      const result = await geocodeAddress({ address });
+      const resolved = normalizeGeocodeResult(result);
+      if (!resolved.city && !resolved.state && !resolved.country) {
+        console.log('[DEBUG] EARLY RETURN: pincode geocoder resolved nothing');
+        return;
+      }
+      geoLookupCacheRef.current.set(cacheKey, resolved);
+      updateAutoAddressFields(resolved, { updateCity: true, requireCityMatch: !!city.trim() });
+    }, 600);
+
+    return () => clearTimeout(timer);
+    // Only pincode/city changes should trigger the manual pincode validation debounce.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.pincode, city]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

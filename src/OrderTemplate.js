@@ -10,7 +10,7 @@
  */
 import React from 'react';
 import { company, bank, hasBankDetails } from './config/company';
-import { inr, fmtDate, amountInWords, DOC_TEMPLATE_CSS } from './utils/docFormatters';
+import { inr, fmtDate, amountInWords, DOC_TEMPLATE_CSS, resolveImageUrl } from './utils/docFormatters';
 import DocumentOwnershipPanel from './components/ownership/DocumentOwnershipPanel';
 
 /* ── Order status display ──────────────────────────────────────────────── */
@@ -41,6 +41,13 @@ export default function OrderTemplate({ data, wrapClass = 'qp-screen' }) {
   if (!data) return null;
 
   const items      = data.items || [];
+  // The Disc column only appears at all if at least one line item actually
+  // has a discount — the freed width is redistributed among the remaining
+  // columns rather than left as a gap.
+  const hasAnyDiscount = items.some((it) => Number(it.discount_value || 0) > 0);
+  const colWidths = hasAnyDiscount
+    ? { no: 4, photo: 6, name: 28, instr: 17, qty: 6, disc: 7, rate: 12, gst: 6, amt: 14 }
+    : { no: 4, photo: 6, name: 32, instr: 19, qty: 6, rate: 13, gst: 7, amt: 13 };
   // Order entity uses 'subtotal' not 'sub_total'
   const subTotal   = Number(data.subtotal || data.sub_total || 0);
   const discType   = data.discount_type  || 'PERCENT';
@@ -185,21 +192,25 @@ export default function OrderTemplate({ data, wrapClass = 'qp-screen' }) {
                 <span className="qp-meta-val">{fmtDate(data.due_date)}</span>
               </div>
             )}
-            <div className="qp-meta-row">
-              <span className="qp-meta-key">Dispatch Type</span>
-              <span className="qp-meta-val">{data.delivery_type || '—'}</span>
-            </div>
-            <div className="qp-meta-row">
+            {data.booking_at && <div className="qp-meta-row">
+              <span className="qp-meta-key">Booking At</span>
+              <span className="qp-meta-val">{data.booking_at}</span>
+            </div>}
+            {data.goods_sent_by && <div className="qp-meta-row">
               <span className="qp-meta-key">Goods Sent By</span>
-              <span className="qp-meta-val">{data.delivery_by || '—'}</span>
-            </div>
-            <div className="qp-meta-row">
-              <span className="qp-meta-key">Payment Mode</span>
-              <span className="qp-meta-val">{data.payment_type || data.payment_mode || '—'}</span>
-            </div>
+              <span className="qp-meta-val">{data.goods_sent_by}</span>
+            </div>}
+            {data.transport_payment_by && <div className="qp-meta-row">
+              <span className="qp-meta-key">Transport Payment By</span>
+              <span className="qp-meta-val">{data.transport_payment_by}</span>
+            </div>}
+            {data.delivery_type && <div className="qp-meta-row">
+              <span className="qp-meta-key">Delivery Type</span>
+              <span className="qp-meta-val">{data.delivery_type}</span>
+            </div>}
             {data.delivery_instructions && (
               <div style={{ marginTop: 4 }}>
-                <div className="qp-meta-key" style={{ fontSize: '7pt', marginBottom: 2 }}>Instructions</div>
+                <div className="qp-meta-key" style={{ fontSize: '7pt', marginBottom: 2 }}>Delivery Instruction</div>
                 <div style={{ fontSize: '7.5pt', color: '#475569', lineHeight: 1.5 }}>
                   {data.delivery_instructions}
                 </div>
@@ -209,18 +220,18 @@ export default function OrderTemplate({ data, wrapClass = 'qp-screen' }) {
 
         </div>
 
-        {/* ── Items table (9 columns) ──────────────────────────────── */}
+        {/* ── Items table ──────────────────────────────────────────── */}
         <table className="qp-table">
           <colgroup>
-            <col className="c-no"    />
-            <col className="c-photo" />
-            <col className="c-name"  />
-            <col className="c-instr" />
-            <col className="c-gst"   />
-            <col className="c-disc"  />
-            <col className="c-qty"   />
-            <col className="c-rate"  />
-            <col className="c-amt"   />
+            <col style={{ width: `${colWidths.no}%` }}    />
+            <col style={{ width: `${colWidths.photo}%` }} />
+            <col style={{ width: `${colWidths.name}%` }}  />
+            <col style={{ width: `${colWidths.instr}%` }} />
+            <col style={{ width: `${colWidths.qty}%` }}   />
+            {hasAnyDiscount && <col style={{ width: `${colWidths.disc}%` }} />}
+            <col style={{ width: `${colWidths.rate}%` }}  />
+            <col style={{ width: `${colWidths.gst}%` }}   />
+            <col style={{ width: `${colWidths.amt}%` }}   />
           </colgroup>
           <thead>
             <tr>
@@ -228,17 +239,17 @@ export default function OrderTemplate({ data, wrapClass = 'qp-screen' }) {
               <th className="ta-c">Photo</th>
               <th className="ta-l">Item No / Name</th>
               <th className="ta-l">Instructions</th>
-              <th className="ta-c">GST%</th>
-              <th className="ta-c">Disc.</th>
               <th className="ta-c">Qty</th>
+              {hasAnyDiscount && <th className="ta-c">Disc</th>}
               <th className="ta-r">Rate (₹)</th>
-              <th className="ta-r">Amount (₹)</th>
+              <th className="ta-c">GST Tax</th>
+              <th className="ta-r" style={{ whiteSpace: 'normal' }}>Amount (₹)<div className="qp-th-sub">(Tax Extra)</div></th>
             </tr>
           </thead>
           <tbody>
             {items.length === 0 ? (
               <tr>
-                <td colSpan={9} style={{ textAlign: 'center', color: '#94a3b8', padding: '14pt' }}>
+                <td colSpan={hasAnyDiscount ? 9 : 8} style={{ textAlign: 'center', color: '#94a3b8', padding: '14pt' }}>
                   No items
                 </td>
               </tr>
@@ -259,7 +270,7 @@ export default function OrderTemplate({ data, wrapClass = 'qp-screen' }) {
                   <td className="ta-c">
                     {it.image_url ? (
                       <img
-                        src={it.image_url}
+                        src={resolveImageUrl(it.image_url)}
                         alt=""
                         style={{ width: 28, height: 28, objectFit: 'contain', borderRadius: 2 }}
                         onError={(e) => { e.target.style.display = 'none'; }}
@@ -275,10 +286,10 @@ export default function OrderTemplate({ data, wrapClass = 'qp-screen' }) {
                   <td style={{ fontSize: '7.5pt', color: '#475569' }}>
                     {it.instruction || it.instructions || it.notes || '—'}
                   </td>
-                  <td className="ta-c">{gstPct > 0 ? `${gstPct}%` : '—'}</td>
-                  <td className="ta-c">{disc}</td>
                   <td className="ta-c">{Number(it.qty || 0)}</td>
+                  {hasAnyDiscount && <td className="ta-c">{disc}</td>}
                   <td className="ta-r">{inr(it.rate)}</td>
+                  <td className="ta-c">{gstPct > 0 ? `${gstPct}%` : '—'}</td>
                   <td className="ta-r" style={{ fontWeight: 600 }}>{inr(total)}</td>
                 </tr>
               );

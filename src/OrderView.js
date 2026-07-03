@@ -8,6 +8,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { apiFetch } from './utils/api';
 import OrderTemplate from './OrderTemplate';
 import DocumentActionBar from './components/DocumentActionBar';
+import { trackDocAction } from './utils/trackDocAction';
 
 const EDITABLE_STATUSES = ['PENDING_APPROVAL', 'APPROVED'];
 
@@ -26,6 +27,8 @@ export default function OrderView() {
       .catch(() => setError('Could not load order.'))
       .finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => { trackDocAction('order', id, 'view'); }, [id]);
 
   if (loading) return (
     <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8', fontFamily: 'sans-serif' }}>
@@ -53,6 +56,11 @@ export default function OrderView() {
         customerMobile={data.customer_phone}
         customerName={data.customer_name}
         customerEmail={data.customer_email}
+        emailCount={data.email_sent_count}
+        editCount={data.edit_count}
+        printCount={data.print_count}
+        pdfCount={data.pdf_count}
+        whatsappCount={data.whatsapp_count}
         publicPdfUrl=""
         onBack={() => navigate(location.state?.from || '/orders')}
         onEdit={isEdit ? () => navigate(`/edit-order/${id}`) : null}

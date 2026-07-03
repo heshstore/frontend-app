@@ -137,7 +137,7 @@ export default function WaEngineDashboard() {
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    const t = setInterval(load, 30000);
+    const t = setInterval(load, 120000);
     return () => clearInterval(t);
   }, [load]);
 

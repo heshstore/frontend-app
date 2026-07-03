@@ -19,6 +19,8 @@ import { theme, buttonStyle } from '../theme';
 import { toast } from '../utils/toast';
 import { normalizePhoneForWhatsApp } from '../utils/phone';
 import { company } from '../config/company';
+import { trackDocAction } from '../utils/trackDocAction';
+import CountBadge from './CountBadge';
 
 const fmtDate = (iso) => {
   if (!iso) return '';
@@ -32,6 +34,7 @@ export default function DocActions({
   type, id, docNo, docDate, amount,
   customerMobile, customerName, customerEmail,
   publicPdfUrl,
+  emailCount = 0, printCount = 0, pdfCount = 0, whatsappCount = 0,
 }) {
   const [emailModal, setEmailModal] = useState(false);
   const [emailTo,    setEmailTo]    = useState(customerEmail || '');
@@ -39,6 +42,7 @@ export default function DocActions({
 
   /* ── Print ────────────────────────────────────────────────────────── */
   const handlePrint = () => {
+    trackDocAction(type, id, 'print');
     if (type === 'quotation') {
       window.open(`/quotations/${id}/print`, '_blank');
     } else {
@@ -74,6 +78,7 @@ export default function DocActions({
 
   /* ── WhatsApp ──────────────────────────────────────────────────────── */
   const handleWhatsApp = () => {
+    trackDocAction(type, id, 'whatsapp');
     const docLabel = type === 'invoice' ? 'Invoice' : type === 'order' ? 'Order' : 'Quotation';
     const name     = customerName || 'there';
     const refNo    = docNo || `#${id}`;
@@ -146,11 +151,19 @@ export default function DocActions({
   return (
     <>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        <button onClick={handlePrint}        style={btn({ background: '#6c757d', color: '#fff' })}>🖨 Print</button>
-        <button onClick={handleDownloadPdf}  style={btn({ background: theme.primary, color: '#fff' })}>⬇ PDF</button>
-        <button onClick={handleWhatsApp}     style={btn({ background: '#25d366', color: '#fff' })}>💬 WhatsApp</button>
+        <button onClick={handlePrint}        style={btn({ background: '#6c757d', color: '#fff' })}>
+          🖨 Print<CountBadge n={printCount} color="#6c757d" />
+        </button>
+        <button onClick={handleDownloadPdf}  style={btn({ background: theme.primary, color: '#fff' })}>
+          ⬇ PDF<CountBadge n={pdfCount} color={theme.primary} />
+        </button>
+        <button onClick={handleWhatsApp}     style={btn({ background: '#25d366', color: '#fff' })}>
+          💬 WhatsApp<CountBadge n={whatsappCount} color="#1a8a4a" />
+        </button>
         <button onClick={() => { setEmailTo(customerEmail || ''); setEmailModal(true); }}
-                                             style={btn({ background: '#0d6efd', color: '#fff' })}>✉ Email</button>
+                                             style={btn({ background: '#0d6efd', color: '#fff' })}>
+          ✉ Email<CountBadge n={emailCount} color="#0d6efd" />
+        </button>
       </div>
 
       {/* Email modal */}

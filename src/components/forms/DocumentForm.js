@@ -65,7 +65,9 @@ export const defaultForm = () => ({
   validity_days: 15,
   delivery_by: "",
   delivery_type: "Road",
-  payment_type: "Credit",
+  booking_at: "",
+  goods_sent_by: "",
+  transport_payment_by: "",
   delivery_instructions: "",
   charges_packing: "",
   charges_cartage: "",
@@ -497,8 +499,10 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
       salesman_id:       form.salesman_id || null,
       validity_days:     Number(form.validity_days) || 15,
       delivery_by:       form.delivery_by,
-      delivery_type:     form.delivery_type,
-      payment_type:      form.payment_type,
+      delivery_type:         form.delivery_type,
+      booking_at:            form.booking_at || null,
+      goods_sent_by:         form.goods_sent_by || null,
+      transport_payment_by:  form.transport_payment_by || null,
       delivery_instructions: form.delivery_instructions,
       charges_packing:      Number(form.charges_packing)      || 0,
       charges_cartage:      Number(form.charges_cartage)      || 0,
@@ -702,24 +706,35 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
             </div>
             <div>
               <label style={lbl}>Booking At</label>
-              <input type="text" placeholder="e.g. Transport Name" value={form.delivery_by}
-                onChange={e => setForm(f => ({ ...f, delivery_by: e.target.value }))} style={inp} />
+              <input type="text" placeholder="e.g. Transport office name" value={form.booking_at || ""}
+                onChange={e => setForm(f => ({ ...f, booking_at: e.target.value }))} style={inp} />
             </div>
             <div>
               <label style={lbl}>Goods Sent By</label>
-              <select value={form.delivery_type} onChange={e => setForm(f => ({ ...f, delivery_type: e.target.value }))} style={inp}>
+              <select value={form.goods_sent_by || ""} onChange={e => setForm(f => ({ ...f, goods_sent_by: e.target.value }))} style={inp}>
+                <option value="">— Select —</option>
                 {DELIVERY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
             <div>
-              <label style={lbl}>Payment Mode</label>
-              <select value={form.payment_type} onChange={e => setForm(f => ({ ...f, payment_type: e.target.value }))} style={inp}>
+              <label style={lbl}>Transport Payment By</label>
+              <select value={form.transport_payment_by || ""} onChange={e => setForm(f => ({ ...f, transport_payment_by: e.target.value }))} style={inp}>
+                <option value="">— Select —</option>
                 {PAYMENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
           </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 8 }}>
+            <div>
+              <label style={lbl}>Delivery Type</label>
+              <select value={form.delivery_type || ""} onChange={e => setForm(f => ({ ...f, delivery_type: e.target.value }))} style={inp}>
+                <option value="">— Select —</option>
+                {["Road", "Air", "Sea", "Rail", "Courier"].map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+          </div>
           <div>
-            <label style={lbl}>Delivery Instructions</label>
+            <label style={lbl}>Delivery Instruction</label>
             <textarea rows={2} placeholder="Any special delivery note…" value={form.delivery_instructions}
               onChange={e => setForm(f => ({ ...f, delivery_instructions: e.target.value }))}
               style={{ ...inp, resize: "vertical", lineHeight: 1.5 }} />

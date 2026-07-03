@@ -4,6 +4,7 @@ import { apiFetch } from '../../utils/api';
 import { usePermission, hasAnyPermission } from '../../utils/usePermission';
 import { Ic } from '../ui/NavIcon';
 import { loadPins, savePins } from '../../utils/navPins';
+import { useDeployedVersion } from '../../utils/useDeployedVersion';
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
 
@@ -230,7 +231,7 @@ function ShopifyNavItem({ pins, onTogglePin }) {
       } catch {}
     };
     load();
-    const id = setInterval(load, 120_000);
+    const id = setInterval(load, 300_000);
     return () => { cancelled = true; clearInterval(id); };
   }, []);
 
@@ -291,6 +292,7 @@ export default function Sidebar({ onClose }) {
   const { pathname }   = useLocation();
   const navigate       = useNavigate();
   const isMobileDrawer = Boolean(onClose);
+  const deployedVersion = useDeployedVersion();
 
   const canSeeQuotations = usePermission('quotation.view');
   const canSeeOrders     = usePermission('order.view');
@@ -455,7 +457,7 @@ export default function Sidebar({ onClose }) {
 
           {(canSeeMarketing || canSeeCustomers) && (
             <SectionGroup id="database" label="Database" icon="box" sections={sections} onToggle={toggleSection}>
-              {canSeeMarketing && pi('Promotional DB',       '/database/promotional',   'users')}
+              {canSeeMarketing && pi('Promotional Contacts',  '/database/promotional',   'users')}
               {canSeeMarketing && pi('Visiting Card Reader', '/database/visiting-card', 'card')}
             </SectionGroup>
           )}
@@ -510,7 +512,7 @@ export default function Sidebar({ onClose }) {
 
           {canSeeItems && (
             <SectionGroup id="items" label="Catalog" icon="box" sections={sections} onToggle={toggleSection}>
-              {pi('Item Master', '/items',    'list')}
+              {pi('Service Item Master', '/items',    'list')}
               {pi('Add Item',    '/add-item', 'plus')}
               <ShopifyNavItem pins={pins} onTogglePin={togglePin} />
             </SectionGroup>
@@ -523,6 +525,7 @@ export default function Sidebar({ onClose }) {
               {canSeeWhatsApp && pi('WA Monitor', '/admin/whatsapp',   'monitor')}
               {pi('Ops Log',             '/pilot/log',                 'doc')}
               {pi('System Health',        '/settings/system-health',    'monitor')}
+              {pi('Perf Monitor',         '/settings/perf-monitor',     'monitor')}
             </SectionGroup>
           )}
 
@@ -548,11 +551,9 @@ export default function Sidebar({ onClose }) {
           >
             Logout
           </button>
-          {process.env.REACT_APP_VERSION && (
-            <div style={{ marginTop: 6, textAlign: 'center', fontSize: 9, color: 'rgba(255,255,255,0.25)', letterSpacing: '0.04em' }}>
-              {process.env.REACT_APP_VERSION}
-            </div>
-          )}
+          <div style={{ marginTop: 6, textAlign: 'center', fontSize: 9, color: 'rgba(255,255,255,0.25)', letterSpacing: '0.04em' }}>
+            CRM {deployedVersion ?? '—'}
+          </div>
         </div>
 
       </div>

@@ -166,7 +166,7 @@ export default function WaQueue() {
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    const interval = tab === 'pending' ? 15000 : 60000;
+    const interval = tab === 'pending' ? 60000 : 300000;
     const t = setInterval(load, interval);
     return () => clearInterval(t);
   }, [load, tab]);

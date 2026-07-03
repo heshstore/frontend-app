@@ -3,6 +3,7 @@ import { io } from 'socket.io-client';
 import { apiFetch, getToken } from '../utils/api';
 import { API_URL } from '../config';
 import { useAuth } from './AuthContext';
+import { initFCM, deregisterFCM } from '../lib/fcm';
 
 const NotificationContext = createContext(null);
 
@@ -108,7 +109,6 @@ export function NotificationProvider({ children }) {
   const { currentUser } = useAuth();
   const [state, dispatch] = useReducer(reducer, initialState);
   const socketRef = useRef(null);
-  const pollRef   = useRef(null);
 
   // Single source of truth: both React state (currentUser) AND token must exist.
   // currentUser drives re-renders; getToken() confirms the token is actually set.
@@ -182,29 +182,26 @@ export function NotificationProvider({ children }) {
     dispatch({ type: 'SET_PANEL', payload: open });
   }, []);
 
-  /* ── Polling lifecycle ─────────────────────────────────────────────────────── */
-  // Starts ONLY when authenticated. Stops on logout or unmount.
-  // pollRef guards against duplicate intervals (React StrictMode double-invoke).
+  /* ── Authentication lifecycle ──────────────────────────────────────────────── */
+  // On login: hydrate notification state and initialize FCM for background push.
+  // On logout: deregister FCM device token so push stops for this device.
+  // There is NO polling interval — the socket delivers real-time updates and FCM
+  // delivers background push. The unreadCount is kept accurate by the ADD reducer
+  // action (increments +1 on every socket-delivered notification).
   useEffect(() => {
-    if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
-
     if (!isAuthenticated) {
-      console.log('[Notifications] Polling stopped on logout');
+      deregisterFCM();
       return;
     }
 
-    console.log('[Notifications] Authenticated — starting polling');
+    // One-time hydration on login — loads existing unread notifications and count.
     fetchNotifications();
     fetchUnreadCount();
-    pollRef.current = setInterval(fetchUnreadCount, 30_000);
 
-    return () => {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    };
+    // Initialize FCM: requests permission, registers service worker, stores token.
+    // Safe no-op if REACT_APP_FIREBASE_* env vars are not set.
+    initFCM(null); // null = no additional foreground handler (socket handles in-app)
+
   // fetchNotifications/fetchUnreadCount have stable identities (empty useCallback deps)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);

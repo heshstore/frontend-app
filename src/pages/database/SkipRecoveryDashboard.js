@@ -134,7 +134,7 @@ function RecoverModal({ record, onClose, onRecovered }) {
           <div style={{ fontSize: 36, marginBottom: 8 }}>✅</div>
           <div style={{ fontWeight: 700, fontSize: 15, color: '#059669', marginBottom: 8 }}>Contact Recovered</div>
           <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
-            {form.phone || form.email} has been added to the Promotional Database.
+            {form.phone || form.email} has been added to Promotional Contacts.
           </div>
           <button style={{ ...btn('#0d6efd'), width: '100%' }} onClick={onClose}>Done</button>
         </div>
@@ -159,12 +159,12 @@ function RecoverModal({ record, onClose, onRecovered }) {
         {inp('Business Type', 'business_type')}
         {err && <div style={{ fontSize: 12, color: '#dc3545', marginBottom: 10 }}>{err}</div>}
         <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, padding: '8px 10px', marginBottom: 14, fontSize: 11, color: '#92400e' }}>
-          Contact will be added to the Promotional Database. Phone will be normalized to E.164 format.
+          Contact will be added to Promotional Contacts. Phone will be normalized to E.164 format.
         </div>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button style={btn('#f3f4f6', '#374151')} onClick={onClose}>Cancel</button>
           <button style={btn('#059669', '#fff', busy)} onClick={submit} disabled={busy}>
-            {busy ? 'Adding…' : 'Add to Promotional DB'}
+            {busy ? 'Adding…' : 'Add to Promotional Contacts'}
           </button>
         </div>
       </div>
@@ -344,7 +344,7 @@ export default function SkipRecoveryDashboard() {
         <RecoverModal
           record={recover}
           onClose={() => setRecover(null)}
-          onRecovered={() => { loadSummary(); loadRecords({}); flash('Contact added to Promotional DB'); }}
+          onRecovered={() => { loadSummary(); loadRecords({}); flash('Contact added to Promotional Contacts'); }}
         />
       )}
 

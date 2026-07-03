@@ -5,6 +5,7 @@ import { normalizePhoneForWhatsApp } from './utils/phone';
 import { ORDER_STATUS_LABELS } from './constants/orderStatus';
 import DocActions from './components/DocActions';
 import DocumentOwnershipPanel from './components/ownership/DocumentOwnershipPanel';
+import { trackDocAction } from './utils/trackDocAction';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -189,6 +190,8 @@ export default function OrderDetail({ orderId: propId }) {
 
   const retry = () => { setOrder(null); setRetryCount(c => c + 1); };
 
+  useEffect(() => { trackDocAction('order', id, 'view'); }, [id]);
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -246,7 +249,7 @@ export default function OrderDetail({ orderId: propId }) {
   const statusSt    = STATUS_STYLE[order.status] ?? { bg: '#f1f5f9', color: '#374151' };
   const completedN  = stagesCompleted(order.status);
   const pending     = order.pending_amount ?? (order.total_amount - (order.paid_amount || 0));
-  const waPhone     = normalizePhoneForWhatsApp(order.mobile || order.phone);
+  const waPhone     = normalizePhoneForWhatsApp(order.customer_phone);
 
   return (
     <div style={{
@@ -329,12 +332,12 @@ export default function OrderDetail({ orderId: propId }) {
           <InfoRow
             label="Phone"
             value={
-              order.mobile || order.phone
+              order.customer_phone
                 ? <a
-                    href={`tel:${order.mobile || order.phone}`}
+                    href={`tel:${order.customer_phone}`}
                     style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}
                   >
-                    {order.mobile || order.phone}
+                    {order.customer_phone}
                   </a>
                 : '—'
             }
@@ -459,7 +462,13 @@ export default function OrderDetail({ orderId: propId }) {
               id={id}
               docNo={order.order_number}
               amount={order.total_amount}
-              customerMobile={order.mobile || order.phone}
+              customerMobile={order.customer_phone}
+              customerName={order.customer_name}
+              customerEmail={order.customer_email}
+              emailCount={order.email_sent_count}
+              printCount={order.print_count}
+              pdfCount={order.pdf_count}
+              whatsappCount={order.whatsapp_count}
             />
           </div>
         </Card>

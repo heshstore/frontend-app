@@ -93,9 +93,9 @@ export default function WaValidate() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Auto-refresh every 30s during live testing
+  // Auto-refresh every 5 minutes — validation report rarely changes
   useEffect(() => {
-    const t = setInterval(load, 30000);
+    const t = setInterval(load, 300000);
     return () => clearInterval(t);
   }, [load]);
 

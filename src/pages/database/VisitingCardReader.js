@@ -213,7 +213,7 @@ function PreviewStage({ cardImage, onBack, onSaved }) {
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d?.message || `Error ${r.status}`);
-      setSuccess('Saved to Promotional DB');
+      setSuccess('Saved to Promotional Contacts');
       onSaved('/database/promotional');
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
@@ -241,7 +241,7 @@ function PreviewStage({ cardImage, onBack, onSaved }) {
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d?.message || `Error ${r.status}`);
-      setSuccess(`Saved to Customer DB: ${data.company || data.customer_name || data.phone}`);
+      setSuccess(`Saved to Customer Contacts: ${data.company || data.customer_name || data.phone}`);
       onSaved('/customers');
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
@@ -298,12 +298,12 @@ function PreviewStage({ cardImage, onBack, onSaved }) {
           <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 14, marginTop: 8 }}>
             <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 10, fontWeight: 600 }}>Choose where to save:</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <button style={btn('#0d6efd', '#fff', busy)} onClick={saveToPromo}    disabled={busy}>Save to Promotional DB</button>
-              <button style={btn('#166534', '#fff', busy)} onClick={saveToCustomer} disabled={busy}>Save to Customer DB</button>
+              <button style={btn('#0d6efd', '#fff', busy)} onClick={saveToPromo}    disabled={busy}>Save to Promotional Contacts</button>
+              <button style={btn('#166534', '#fff', busy)} onClick={saveToCustomer} disabled={busy}>Save to Customer Contacts</button>
             </div>
             <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 10, lineHeight: 1.5 }}>
               Phone or email required (not both).<br />
-              Promotional DB → WhatsApp campaigns · Customer DB → full CRM record.
+              Promotional Contacts → WhatsApp campaigns · Customer Contacts → full CRM record.
             </div>
           </div>
         )}

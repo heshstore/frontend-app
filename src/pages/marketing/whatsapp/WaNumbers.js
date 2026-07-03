@@ -637,7 +637,7 @@ export default function WaNumbers() {
   // Auto-refresh every 15 seconds
   useEffect(() => {
     loadNumbers();
-    const t = setInterval(loadNumbers, 15_000);
+    const t = setInterval(loadNumbers, 60_000);
     return () => clearInterval(t);
   }, [loadNumbers]);
 

@@ -4,6 +4,7 @@ import { apiFetch } from './utils/api';
 import { API_URL } from './config';
 import QuotationTemplate from './QuotationTemplate';
 import DocumentActionBar from './components/DocumentActionBar';
+import { trackDocAction } from './utils/trackDocAction';
 
 const EDITABLE_STATUSES    = ['DRAFT', 'GENERATED'];
 const CONVERTIBLE_STATUSES = ['GENERATED'];
@@ -23,6 +24,8 @@ export default function QuotationView() {
       .catch(() => setError('Could not load quotation.'))
       .finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => { trackDocAction('quotation', id, 'view'); }, [id]);
 
   if (loading) return (
     <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8', fontFamily: 'sans-serif' }}>
@@ -51,6 +54,11 @@ export default function QuotationView() {
         customerMobile={data.customer_phone}
         customerName={data.customer_name}
         customerEmail={data.customer_email}
+        emailCount={data.email_sent_count}
+        editCount={data.edit_count}
+        printCount={data.print_count}
+        pdfCount={data.pdf_count}
+        whatsappCount={data.whatsapp_count}
         publicPdfUrl={publicPdfUrl}
         onBack={() => navigate(location.state?.from || '/quotations')}
         onEdit={EDITABLE_STATUSES.includes(data.status) ? () => navigate(`/quotation?id=${id}`) : null}

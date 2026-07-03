@@ -98,6 +98,7 @@ import CommissionPage             from "./pages/workforce/CommissionPage";
 import VersionHistory             from "./pages/settings/VersionHistory";
 import EnvironmentDashboard       from "./pages/settings/EnvironmentDashboard";
 import SystemHealth               from "./pages/settings/SystemHealth";
+import PerformanceMonitor         from "./pages/settings/PerformanceMonitor";
 
 console.log('[FRONTEND_BUILD]', '2026-05-21-v2');
 
@@ -259,6 +260,7 @@ function App() {
               <Route path="/marketing/whatsapp-engine/pilot" element={<Navigate to="/marketing/whatsapp" replace />} />
               <Route path="/pilot/log" element={<PermissionRoute permission={["admin"]}><OperationsLog /></PermissionRoute>} />
               <Route path="/settings/system-health"  element={<PermissionRoute permission="rbac.manage"><SystemHealth /></PermissionRoute>} />
+              <Route path="/settings/perf-monitor"   element={<PermissionRoute permission="rbac.manage"><PerformanceMonitor /></PermissionRoute>} />
               <Route path="/settings/version-history" element={<Navigate to="/settings/system-health" replace />} />
               <Route path="/settings/environment"     element={<Navigate to="/settings/system-health" replace />} />
               <Route path="/daily-ops" element={<PermissionRoute permission={["order.view"]}><DailyOps /></PermissionRoute>} />

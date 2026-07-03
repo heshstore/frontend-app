@@ -1,5 +1,15 @@
 /** Shared formatters and helpers for order/quotation document templates. */
 
+import { API_URL } from '../config';
+
+/** Item photos are normally absolute (Shopify CDN or backend-resolved
+ * /uploads path), but prefix defensively in case a relative path slips
+ * through from stale cached data. */
+export const resolveImageUrl = (url) => {
+  if (!url) return null;
+  return /^https?:\/\//i.test(url) ? url : `${API_URL}${url}`;
+};
+
 export const inr = (n) =>
   `₹${Number(n || 0).toLocaleString('en-IN', {
     minimumFractionDigits:  2,
@@ -159,21 +169,13 @@ export const DOC_TEMPLATE_CSS = `
   width: 100%; border-collapse: collapse; font-size: 8pt;
   margin-bottom: 4pt; table-layout: fixed;
 }
-.qp-table col.c-no    { width: 4%; }
-.qp-table col.c-photo { width: 6%; }
-.qp-table col.c-name  { width: 28%; }
-.qp-table col.c-instr { width: 17%; }
-.qp-table col.c-gst   { width: 6%; }
-.qp-table col.c-disc  { width: 7%; }
-.qp-table col.c-qty   { width: 6%; }
-.qp-table col.c-rate  { width: 12%; }
-.qp-table col.c-amt   { width: 14%; }
 .qp-table th {
   background: #005fb8; color: #fff; padding: 5pt 4pt;
   font-size: 7.5pt; font-weight: 600; white-space: nowrap;
   border-right: 0.5pt solid rgba(255,255,255,.15);
 }
 .qp-table th:last-child { border-right: none; }
+.qp-th-sub { font-size: 5.5pt; font-weight: 400; font-style: italic; white-space: nowrap; margin-top: 1pt; }
 .qp-table td {
   padding: 4pt 4pt; border-bottom: 0.5pt solid #e8ecf0;
   vertical-align: top; overflow-wrap: break-word; word-break: break-word;

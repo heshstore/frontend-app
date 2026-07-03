@@ -4,6 +4,8 @@ import { apiFetch } from './utils/api';
 import { API_URL } from './config';
 import { theme, buttonStyle } from './theme';
 import DocActions from './components/DocActions';
+import CountBadge from './components/CountBadge';
+import { trackDocAction } from './utils/trackDocAction';
 import StatusBadge, { PricingBadge } from './components/ui/StatusBadge';
 import EmptyState from './components/ui/EmptyState';
 import { SkeletonList } from './components/ui/SkeletonCard';
@@ -282,15 +284,15 @@ export default function QuotationList() {
                         onClick={() => navigate(`/quotations/${q.id}/view`)}
                         style={btn({ background: '#f8fafc', color: '#374151', border: '1px solid #e2e8f0' })}
                       >
-                        👁 View
+                        👁 View<CountBadge n={q.view_count} color="#374151" />
                       </button>
 
                       {isEditable && (
                         <button
-                          onClick={() => navigate(`/quotation?id=${q.id}`)}
+                          onClick={() => { trackDocAction('quotation', q.id, 'edit'); navigate(`/quotation?id=${q.id}`); }}
                           style={btn({ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' })}
                         >
-                          ✏ Edit
+                          ✏ Edit<CountBadge n={q.edit_count} color="#15803d" />
                         </button>
                       )}
 
@@ -330,6 +332,10 @@ export default function QuotationList() {
                         customerMobile={q.customer_phone}
                         customerName={q.customer_name}
                         customerEmail={q.customer_email}
+                        emailCount={q.email_sent_count}
+                        printCount={q.print_count}
+                        pdfCount={q.pdf_count}
+                        whatsappCount={q.whatsapp_count}
                         publicPdfUrl={q.quotation_no ? `${API_URL}/quotations/public/${encodeURIComponent(q.quotation_no)}/pdf` : ''}
                       />
 

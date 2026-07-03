@@ -7,6 +7,7 @@ import UniversalSearch from '../UniversalSearch';
 import QuickActions from '../QuickActions';
 import NotificationBell from '../NotificationBell';
 import NotificationPanel from '../NotificationPanel';
+import { useDeployedVersion } from '../../utils/useDeployedVersion';
 
 const MOBILE_BP = 768;
 
@@ -38,6 +39,7 @@ export default function Layout() {
   const { pathname }   = useLocation();
   const [isMobile,   setIsMobile]   = useState(window.innerWidth < MOBILE_BP);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const deployedVersion = useDeployedVersion();
 
   useEffect(() => {
     const h = () => {
@@ -135,6 +137,17 @@ export default function Layout() {
             {/* Quick actions button */}
             {!isMobile && (
               <QuickActionsButton />
+            )}
+
+            {/* Version chip — desktop only */}
+            {!isMobile && (
+              <div style={{
+                fontSize: 10, fontWeight: 500,
+                color: '#9ca3af', whiteSpace: 'nowrap',
+                letterSpacing: '0.02em', userSelect: 'none',
+              }}>
+                Production&nbsp;•&nbsp;{deployedVersion ?? '—'}
+              </div>
             )}
 
             {/* Notification bell */}

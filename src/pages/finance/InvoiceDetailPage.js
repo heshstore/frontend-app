@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import PageLayout from '../../components/layout/PageLayout';
 import { apiFetch } from '../../utils/api';
 import { toast } from '../../utils/toast';
+import { trackDocAction } from '../../utils/trackDocAction';
+import CountBadge from '../../components/CountBadge';
 
 const btn = (bg, color = '#fff', disabled = false) => ({
   background: disabled ? '#e5e7eb' : bg,
@@ -72,6 +74,15 @@ export default function InvoiceDetailPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => { trackDocAction('invoice', id, 'view'); }, [id]);
+
+  // Prefill recipient from the customer record once the invoice loads.
+  useEffect(() => {
+    if (invoice?.customer_email) {
+      setEmailForm(f => (f.to ? f : { ...f, to: invoice.customer_email }));
+    }
+  }, [invoice]);
+
   const handlePdf = async () => {
     setPdfBusy(true);
     await downloadPdf(id, invoice?.invoice_no);
@@ -124,8 +135,8 @@ export default function InvoiceDetailPage() {
         <div style={{ display: 'flex', gap: 8 }}>
           <button style={btn('#f3f4f6', '#374151')} onClick={() => navigate('/invoices')}>← All Invoices</button>
           <button style={btn('#f3f4f6', '#374151')} onClick={() => navigate(`/invoice/${inv.order_id}`)}>View Proforma</button>
-          <button style={btn('#dc2626', '#fff', pdfBusy)} disabled={pdfBusy} onClick={handlePdf}>
-            {pdfBusy ? 'Downloading…' : 'Download PDF'}
+          <button style={{ ...btn('#dc2626', '#fff', pdfBusy), display: 'inline-flex', alignItems: 'center', gap: 6 }} disabled={pdfBusy} onClick={handlePdf}>
+            {pdfBusy ? 'Downloading…' : 'Download PDF'}<CountBadge n={inv.pdf_count} color="#dc2626" />
           </button>
           {!isPaid && (
             <button style={btn('#198754')} onClick={() => navigate(`/accounts/payment/${inv.order_id}`)}>
@@ -181,7 +192,16 @@ export default function InvoiceDetailPage() {
 
         {/* Email invoice */}
         <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '20px 24px', marginBottom: 16 }}>
-          <div style={{ fontWeight: 700, fontSize: 14, color: '#374151', marginBottom: 12 }}>Email Invoice</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+            <span style={{ fontWeight: 700, fontSize: 14, color: '#374151' }}>Email Invoice</span>
+            {Number(inv.email_sent_count) > 0 && (
+              <span style={{
+                background: '#eef2ff', color: '#4f46e5',
+                borderRadius: 999, fontSize: 11, fontWeight: 700,
+                padding: '1px 7px', lineHeight: 1.5,
+              }}>{inv.email_sent_count}</span>
+            )}
+          </div>
           {emailForm.sent ? (
             <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '12px 16px', color: '#15803d', fontWeight: 600 }}>
               Invoice emailed to {emailForm.to}

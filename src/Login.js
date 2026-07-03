@@ -9,6 +9,7 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const cachedVersion = localStorage.getItem('saachu_current_version');
   const navigate = useNavigate();
   const { login } = useAuth();
 
@@ -144,11 +145,9 @@ export default function Login() {
             {loading ? "Signing in..." : "Sign In"}
           </button>
         </form>
-        {process.env.REACT_APP_VERSION && (
-          <div style={{ marginTop: 16, color: '#aaa', fontSize: 12, textAlign: 'center', letterSpacing: '0.03em' }}>
-            {process.env.REACT_APP_VERSION}
-          </div>
-        )}
+        <div style={{ marginTop: 16, color: '#aaa', fontSize: 12, textAlign: 'center', letterSpacing: '0.03em' }}>
+          Version {cachedVersion || '—'}
+        </div>
       </div>
     </div>
   );

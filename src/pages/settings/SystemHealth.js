@@ -334,12 +334,12 @@ export default function SystemHealth() {
               sub={`${envData.database_name} @ ${envData.database_host}`}
             />
             <MetricCard
-              label="Customer DB"
+              label="Customer Contacts"
               value={envData.customer_db_count ?? '—'}
               sub="records"
             />
             <MetricCard
-              label="Promotional DB"
+              label="Promotional Contacts"
               value={envData.promotional_db_count ?? '—'}
               sub="records"
             />
@@ -379,6 +379,24 @@ export default function SystemHealth() {
                 </div>
               </div>
               <div style={{ fontSize: 13, marginTop: 12 }}>{envData.audit.overwrite_risk_reason}</div>
+
+              <div style={{ marginTop: 16, padding: '12px 14px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12, lineHeight: 1.7 }}>
+                <div style={{ fontWeight: 700, color: '#374151', marginBottom: 6 }}>Production Database contains:</div>
+                <div style={{ color: '#6b7280', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1px 16px' }}>
+                  <span>• Customer Contacts</span>
+                  <span>• Orders &amp; Quotations</span>
+                  <span>• Promotional Contacts</span>
+                  <span>• Invoices</span>
+                  <span>• CRM Leads</span>
+                  <span>• Production Pipeline</span>
+                  <span>• Staff &amp; RBAC</span>
+                </div>
+                <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #e2e8f0', color: '#6b7280' }}>
+                  <span style={{ color: '#374151', fontWeight: 600 }}>Local Database</span> is for development and testing only.{' '}
+                  <span style={{ color: '#374151', fontWeight: 600 }}>Production Database</span> stores live business data.
+                </div>
+              </div>
+
               <div style={{ marginTop: 14, fontSize: 12, lineHeight: 1.6 }}>
                 <div><strong>Local DB:</strong>{' '}
                   <span style={{ fontFamily: 'monospace' }}>{envData.audit.local_database_redacted || '—'}</span>
