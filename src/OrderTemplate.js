@@ -205,7 +205,7 @@ export default function OrderTemplate({ data, wrapClass = 'qp-screen' }) {
               <span className="qp-meta-val">{data.transport_payment_by}</span>
             </div>}
             {data.delivery_type && <div className="qp-meta-row">
-              <span className="qp-meta-key">Delivery Type</span>
+              <span className="qp-meta-key">Delivery Location</span>
               <span className="qp-meta-val">{data.delivery_type}</span>
             </div>}
             {data.delivery_instructions && (

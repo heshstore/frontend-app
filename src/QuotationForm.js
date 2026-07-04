@@ -21,7 +21,7 @@ async function loadQuotation(id) {
       form: {
         salesman_id: "", validity_days: 15, delivery_by: "",
         booking_at: "", goods_sent_by: "", transport_payment_by: "",
-        delivery_type: "Road", payment_type: "Credit",
+        delivery_type: "", payment_type: "Credit",
         delivery_instructions: "", charges_packing: "",
         charges_cartage: "", charges_forwarding: "",
         charges_installation: "", charges_loading: "",
@@ -44,7 +44,7 @@ async function loadQuotation(id) {
       booking_at:            data.booking_at             || "",
       goods_sent_by:         data.goods_sent_by          || "",
       transport_payment_by:  data.transport_payment_by   || "",
-      delivery_type:         data.delivery_type          || "Road",
+      delivery_type:         data.delivery_type          || "",
       payment_type:          data.payment_type           || "Credit",
       delivery_instructions: data.delivery_instructions  || "",
       charges_packing:      data.charges_packing      || "",

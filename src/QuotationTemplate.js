@@ -423,7 +423,7 @@ export default function QuotationTemplate({ data, wrapClass = 'qp-screen' }) {
               <InfoRow label="Validity:" value={validity} />
               <hr className="qp-info-rule" />
               <InfoRow label="Payment Terms:" value="Advance 70% & Before Dispatch 30%" />
-              <InfoRow label="Delivery Type:" value={data.delivery_type || data.delivery_by || '—'} />
+              <InfoRow label="Delivery Location:" value={data.delivery_type || data.delivery_by || '—'} />
             </div>
           </div>
 
@@ -568,7 +568,7 @@ export default function QuotationTemplate({ data, wrapClass = 'qp-screen' }) {
             <BdRow label="Booking At" value={data.booking_at} />
             <BdRow label="Goods Sent By" value={data.goods_sent_by || data.delivery_by} />
             <BdRow label="Transport Payment By" value={data.transport_payment_by || data.payment_type} />
-            <BdRow label="Delivery Type" value={data.delivery_type} />
+            <BdRow label="Delivery Location" value={data.delivery_type} />
             <BdRow label="Delivery Instruction" value={data.delivery_instructions} />
           </div>
 

@@ -343,7 +343,7 @@ export default function OrderDetail({ orderId: propId }) {
             }
           />
           {order.delivery_type && (
-            <InfoRow label="Delivery" value={order.delivery_type} />
+            <InfoRow label="Delivery Location" value={order.delivery_type} />
           )}
           {order.payment_type && (
             <InfoRow label="Payment Type" value={order.payment_type} />

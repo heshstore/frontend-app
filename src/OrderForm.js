@@ -17,7 +17,7 @@ async function loadOrder(id) {
       salesman_id:          data.salesman_id          || "",
       validity_days:        data.validity_days         || 15,
       delivery_by:          data.delivery_by           || "",
-      delivery_type:           data.delivery_type            || "Road",
+      delivery_type:           data.delivery_type            || "",
       booking_at:              data.booking_at               || "",
       goods_sent_by:           data.goods_sent_by            || "",
       transport_payment_by:    data.transport_payment_by     || "",

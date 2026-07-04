@@ -223,7 +223,7 @@ const grandTotal =
           <div className="delivery">
             <b>Delivery Instructions:</b><br/>
             Payment Type: To Pay<br/>
-            Delivery Type: Door Delivery<br/>
+            Delivery Location: Door Delivery<br/>
             Delivery Instructions: -
           </div>
         </div>

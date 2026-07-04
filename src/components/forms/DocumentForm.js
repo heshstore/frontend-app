@@ -64,7 +64,7 @@ export const defaultForm = () => ({
   salesman_id: "",
   validity_days: 15,
   delivery_by: "",
-  delivery_type: "Road",
+  delivery_type: "",
   booking_at: "",
   goods_sent_by: "",
   transport_payment_by: "",
@@ -728,11 +728,9 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 8 }}>
             <div>
-              <label style={lbl}>Delivery Type</label>
-              <select value={form.delivery_type || ""} onChange={e => setForm(f => ({ ...f, delivery_type: e.target.value }))} style={inp}>
-                <option value="">— Select —</option>
-                {["Road", "Air", "Sea", "Rail", "Courier"].map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
+              <label style={lbl}>Delivery Location</label>
+              <input type="text" placeholder="e.g. Chennai" value={form.delivery_type || ""}
+                onChange={e => setForm(f => ({ ...f, delivery_type: e.target.value }))} style={inp} />
             </div>
           </div>
           <div>
