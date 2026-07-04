@@ -313,8 +313,8 @@ export default function QuotationTemplate({ data, wrapClass = 'qp-screen' }) {
   // columns rather than left as a gap.
   const hasAnyDiscount = items.some((it) => Number(it.discount_value || 0) > 0);
   const colWidths = hasAnyDiscount
-    ? { no: 4, photo: 6, name: 28, instr: 8, qty: 5, uom: 5, disc: 13, rate: 11.5, gst: 8, amt: 11.5 }
-    : { no: 4, photo: 6, name: 34, instr: 11, qty: 5, uom: 5, rate: 13.5, gst: 9, amt: 12.5 };
+    ? { no: 4, photo: 6, name: 28, instr: 8, qty: 5, unit: 5, disc: 13, rate: 11.5, gst: 8, amt: 11.5 }
+    : { no: 4, photo: 6, name: 34, instr: 11, qty: 5, unit: 5, rate: 13.5, gst: 9, amt: 12.5 };
 
   const subTotal   = Number(data.sub_total || 0);
   const chargePack = Number(data.charges_packing      || 0);
@@ -437,7 +437,7 @@ export default function QuotationTemplate({ data, wrapClass = 'qp-screen' }) {
             <col style={{ width: `${colWidths.name}%` }}  />
             <col style={{ width: `${colWidths.instr}%` }} />
             <col style={{ width: `${colWidths.qty}%` }}   />
-            <col style={{ width: `${colWidths.uom}%` }}   />
+            <col style={{ width: `${colWidths.unit}%` }}  />
             {hasAnyDiscount && <col style={{ width: `${colWidths.disc}%` }} />}
             <col style={{ width: `${colWidths.rate}%` }}  />
             <col style={{ width: `${colWidths.gst}%` }}   />
@@ -450,7 +450,7 @@ export default function QuotationTemplate({ data, wrapClass = 'qp-screen' }) {
               <th className="ta-l">Item / Name / HSN</th>
               <th className="ta-l">Instruction</th>
               <th className="ta-c">Qty</th>
-              <th className="ta-c">UOM</th>
+              <th className="ta-c">Unit</th>
               {hasAnyDiscount && <th className="ta-c">Disc</th>}
               <th className="ta-r">Rate (₹)</th>
               <th className="ta-c">GST Tax</th>
@@ -505,7 +505,7 @@ export default function QuotationTemplate({ data, wrapClass = 'qp-screen' }) {
                   </td>
                   <td className="qp-instr">{it.instruction || it.notes || ''}</td>
                   <td className="ta-c">{qty}</td>
-                  <td className="ta-c">{it.uom || it.unit || ''}</td>
+                  <td className="ta-c">{it.unit || ''}</td>
                   {hasAnyDiscount && (
                     <td className="ta-c">
                       {discVal > 0 && (
