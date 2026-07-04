@@ -5,6 +5,11 @@ import { GST_OPTIONS } from "./config/gstOptions";
 
 const UNIT_OPTIONS = ["Nos", "pcs", "box", "doz", "pair", "set", "kg", "ltr"];
 
+// Shared field styles for the classification card — keeps every label/input
+// pair the same height so grid rows line up horizontally and vertically.
+const fieldLabel = { fontSize: 11, color: "#6b7280", fontWeight: 600, marginBottom: 4 };
+const fieldInput = { height: 38, width: "100%", padding: "0 10px", borderRadius: 6, border: "1px solid #ccc", boxSizing: "border-box", fontSize: 13 };
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 function isSalesReady(item) {
@@ -224,51 +229,68 @@ function InlineConfigForm({ item, mainData, selectedItems, selectedVariants,
           Edit Configuration
         </div>
       )}
-      <div style={{ padding: 10, background: "#f5f5f5", borderRadius: 10, marginBottom: 10 }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <input
-            placeholder="HSN Code"
-            maxLength={8}
-            inputMode="numeric"
-            value={data.hsn || ""}
-            onClick={e => e.stopPropagation()}
-            onChange={e => {
-              const v = e.target.value.replace(/\D/g, "");
-              setMainData(p => ({ ...p, [item.sku]: { ...(p[item.sku] || {}), hsn: v } }));
-            }}
-            disabled={!fieldsEnabled}
-            style={{ padding: 8, borderRadius: 6, border: "1px solid #ccc" }}
-          />
-          <select
-            value={String(data.gst ?? "")}
-            onClick={e => e.stopPropagation()}
-            onChange={e => setMainData(p => ({ ...p, [item.sku]: { ...(p[item.sku] || {}), gst: e.target.value } }))}
-            disabled={!fieldsEnabled}
-            style={{ padding: 8, borderRadius: 6, border: "1px solid #ccc" }}
-          >
-            {GST_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-          <input
-            placeholder="Cost Price (₹)"
-            value={data.cost || ""}
-            onClick={e => e.stopPropagation()}
-            onChange={e => setMainData(p => ({ ...p, [item.sku]: { ...(p[item.sku] || {}), cost: e.target.value } }))}
-            disabled={!fieldsEnabled}
-            style={{ padding: 8, borderRadius: 6, border: "1px solid #ccc" }}
-          />
-          <select
-            value={data.unit || "Nos"}
-            onClick={e => e.stopPropagation()}
-            onChange={e => setMainData(p => ({ ...p, [item.sku]: { ...(p[item.sku] || {}), unit: e.target.value } }))}
-            disabled={!fieldsEnabled}
-            style={{ padding: 8, borderRadius: 6, border: "1px solid #ccc" }}
-          >
-            {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
-          </select>
+      <div style={{ padding: 14, background: "#f5f5f5", borderRadius: 10, marginBottom: 10 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
+          <div>
+            <div style={fieldLabel}>HSN Code</div>
+            <input
+              placeholder="e.g. 8471"
+              maxLength={8}
+              inputMode="numeric"
+              value={data.hsn || ""}
+              onClick={e => e.stopPropagation()}
+              onChange={e => {
+                const v = e.target.value.replace(/\D/g, "");
+                setMainData(p => ({ ...p, [item.sku]: { ...(p[item.sku] || {}), hsn: v } }));
+              }}
+              disabled={!fieldsEnabled}
+              style={fieldInput}
+            />
+          </div>
 
+          <div>
+            <div style={fieldLabel}>GST %</div>
+            <select
+              value={String(data.gst ?? "")}
+              onClick={e => e.stopPropagation()}
+              onChange={e => setMainData(p => ({ ...p, [item.sku]: { ...(p[item.sku] || {}), gst: e.target.value } }))}
+              disabled={!fieldsEnabled}
+              style={fieldInput}
+            >
+              {GST_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <div style={fieldLabel}>Cost Price (₹)</div>
+            <input
+              placeholder="0.00"
+              value={data.cost || ""}
+              onClick={e => e.stopPropagation()}
+              onChange={e => setMainData(p => ({ ...p, [item.sku]: { ...(p[item.sku] || {}), cost: e.target.value } }))}
+              disabled={!fieldsEnabled}
+              style={fieldInput}
+            />
+          </div>
+
+          <div>
+            <div style={fieldLabel}>Unit</div>
+            <select
+              value={data.unit || "Nos"}
+              onClick={e => e.stopPropagation()}
+              onChange={e => setMainData(p => ({ ...p, [item.sku]: { ...(p[item.sku] || {}), unit: e.target.value } }))}
+              disabled={!fieldsEnabled}
+              style={fieldInput}
+            >
+              {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginTop: 12 }}>
           {/* Category classification */}
           <div onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: 11, color: "#5b21b6", fontWeight: 600, marginBottom: 4 }}>
+            <div style={{ ...fieldLabel, color: "#5b21b6" }}>
               ERP Classification (optional — set after sync)
             </div>
             <select
@@ -279,7 +301,7 @@ function InlineConfigForm({ item, mainData, selectedItems, selectedVariants,
                 [item.sku]: { ...(p[item.sku] || {}), categoryType: e.target.value, serviceSubtype: "" },
               }))}
               disabled={!fieldsEnabled}
-              style={{ padding: 8, borderRadius: 6, border: "1px solid #ccc", width: "100%" }}
+              style={{ ...fieldInput, width: "100%" }}
             >
               <option value="">— Main Category Type (optional) —</option>
               <option value="TRADING">Trading</option>
@@ -295,7 +317,7 @@ function InlineConfigForm({ item, mainData, selectedItems, selectedVariants,
                   [item.sku]: { ...(p[item.sku] || {}), serviceSubtype: e.target.value },
                 }))}
                 disabled={!fieldsEnabled}
-                style={{ padding: 8, borderRadius: 6, border: "1px solid #ccc", width: "100%", marginTop: 6 }}
+                style={{ ...fieldInput, width: "100%", marginTop: 8 }}
               >
                 <option value="">— Service Subtype (optional) —</option>
                 <option value="AMC">AMC</option>
@@ -308,15 +330,15 @@ function InlineConfigForm({ item, mainData, selectedItems, selectedVariants,
 
           {/* Wholesale */}
           <div onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: 11, color: "#a16207", fontWeight: 600, marginBottom: 4 }}>
+            <div style={{ ...fieldLabel, color: "#a16207" }}>
               Wholesale Price (per variant)
             </div>
-            <div style={{ display: "flex", borderRadius: 6, overflow: "hidden", border: "1px solid #ca8a04" }}>
+            <div style={{ display: "flex", height: 38, borderRadius: 6, overflow: "hidden", border: "1px solid #ca8a04" }}>
               {["percent", "rs"].map(mode => (
                 <button key={mode} type="button" disabled={!fieldsEnabled}
                   onClick={() => setMainData(p => ({ ...p, [item.sku]: { ...(p[item.sku] || {}), wholesaleMode: mode, wholesale: "" } }))}
                   style={{
-                    padding: "6px 12px", border: "none",
+                    padding: "0 14px", border: "none",
                     borderRight: mode === "percent" ? "1px solid #ca8a04" : "none",
                     background: (data.wholesaleMode || "rs") === mode ? "#ca8a04" : "#fefce8",
                     color: (data.wholesaleMode || "rs") === mode ? "#fff" : "#a16207",
@@ -329,7 +351,7 @@ function InlineConfigForm({ item, mainData, selectedItems, selectedVariants,
                 placeholder={(data.wholesaleMode || "rs") === "percent" ? "Discount %" : "Discount ₹"}
                 onChange={e => setMainData(p => ({ ...p, [item.sku]: { ...(p[item.sku] || {}), wholesale: e.target.value } }))}
                 disabled={!fieldsEnabled}
-                style={{ flex: 1, padding: "6px 8px", border: "none", background: fieldsEnabled ? "#fefce8" : "#fafafa", outline: "none" }}
+                style={{ flex: 1, padding: "0 10px", border: "none", background: fieldsEnabled ? "#fefce8" : "#fafafa", outline: "none" }}
               />
             </div>
           </div>
