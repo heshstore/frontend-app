@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from './utils/api';
+import { useAuth } from './context/AuthContext';
 import { getUserCapabilities } from './config/roleCapabilities';
 import KpiCard from './components/dashboard/KpiCard';
 import KpiGrid from './components/dashboard/KpiGrid';
@@ -403,10 +404,19 @@ function StatusPanel({ kpis, waNumbers, navigate }) {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
+function greeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
 export default function Dashboard() {
   const navigate   = useNavigate();
   const isMobile   = useIsMobile();
   const mountedRef = useRef(true);
+  const { currentUser } = useAuth();
+  const firstName = currentUser?.name?.split(' ')[0] || '';
 
   const caps = useMemo(() => getUserCapabilities(), []);
 
@@ -545,7 +555,9 @@ export default function Dashboard() {
         <div style={{ marginBottom: 18 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 8 }}>
             <div>
-              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: C.text }}>Dashboard</h2>
+              <h2 style={{ margin: 0, fontSize: 24, fontWeight: 700, letterSpacing: '-0.01em', color: C.text }}>
+                {greeting()}{firstName ? `, ${firstName}` : ''}
+              </h2>
               <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
                 {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
               </div>
