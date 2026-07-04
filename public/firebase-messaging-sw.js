@@ -23,12 +23,12 @@ importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-com
 
 // ── Firebase config (fill in from Firebase Console) ───────────────────────────
 const firebaseConfig = {
-  apiKey:            'REPLACE_WITH_FIREBASE_API_KEY',
-  authDomain:        'REPLACE_WITH_PROJECT_ID.firebaseapp.com',
-  projectId:         'REPLACE_WITH_PROJECT_ID',
-  storageBucket:     'REPLACE_WITH_PROJECT_ID.appspot.com',
-  messagingSenderId: 'REPLACE_WITH_MESSAGING_SENDER_ID',
-  appId:             'REPLACE_WITH_APP_ID',
+  apiKey:            'AIzaSyB0aq4YlJI3JJmUk3QF-zqIW0QHxfPY7h4',
+  authDomain:        'saachi-16d7b.firebaseapp.com',
+  projectId:         'saachi-16d7b',
+  storageBucket:     'saachi-16d7b.firebasestorage.app',
+  messagingSenderId: '299817092820',
+  appId:             '1:299817092820:web:2dac7704cd727d89cb9d41',
 };
 
 // Guard: do not initialize if config has not been filled in yet.
