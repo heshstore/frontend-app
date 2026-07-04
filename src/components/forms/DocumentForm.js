@@ -56,7 +56,7 @@ const sectionDivider = (title) => (
 export const emptyRow = () => ({
   sku: "", item_name: "", qty: 1, rate: "",
   discount_type: "percent", discount_value: "",
-  gst_percent: 0, hsn_code: "", instruction: "",
+  gst_percent: 0, hsn_code: "", instruction: "", unit: "",
   _floor_price: 0, _image: "",
 });
 
@@ -215,6 +215,7 @@ function ItemRow({ row, index, items, canRemove, onChange, onRemove, isWholesale
       rate,
       gst_percent: item.gst || 0,
       hsn_code: item.hsnCode || "",
+      unit: item.unit || "",
       _floor_price: rate,   // floor = auto-filled price; user can increase but not go below
       _image: item.image || "",
     });
@@ -252,7 +253,7 @@ function ItemRow({ row, index, items, canRemove, onChange, onRemove, isWholesale
           />
           {search && (
             <button type="button"
-              onClick={() => { setSearch(""); onChange(index, { sku: "", item_name: "", rate: "", gst_percent: 0, hsn_code: "", _floor_price: 0, _image: "" }); setShowDrop(false); }}
+              onClick={() => { setSearch(""); onChange(index, { sku: "", item_name: "", rate: "", gst_percent: 0, hsn_code: "", unit: "", _floor_price: 0, _image: "" }); setShowDrop(false); }}
               style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 16, color: theme.textMuted }}>
               ×
             </button>
@@ -519,6 +520,7 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
         discount_value: Number(r.discount_value),
         gst_percent:    Number(r.gst_percent),
         hsn_code:       r.hsn_code,
+        unit:           r.unit || "",
         amount:         calcAmount(r),
         gst_amount:     calcGst(r),
       })),

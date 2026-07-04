@@ -63,6 +63,7 @@ async function loadQuotation(id) {
       gst_percent:    it.gst_percent    || 0,
       hsn_code:       it.hsn_code       || "",
       instruction:    it.instruction    || "",
+      unit:           it.unit           || "",
       _floor_price:   it.rate           || 0,
       _image:         "",
     })),
