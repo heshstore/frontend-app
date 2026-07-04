@@ -35,7 +35,6 @@ import AllLeadsView from "./crm/AllLeadsView";
 import FollowUpView from "./crm/FollowUpView";
 import AutomationSettings from "./crm/AutomationSettings";
 import WhatsAppQR from "./whatsapp/WhatsAppQR";
-import NotificationCenter from "./pages/notifications/NotificationCenter";
 import WhatsAppMonitor from "./pages/admin/WhatsAppMonitor";
 import ReadyOrders from "./pages/dispatch/ReadyOrders";
 import DispatchForm from "./pages/dispatch/DispatchForm";
@@ -46,8 +45,6 @@ import PaymentForm from "./pages/accounts/PaymentForm";
 import PaymentHistory from "./pages/accounts/PaymentHistory";
 import { AuthProvider } from "./context/AuthContext";
 import { NotificationProvider } from "./context/NotificationContext";
-import GlobalNotifications from "./components/GlobalNotifications";
-import NotificationPanel from "./components/NotificationPanel";
 import ToastContainer from "./components/ui/ToastContainer";
 import Layout from "./components/layout/Layout";
 import SlaDashboard from "./pages/sla/SlaDashboard";
@@ -153,8 +150,6 @@ function App() {
       <NotificationProvider>
         <BrowserRouter>
           <PageTracker />
-          <GlobalNotifications />
-          <NotificationPanel />
           <ToastContainer />
           <Routes>
 
@@ -289,7 +284,6 @@ function App() {
               <Route path="/staff" element={<PermissionRoute permission="staff.view"><StaffManagement /></PermissionRoute>} />
               <Route path="/rbac" element={<PermissionRoute permission="rbac.manage"><RbacMatrix /></PermissionRoute>} />
 
-              <Route path="/notifications" element={<PrivateRoute><NotificationCenter /></PrivateRoute>} />
 
               <Route path="/accounts" element={<Navigate to="/dashboard" replace />} />
               <Route path="/delivery" element={<Navigate to="/dashboard" replace />} />

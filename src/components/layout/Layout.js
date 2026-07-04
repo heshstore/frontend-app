@@ -5,8 +5,6 @@ import RightPanel, { RightPanelProvider } from './RightPanel';
 import MobileNav from './MobileNav';
 import UniversalSearch from '../UniversalSearch';
 import QuickActions from '../QuickActions';
-import NotificationBell from '../NotificationBell';
-import NotificationPanel from '../NotificationPanel';
 import { useDeployedVersion } from '../../utils/useDeployedVersion';
 
 const MOBILE_BP = 768;
@@ -60,7 +58,6 @@ export default function Layout() {
   return (
     <RightPanelProvider>
       <QuickActions />
-      <NotificationPanel />
       <div style={{
         display: 'flex',
         background: '#f4f6f9',
@@ -149,9 +146,6 @@ export default function Layout() {
                 Production&nbsp;•&nbsp;{deployedVersion ?? '—'}
               </div>
             )}
-
-            {/* Notification bell */}
-            <NotificationBell />
           </header>
 
           <main style={{

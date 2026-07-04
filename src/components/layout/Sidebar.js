@@ -536,7 +536,6 @@ export default function Sidebar({ onClose }) {
           <div style={{ fontSize: 10, fontWeight: 700, color: NAV_MUTED, marginBottom: 4, letterSpacing: '0.04em', paddingLeft: 2 }}>MY WORKPLACE</div>
           <NavItem label="Attendance"     href="/workforce/attendance" icon="clock"    />
           <NavItem label="Leave Requests" href="/workforce/leaves"     icon="calendar" />
-          <NavItem label="Notifications"  href="/notifications"        icon="bell"     />
         </div>
 
         {/* ── Logout ── */}
