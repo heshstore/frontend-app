@@ -178,8 +178,8 @@ function CustomerSearchField({ label, value, onSelect, onClear, placeholder }) {
   );
 }
 
-// ── ItemRow ───────────────────────────────────────────────────────────────────
-function ItemRow({ row, index, items, canRemove, onChange, onRemove, isWholesaler }) {
+// ── ItemRow — the single persistent item-entry form ───────────────────────────
+function ItemRow({ row, items, onChange, isWholesaler }) {
   const [search, setSearch] = useState(
     row.sku && row.item_name ? `${row.sku}  ·  ${row.item_name}` : (row.item_name || "")
   );
@@ -209,7 +209,7 @@ function ItemRow({ row, index, items, canRemove, onChange, onRemove, isWholesale
     const wholesalePrice = Number(item.wholesale_price) || 0;
     const retailPrice    = Number(item.retail_price) || Number(item.sellingPrice) || 0;
     const rate = (isWholesaler && wholesalePrice > 0) ? wholesalePrice : retailPrice;
-    onChange(index, {
+    onChange({
       sku: item.sku,
       item_name: item.itemName,
       rate,
@@ -247,13 +247,13 @@ function ItemRow({ row, index, items, canRemove, onChange, onRemove, isWholesale
           <input
             placeholder="Search item by name or SKU…"
             value={search}
-            onChange={(e) => { setSearch(e.target.value); setShowDrop(true); onChange(index, { item_name: e.target.value }); }}
+            onChange={(e) => { setSearch(e.target.value); setShowDrop(true); onChange({ item_name: e.target.value }); }}
             onFocus={() => search.length >= 1 && setShowDrop(true)}
             style={{ ...inp, paddingRight: 36 }}
           />
           {search && (
             <button type="button"
-              onClick={() => { setSearch(""); onChange(index, { sku: "", item_name: "", rate: "", gst_percent: 0, hsn_code: "", unit: "", _floor_price: 0, _image: "" }); setShowDrop(false); }}
+              onClick={() => { setSearch(""); onChange({ sku: "", item_name: "", rate: "", gst_percent: 0, hsn_code: "", unit: "", _floor_price: 0, _image: "" }); setShowDrop(false); }}
               style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 16, color: theme.textMuted }}>
               ×
             </button>
@@ -280,12 +280,6 @@ function ItemRow({ row, index, items, canRemove, onChange, onRemove, isWholesale
             </div>
           )}
         </div>
-        {canRemove && (
-          <button type="button" onClick={() => onRemove(index)}
-            style={{ flexShrink: 0, width: 28, height: 28, borderRadius: "50%", background: "#fee2e2", border: "none", cursor: "pointer", color: "#dc2626", fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            ✕
-          </button>
-        )}
       </div>
 
       {/* SKU + HSN chips */}
@@ -301,7 +295,7 @@ function ItemRow({ row, index, items, canRemove, onChange, onRemove, isWholesale
         <div>
           <label style={lbl}>Qty</label>
           <input type="number" min="0.01" step="0.01" value={row.qty}
-            onChange={(e) => onChange(index, { qty: e.target.value })} style={inp} />
+            onChange={(e) => onChange({ qty: e.target.value })} style={inp} />
         </div>
         <div>
           <label style={lbl}>
@@ -319,15 +313,15 @@ function ItemRow({ row, index, items, canRemove, onChange, onRemove, isWholesale
             onChange={(e) => {
               const val = Number(e.target.value);
               if (row._floor_price > 0 && val < row._floor_price) {
-                onChange(index, { rate: row._floor_price });
+                onChange({ rate: row._floor_price });
                 return;
               }
-              onChange(index, { rate: e.target.value });
+              onChange({ rate: e.target.value });
             }}
             onBlur={(e) => {
               const val = Number(e.target.value);
               if (row._floor_price > 0 && (isNaN(val) || val < row._floor_price)) {
-                onChange(index, { rate: row._floor_price });
+                onChange({ rate: row._floor_price });
               }
             }}
             style={{
@@ -351,7 +345,7 @@ function ItemRow({ row, index, items, canRemove, onChange, onRemove, isWholesale
           <div style={{ display: "flex", borderRadius: 8, border: `1.5px solid ${theme.border}`, overflow: "hidden", flexShrink: 0 }}>
             {["percent", "fixed"].map(t => (
               <button key={t} type="button"
-                onClick={() => onChange(index, { discount_type: t })}
+                onClick={() => onChange({ discount_type: t })}
                 style={{
                   padding: "0 14px", height: 42, border: "none", cursor: "pointer",
                   background: row.discount_type === t ? theme.primary : "#fff",
@@ -365,7 +359,7 @@ function ItemRow({ row, index, items, canRemove, onChange, onRemove, isWholesale
           <input type="number" min="0" step="0.01"
             value={row.discount_value}
             placeholder={row.discount_type === "percent" ? "0" : "0.00"}
-            onChange={(e) => onChange(index, { discount_value: e.target.value })}
+            onChange={(e) => onChange({ discount_value: e.target.value })}
             style={{ ...inp, flex: 1 }} />
         </div>
       </div>
@@ -386,7 +380,7 @@ function ItemRow({ row, index, items, canRemove, onChange, onRemove, isWholesale
       {/* Special instruction */}
       <div style={{ padding: "10px 12px 12px" }}>
         <input placeholder="Special instruction (optional)…" value={row.instruction}
-          onChange={(e) => onChange(index, { instruction: e.target.value })}
+          onChange={(e) => onChange({ instruction: e.target.value })}
           style={{ ...inp, fontSize: 13, color: theme.textMuted }} />
       </div>
 
@@ -403,6 +397,56 @@ function ItemRow({ row, index, items, canRemove, onChange, onRemove, isWholesale
   );
 }
 
+// ── AddedItemsList — compact table of confirmed items, with edit/remove ───────
+function AddedItemsList({ rows, calcAmount, calcGst, editingIndex, onEdit, onRemove }) {
+  if (rows.length === 0) {
+    return (
+      <div style={{ padding: 20, textAlign: "center", color: theme.textMuted, fontSize: 13, border: `1.5px dashed ${theme.border}`, borderRadius: 10, marginBottom: 12 }}>
+        No items added yet
+      </div>
+    );
+  }
+  return (
+    <div style={{ border: `1px solid ${theme.border}`, borderRadius: 10, overflow: "hidden", marginBottom: 12 }}>
+      {rows.map((row, i) => {
+        const amount = calcAmount(row);
+        const gst = calcGst(row);
+        return (
+          <div key={i} style={{
+            display: "flex", alignItems: "center", gap: 10, padding: "10px 12px",
+            borderBottom: i < rows.length - 1 ? `1px solid ${theme.border}` : "none",
+            background: editingIndex === i ? theme.primaryLight : "#fff",
+          }}>
+            {row._image
+              ? <img src={row._image} alt="" style={{ width: 36, height: 36, borderRadius: 6, objectFit: "cover", flexShrink: 0 }} />
+              : <div style={{ width: 36, height: 36, borderRadius: 6, background: theme.surface, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>📦</div>
+            }
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: theme.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {row.item_name || row.sku}
+              </div>
+              <div style={{ fontSize: 11, color: theme.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {row.qty} × ₹{Number(row.rate || 0).toLocaleString("en-IN")}{row.sku ? ` · ${row.sku}` : ""}
+              </div>
+            </div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: theme.text, flexShrink: 0, textAlign: "right", minWidth: 84 }}>
+              ₹{(amount + gst).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+            </div>
+            <button type="button" onClick={() => onEdit(i)} title="Edit item" aria-label="Edit item"
+              style={{ flexShrink: 0, width: 28, height: 28, borderRadius: 6, background: "none", border: "none", cursor: "pointer", color: theme.textMuted, fontSize: 15 }}>
+              ✎
+            </button>
+            <button type="button" onClick={() => onRemove(i)} title="Remove item" aria-label="Remove item"
+              style={{ flexShrink: 0, width: 28, height: 28, borderRadius: "50%", background: "#fee2e2", border: "none", cursor: "pointer", color: "#dc2626", fontSize: 13, fontWeight: 700 }}>
+              ✕
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── DocumentForm ──────────────────────────────────────────────────────────────
 export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, submitLabel, updateLabel, allowDraft }) {
   const navigate = useNavigate();
@@ -411,7 +455,10 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
   const [shipTo, setShipTo]                 = useState(null);
   const [shipSameAsBill, setShipSameAsBill] = useState(true);
 
-  const [rows, setRows]   = useState([emptyRow()]);
+  const [rows, setRows]   = useState([]);
+  const [draftRow, setDraftRow]       = useState(emptyRow());
+  const [editingIndex, setEditingIndex] = useState(null);
+  const [formResetKey, setFormResetKey] = useState(0);
   const [items, setItems] = useState([]);
   const [users, setUsers] = useState([]);
   const [form, setForm]   = useState(defaultForm());
@@ -449,11 +496,45 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
       .finally(() => setLoading(false));
   }, [editId, loadData]);
 
-  // Row helpers
-  const updateRow = (index, patch) =>
-    setRows(prev => { const next = [...prev]; next[index] = { ...next[index], ...patch }; return next; });
-  const removeRow = (index) => setRows(rows.filter((_, i) => i !== index));
-  const addRow    = () => setRows([...rows, emptyRow()]);
+  // Draft item entry — one persistent form. "Add Item" confirms the current
+  // draft into `rows` (or updates it in place when editing), then resets the
+  // form for the next item. formResetKey forces ItemRow to remount so its
+  // internal search-box state clears/reloads cleanly.
+  const updateDraft = (patch) => setDraftRow(prev => ({ ...prev, ...patch }));
+
+  const handleAddItem = () => {
+    if (!draftRow.item_name && !draftRow.sku) {
+      toast.error("Please select or enter an item first");
+      return;
+    }
+    if (editingIndex !== null) {
+      setRows(prev => { const next = [...prev]; next[editingIndex] = draftRow; return next; });
+      toast.success("Item updated");
+    } else {
+      setRows(prev => [...prev, draftRow]);
+      toast.success("Item added");
+    }
+    setDraftRow(emptyRow());
+    setEditingIndex(null);
+    setFormResetKey(k => k + 1);
+  };
+
+  const handleEditRow = (index) => {
+    setDraftRow(rows[index]);
+    setEditingIndex(index);
+    setFormResetKey(k => k + 1);
+  };
+
+  const handleCancelEdit = () => {
+    setDraftRow(emptyRow());
+    setEditingIndex(null);
+    setFormResetKey(k => k + 1);
+  };
+
+  const removeRow = (index) => {
+    setRows(prev => prev.filter((_, i) => i !== index));
+    if (editingIndex === index) handleCancelEdit();
+  };
 
   // Totals
   const calcAmount = (row) => {
@@ -659,18 +740,32 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
 
         {/* ── Items ── */}
         {sectionDivider("Items")}
-        {rows.map((row, i) => (
-          <ItemRow key={i} row={row} index={i} items={items}
-            canRemove={rows.length > 1}
-            onChange={updateRow}
-            onRemove={removeRow}
-            isWholesaler={!!billTo?.isWholesaler}
-          />
-        ))}
-        <button type="button" onClick={addRow}
-          style={{ width: "100%", padding: "12px", borderRadius: 8, background: theme.primaryLight, color: theme.primary, border: `1.5px dashed ${theme.primary}`, cursor: "pointer", fontWeight: 700, fontSize: 15, marginBottom: 4 }}>
-          + Add Item
+        <ItemRow key={formResetKey} row={draftRow} items={items}
+          onChange={updateDraft}
+          isWholesaler={!!billTo?.isWholesaler}
+        />
+        <button type="button" onClick={handleAddItem}
+          style={{ width: "100%", padding: "12px", borderRadius: 8, background: theme.primaryLight, color: theme.primary, border: `1.5px dashed ${theme.primary}`, cursor: "pointer", fontWeight: 700, fontSize: 15, marginBottom: editingIndex !== null ? 4 : 16 }}>
+          {editingIndex !== null ? "✓ Update Item" : "+ Add Item"}
         </button>
+        {editingIndex !== null && (
+          <button type="button" onClick={handleCancelEdit}
+            style={{ width: "100%", padding: "6px", background: "none", border: "none", color: theme.textMuted, cursor: "pointer", fontSize: 13, marginBottom: 16 }}>
+            Cancel edit
+          </button>
+        )}
+
+        <div style={{ fontSize: 12, fontWeight: 600, color: theme.textMuted, marginBottom: 8 }}>
+          Added items ({rows.length})
+        </div>
+        <AddedItemsList
+          rows={rows}
+          calcAmount={calcAmount}
+          calcGst={calcGst}
+          editingIndex={editingIndex}
+          onEdit={handleEditRow}
+          onRemove={removeRow}
+        />
 
         {/* ── Extra Charges ── */}
         {sectionDivider("Extra Charges")}
