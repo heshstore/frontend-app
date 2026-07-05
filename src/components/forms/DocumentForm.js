@@ -223,9 +223,14 @@ function ItemRow({ row, items, onChange, isWholesaler, isTaxInclusive }) {
   };
 
   const base      = Number(row.qty) * Number(row.rate || 0);
+  // Flat discount is a per-piece rupee amount — scale by qty, matching the
+  // backend (quotation.service.ts/orders.service.ts both do this). Previously
+  // this subtracted a single flat amount regardless of quantity, showing a
+  // far-too-high preview for qty > 1 (e.g. qty=200 at ₹50 off showed only
+  // ₹50 total discount instead of the actual ₹10,000 the backend applies).
   const disc      = row.discount_type === "percent"
     ? (base * Number(row.discount_value)) / 100
-    : Number(row.discount_value);
+    : Number(row.discount_value) * Number(row.qty);
   const gross     = Math.max(0, base - disc);
   const gstPct    = Number(row.gst_percent || 0);
   const amount    = (isTaxInclusive && gstPct > 0) ? gross / (1 + gstPct / 100) : gross;
@@ -399,7 +404,7 @@ function ItemRow({ row, items, onChange, isWholesaler, isTaxInclusive }) {
 }
 
 // ── AddedItemsList — compact table of confirmed items, with edit/remove ───────
-function AddedItemsList({ rows, calcAmount, calcGst, editingIndex, onEdit, onRemove }) {
+function AddedItemsList({ rows, calcAmount, editingIndex, onEdit, onRemove }) {
   if (rows.length === 0) {
     return (
       <div style={{ padding: 20, textAlign: "center", color: theme.textMuted, fontSize: 13, border: `1.5px dashed ${theme.border}`, borderRadius: 10, marginBottom: 12 }}>
@@ -411,7 +416,6 @@ function AddedItemsList({ rows, calcAmount, calcGst, editingIndex, onEdit, onRem
     <div style={{ border: `1px solid ${theme.border}`, borderRadius: 10, overflow: "hidden", marginBottom: 12 }}>
       {rows.map((row, i) => {
         const amount = calcAmount(row);
-        const gst = calcGst(row);
         const discVal = Number(row.discount_value) || 0;
         const discLabel = discVal > 0
           ? (row.discount_type === "percent" ? `${discVal}% off` : `₹${discVal.toLocaleString("en-IN")} off`)
@@ -442,7 +446,8 @@ function AddedItemsList({ rows, calcAmount, calcGst, editingIndex, onEdit, onRem
               )}
             </div>
             <div style={{ fontSize: 14, fontWeight: 700, color: theme.text, flexShrink: 0, textAlign: "right", minWidth: 84, marginTop: 2 }}>
-              ₹{(amount + gst).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+              ₹{amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+              <div style={{ fontSize: 10, fontWeight: 400, color: theme.textMuted }}>excl. GST</div>
             </div>
             <button type="button" onClick={() => onEdit(i)} title="Edit item" aria-label="Edit item"
               style={{ flexShrink: 0, width: 28, height: 28, borderRadius: 6, background: "none", border: "none", cursor: "pointer", color: theme.textMuted, fontSize: 15, marginTop: 2 }}>
@@ -556,9 +561,10 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
   // on form.is_tax_inclusive, mirroring the backend's mapItems/normalizeItem.
   const grossAfterDiscount = (row) => {
     const base = Number(row.qty) * Number(row.rate || 0);
+    // Flat discount is per-piece — scale by qty, matching the backend.
     const disc = row.discount_type === "percent"
       ? (base * Number(row.discount_value)) / 100
-      : Number(row.discount_value);
+      : Number(row.discount_value) * Number(row.qty);
     return Math.max(0, base - disc);
   };
   const calcAmount = (row) => {
@@ -816,7 +822,6 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
         <AddedItemsList
           rows={rows}
           calcAmount={calcAmount}
-          calcGst={calcGst}
           editingIndex={editingIndex}
           onEdit={handleEditRow}
           onRemove={removeRow}
