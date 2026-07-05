@@ -19,7 +19,11 @@ async function loadQuotation(id) {
       shipTo:         { id: c.id, companyName: c.companyName },
       shipSameAsBill: true,
       form: {
-        salesman_id: "", validity_days: 15, delivery_by: "",
+        // salesman_id intentionally omitted — DocumentForm's own defaultForm()
+        // already auto-assigns it (Admin/COO get blank + a picker, everyone
+        // else gets themselves, non-editable), and merging {...prev, ...data.form}
+        // would otherwise stomp that default back to blank for every role.
+        validity_days: 15, delivery_by: "",
         booking_at: "", goods_sent_by: "", transport_payment_by: "",
         delivery_type: "", payment_type: "Credit",
         is_tax_inclusive: false,

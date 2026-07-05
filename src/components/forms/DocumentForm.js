@@ -13,7 +13,8 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiFetch } from "../../utils/api";
+import { apiFetch, getCurrentUser } from "../../utils/api";
+import { getUserCapabilities } from "../../config/roleCapabilities";
 import { theme } from "../../theme";
 import PageLayout from "../layout/PageLayout";
 import { toast } from "../../utils/toast";
@@ -71,22 +72,28 @@ export const emptyRow = () => ({
   _floor_price: 0, _image: "",
 });
 
-export const defaultForm = () => ({
-  salesman_id: "",
-  validity_days: 15,
-  delivery_by: "",
-  delivery_type: "",
-  is_tax_inclusive: false,
-  booking_at: "",
-  goods_sent_by: "",
-  transport_payment_by: "",
-  delivery_instructions: "",
-  charges_packing: "",
-  charges_cartage: "",
-  charges_forwarding: "",
-  charges_installation: "",
-  charges_loading: "",
-});
+export const defaultForm = () => {
+  // Only Admin/COO punch orders on someone else's behalf and pick a salesman
+  // explicitly — everyone else is auto-assigned to themselves, non-editable.
+  const caps = getUserCapabilities();
+  const me = getCurrentUser();
+  return {
+    salesman_id: caps.isAdminOrCoo ? "" : (me?.id ?? ""),
+    validity_days: 15,
+    delivery_by: "",
+    delivery_type: "",
+    is_tax_inclusive: false,
+    booking_at: "",
+    goods_sent_by: "",
+    transport_payment_by: "",
+    delivery_instructions: "",
+    charges_packing: "",
+    charges_cartage: "",
+    charges_forwarding: "",
+    charges_installation: "",
+    charges_loading: "",
+  };
+};
 
 function formatCustomer(c) {
   if (!c) return "";
@@ -479,6 +486,11 @@ function AddedItemsList({ rows, calcAmount, editingIndex, onEdit, onRemove }) {
 export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, submitLabel, updateLabel, allowDraft }) {
   const navigate = useNavigate();
 
+  // Only Admin/COO punch orders/quotations on someone else's behalf — everyone
+  // else is locked to themselves (see defaultForm() and the Salesman field below).
+  const caps = getUserCapabilities();
+  const currentUser = getCurrentUser();
+
   const [billTo, setBillTo]                 = useState(null);
   const [shipTo, setShipTo]                 = useState(null);
   const [shipSameAsBill, setShipSameAsBill] = useState(true);
@@ -863,10 +875,17 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <div>
             <label style={lbl}>Salesman</label>
-            <select value={form.salesman_id} onChange={e => setForm(f => ({ ...f, salesman_id: e.target.value }))} style={inp}>
-              <option value="">Select Salesman</option>
-              {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-            </select>
+            {caps.isAdminOrCoo ? (
+              <select value={form.salesman_id} onChange={e => setForm(f => ({ ...f, salesman_id: e.target.value }))} style={inp}>
+                <option value="">Select Salesman</option>
+                {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+              </select>
+            ) : (
+              // Locked to self — only Admin/COO punch on someone else's behalf.
+              <div style={{ ...inp, display: "flex", alignItems: "center", background: "#f8fafc", color: theme.textMuted, cursor: "default", borderStyle: "dashed" }}>
+                {users.find(u => String(u.id) === String(form.salesman_id))?.name || currentUser?.name || "—"}
+              </div>
+            )}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <div>
