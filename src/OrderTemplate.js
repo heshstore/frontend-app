@@ -45,6 +45,13 @@ export default function OrderTemplate({ data, wrapClass = 'qp-screen' }) {
   // has a discount — the freed width is redistributed among the remaining
   // columns rather than left as a gap.
   const hasAnyDiscount = items.some((it) => Number(it.discount_value || 0) > 0);
+  // Tax mode is set per item now, not per document — show "Mixed" when items
+  // disagree instead of a single (possibly wrong) document-wide label.
+  const taxLabel = items.length === 0
+    ? (data.is_tax_inclusive ? '(Tax Incl.)' : '(Tax Extra)')
+    : items.every((it) => !!it.is_tax_inclusive) ? '(Tax Incl.)'
+    : items.every((it) => !it.is_tax_inclusive) ? '(Tax Extra)'
+    : '(Mixed)';
   const colWidths = hasAnyDiscount
     ? { no: 4, photo: 6, name: 28, instr: 17, qty: 6, disc: 7, rate: 12, gst: 6, amt: 14 }
     : { no: 4, photo: 6, name: 32, instr: 19, qty: 6, rate: 13, gst: 7, amt: 13 };
@@ -243,7 +250,7 @@ export default function OrderTemplate({ data, wrapClass = 'qp-screen' }) {
               {hasAnyDiscount && <th className="ta-c">Disc</th>}
               <th className="ta-r">Rate (₹)</th>
               <th className="ta-c">GST Tax</th>
-              <th className="ta-r" style={{ whiteSpace: 'normal' }}>Amount (₹)<div className="qp-th-sub">{data.is_tax_inclusive ? '(Tax Incl.)' : '(Tax Extra)'}</div></th>
+              <th className="ta-r" style={{ whiteSpace: 'normal' }}>Amount (₹)<div className="qp-th-sub">{taxLabel}</div></th>
             </tr>
           </thead>
           <tbody>

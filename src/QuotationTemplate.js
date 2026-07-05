@@ -312,6 +312,13 @@ export default function QuotationTemplate({ data, wrapClass = 'qp-screen' }) {
   // has a discount — the freed width is redistributed among the remaining
   // columns rather than left as a gap.
   const hasAnyDiscount = items.some((it) => Number(it.discount_value || 0) > 0);
+  // Tax mode is set per item now, not per document — show "Mixed" when items
+  // disagree instead of a single (possibly wrong) document-wide label.
+  const taxLabel = items.length === 0
+    ? (data.is_tax_inclusive ? 'Inclusive' : 'Extra')
+    : items.every((it) => !!it.is_tax_inclusive) ? 'Inclusive'
+    : items.every((it) => !it.is_tax_inclusive) ? 'Extra'
+    : 'Mixed';
   const colWidths = hasAnyDiscount
     ? { no: 4, photo: 6, name: 28, instr: 8, qty: 5, unit: 5, disc: 13, rate: 11.5, gst: 8, amt: 11.5 }
     : { no: 4, photo: 6, name: 34, instr: 11, qty: 5, unit: 5, rate: 13.5, gst: 9, amt: 12.5 };
@@ -424,7 +431,7 @@ export default function QuotationTemplate({ data, wrapClass = 'qp-screen' }) {
               <hr className="qp-info-rule" />
               <InfoRow label="Payment Terms:" value="Advance 70% & Before Dispatch 30%" />
               <InfoRow label="Delivery Location:" value={data.delivery_type || data.delivery_by || '—'} />
-              <InfoRow label="GST:" value={data.is_tax_inclusive ? 'Inclusive' : 'Extra'} />
+              <InfoRow label="GST:" value={taxLabel} />
             </div>
           </div>
 
@@ -455,7 +462,7 @@ export default function QuotationTemplate({ data, wrapClass = 'qp-screen' }) {
               {hasAnyDiscount && <th className="ta-c">Disc</th>}
               <th className="ta-r">Rate (₹)</th>
               <th className="ta-c">GST Tax</th>
-              <th className="ta-r" style={{ whiteSpace: 'normal' }}>Amount (₹)<div className="qp-th-sub">{data.is_tax_inclusive ? '(Tax Incl.)' : '(Tax Extra)'}</div></th>
+              <th className="ta-r" style={{ whiteSpace: 'normal' }}>Amount (₹)<div className="qp-th-sub">{taxLabel === 'Mixed' ? '(Mixed)' : taxLabel === 'Inclusive' ? '(Tax Incl.)' : '(Tax Extra)'}</div></th>
             </tr>
           </thead>
           <tbody>
