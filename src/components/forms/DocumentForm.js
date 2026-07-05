@@ -313,15 +313,13 @@ function ItemRow({ row, items, onChange, isWholesaler, isTaxInclusive }) {
             type="number" min={row._floor_price > 0 ? row._floor_price : 0} step="0.01"
             value={row.rate === "" ? "" : row.rate}
             placeholder="Enter rate"
-            onChange={(e) => {
-              const val = Number(e.target.value);
-              if (row._floor_price > 0 && val < row._floor_price) {
-                onChange({ rate: row._floor_price });
-                return;
-              }
-              onChange({ rate: e.target.value });
-            }}
+            onChange={(e) => onChange({ rate: e.target.value })}
             onBlur={(e) => {
+              // Enforced only on blur (not every keystroke) — otherwise typing a new,
+              // higher value is impossible: every intermediate digit while typing (or
+              // clearing the field first) reads as "below floor" and gets snapped back
+              // before you can finish typing. Reducing below the floor is still blocked,
+              // just once you've finished editing rather than mid-keystroke.
               const val = Number(e.target.value);
               if (row._floor_price > 0 && (isNaN(val) || val < row._floor_price)) {
                 onChange({ rate: row._floor_price });
