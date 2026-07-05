@@ -65,6 +65,7 @@ export const defaultForm = () => ({
   validity_days: 15,
   delivery_by: "",
   delivery_type: "",
+  is_tax_inclusive: false,
   booking_at: "",
   goods_sent_by: "",
   transport_payment_by: "",
@@ -179,7 +180,7 @@ function CustomerSearchField({ label, value, onSelect, onClear, placeholder }) {
 }
 
 // ── ItemRow — the single persistent item-entry form ───────────────────────────
-function ItemRow({ row, items, onChange, isWholesaler }) {
+function ItemRow({ row, items, onChange, isWholesaler, isTaxInclusive }) {
   const [search, setSearch] = useState(
     row.sku && row.item_name ? `${row.sku}  ·  ${row.item_name}` : (row.item_name || "")
   );
@@ -225,8 +226,10 @@ function ItemRow({ row, items, onChange, isWholesaler }) {
   const disc      = row.discount_type === "percent"
     ? (base * Number(row.discount_value)) / 100
     : Number(row.discount_value);
-  const amount    = Math.max(0, base - disc);
-  const gstAmount = amount * Number(row.gst_percent || 0) / 100;
+  const gross     = Math.max(0, base - disc);
+  const gstPct    = Number(row.gst_percent || 0);
+  const amount    = (isTaxInclusive && gstPct > 0) ? gross / (1 + gstPct / 100) : gross;
+  const gstAmount = (isTaxInclusive && gstPct > 0) ? gross - amount : amount * gstPct / 100;
 
   const discLabel = Number(row.discount_value) > 0
     ? (row.discount_type === "percent"
@@ -411,9 +414,13 @@ function AddedItemsList({ rows, calcAmount, calcGst, editingIndex, onEdit, onRem
       {rows.map((row, i) => {
         const amount = calcAmount(row);
         const gst = calcGst(row);
+        const discVal = Number(row.discount_value) || 0;
+        const discLabel = discVal > 0
+          ? (row.discount_type === "percent" ? `${discVal}% off` : `₹${discVal.toLocaleString("en-IN")} off`)
+          : "";
         return (
           <div key={i} style={{
-            display: "flex", alignItems: "center", gap: 10, padding: "10px 12px",
+            display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 12px",
             borderBottom: i < rows.length - 1 ? `1px solid ${theme.border}` : "none",
             background: editingIndex === i ? theme.primaryLight : "#fff",
           }}>
@@ -427,17 +434,24 @@ function AddedItemsList({ rows, calcAmount, calcGst, editingIndex, onEdit, onRem
               </div>
               <div style={{ fontSize: 11, color: theme.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {row.qty} × ₹{Number(row.rate || 0).toLocaleString("en-IN")}{row.sku ? ` · ${row.sku}` : ""}
+                {discLabel && <span style={{ color: "#ca8a04", fontWeight: 600 }}> · {discLabel}</span>}
+                {row.gst_percent > 0 && ` · GST ${row.gst_percent}%`}
               </div>
+              {row.instruction && (
+                <div style={{ fontSize: 11, color: theme.textMuted, fontStyle: "italic", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  “{row.instruction}”
+                </div>
+              )}
             </div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: theme.text, flexShrink: 0, textAlign: "right", minWidth: 84 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: theme.text, flexShrink: 0, textAlign: "right", minWidth: 84, marginTop: 2 }}>
               ₹{(amount + gst).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
             </div>
             <button type="button" onClick={() => onEdit(i)} title="Edit item" aria-label="Edit item"
-              style={{ flexShrink: 0, width: 28, height: 28, borderRadius: 6, background: "none", border: "none", cursor: "pointer", color: theme.textMuted, fontSize: 15 }}>
+              style={{ flexShrink: 0, width: 28, height: 28, borderRadius: 6, background: "none", border: "none", cursor: "pointer", color: theme.textMuted, fontSize: 15, marginTop: 2 }}>
               ✎
             </button>
             <button type="button" onClick={() => onRemove(i)} title="Remove item" aria-label="Remove item"
-              style={{ flexShrink: 0, width: 28, height: 28, borderRadius: "50%", background: "#fee2e2", border: "none", cursor: "pointer", color: "#dc2626", fontSize: 13, fontWeight: 700 }}>
+              style={{ flexShrink: 0, width: 28, height: 28, borderRadius: "50%", background: "#fee2e2", border: "none", cursor: "pointer", color: "#dc2626", fontSize: 13, fontWeight: 700, marginTop: 2 }}>
               ✕
             </button>
           </div>
@@ -537,14 +551,28 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
   };
 
   // Totals
-  const calcAmount = (row) => {
+  // Extra Tax (default): row.rate is pre-tax, GST added on top.
+  // Inclusive Tax: row.rate already includes GST, extracted back out here.
+  // calcAmount always returns the taxable (GST-exclusive) value; calcGst
+  // always returns the tax portion — added on top or carved out depending
+  // on form.is_tax_inclusive, mirroring the backend's mapItems/normalizeItem.
+  const grossAfterDiscount = (row) => {
     const base = Number(row.qty) * Number(row.rate || 0);
     const disc = row.discount_type === "percent"
       ? (base * Number(row.discount_value)) / 100
       : Number(row.discount_value);
     return Math.max(0, base - disc);
   };
-  const calcGst = (row) => calcAmount(row) * Number(row.gst_percent || 0) / 100;
+  const calcAmount = (row) => {
+    const gross = grossAfterDiscount(row);
+    const gstPct = Number(row.gst_percent || 0);
+    return (form.is_tax_inclusive && gstPct > 0) ? gross / (1 + gstPct / 100) : gross;
+  };
+  const calcGst = (row) => {
+    const gross = grossAfterDiscount(row);
+    const gstPct = Number(row.gst_percent || 0);
+    return (form.is_tax_inclusive && gstPct > 0) ? gross - calcAmount(row) : calcAmount(row) * gstPct / 100;
+  };
 
   const subTotal = rows.reduce((s, r) => s + calcAmount(r), 0);
   const gstByRate = rows.reduce((acc, r) => {
@@ -577,6 +605,7 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
       bill_to_id:    billTo.id,
       ship_to_id:    shipSameAsBill ? billTo.id : (shipTo?.id || billTo.id),
       is_wholesaler: !!billTo.isWholesaler,
+      is_tax_inclusive: !!form.is_tax_inclusive,
       status:            submitStatus,
       salesman_id:       form.salesman_id || null,
       validity_days:     Number(form.validity_days) || 15,
@@ -740,9 +769,37 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
 
         {/* ── Items ── */}
         {sectionDivider("Items")}
+
+        <div style={{ marginBottom: 14 }}>
+          <label style={lbl}>Tax</label>
+          <div style={{ display: "flex", borderRadius: 8, border: `1.5px solid ${theme.border}`, overflow: "hidden", width: "fit-content" }}>
+            {[
+              { key: false, label: "Extra Tax" },
+              { key: true, label: "Inclusive Tax" },
+            ].map(({ key, label }) => (
+              <button key={label} type="button"
+                onClick={() => setForm(f => ({ ...f, is_tax_inclusive: key }))}
+                style={{
+                  padding: "8px 16px", border: "none", cursor: "pointer",
+                  background: !!form.is_tax_inclusive === key ? theme.primary : "#fff",
+                  color: !!form.is_tax_inclusive === key ? "#fff" : theme.textMuted,
+                  fontWeight: 700, fontSize: 13, transition: "background 0.15s",
+                }}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 4 }}>
+            {form.is_tax_inclusive
+              ? "Item rate already includes GST — tax is extracted, not added on top."
+              : "Item rate is pre-tax — GST is added on top of the rate."}
+          </div>
+        </div>
+
         <ItemRow key={formResetKey} row={draftRow} items={items}
           onChange={updateDraft}
           isWholesaler={!!billTo?.isWholesaler}
+          isTaxInclusive={!!form.is_tax_inclusive}
         />
         <button type="button" onClick={handleAddItem}
           style={{ width: "100%", padding: "12px", borderRadius: 8, background: theme.primaryLight, color: theme.primary, border: `1.5px dashed ${theme.primary}`, cursor: "pointer", fontWeight: 700, fontSize: 15, marginBottom: editingIndex !== null ? 4 : 16 }}>

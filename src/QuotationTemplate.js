@@ -424,6 +424,7 @@ export default function QuotationTemplate({ data, wrapClass = 'qp-screen' }) {
               <hr className="qp-info-rule" />
               <InfoRow label="Payment Terms:" value="Advance 70% & Before Dispatch 30%" />
               <InfoRow label="Delivery Location:" value={data.delivery_type || data.delivery_by || '—'} />
+              <InfoRow label="GST:" value={data.is_tax_inclusive ? 'Inclusive' : 'Extra'} />
             </div>
           </div>
 
@@ -454,7 +455,7 @@ export default function QuotationTemplate({ data, wrapClass = 'qp-screen' }) {
               {hasAnyDiscount && <th className="ta-c">Disc</th>}
               <th className="ta-r">Rate (₹)</th>
               <th className="ta-c">GST Tax</th>
-              <th className="ta-r" style={{ whiteSpace: 'normal' }}>Amount (₹)<div className="qp-th-sub">(Tax Extra)</div></th>
+              <th className="ta-r" style={{ whiteSpace: 'normal' }}>Amount (₹)<div className="qp-th-sub">{data.is_tax_inclusive ? '(Tax Incl.)' : '(Tax Extra)'}</div></th>
             </tr>
           </thead>
           <tbody>

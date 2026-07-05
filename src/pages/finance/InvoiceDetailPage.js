@@ -184,9 +184,11 @@ export default function InvoiceDetailPage() {
           <div style={{ fontWeight: 700, fontSize: 14, color: '#374151', marginBottom: 4 }}>Amount Breakdown</div>
           <Row label="Total Amount"    value={fmt(inv.total_amount)} bold />
           <Row label="GST Type"        value={inv.gst_type || 'none'} />
-          {Number(inv.cgst) > 0 && <Row label="CGST (9%)"    value={fmt(inv.cgst)} />}
-          {Number(inv.sgst) > 0 && <Row label="SGST (9%)"    value={fmt(inv.sgst)} />}
-          {Number(inv.igst) > 0 && <Row label="IGST (18%)"   value={fmt(inv.igst)} />}
+          <Row label="GST"             value={inv.is_tax_inclusive ? 'Inclusive' : 'Extra'} />
+          {/* Rates vary per item (5/12/18/28%) — no single % shown here, see gstTotal for the real sum */}
+          {Number(inv.cgst) > 0 && <Row label="CGST"    value={fmt(inv.cgst)} />}
+          {Number(inv.sgst) > 0 && <Row label="SGST"    value={fmt(inv.sgst)} />}
+          {Number(inv.igst) > 0 && <Row label="IGST"    value={fmt(inv.igst)} />}
           {gstTotal > 0 && <Row label="Total GST"             value={fmt(gstTotal)} bold />}
         </div>
 

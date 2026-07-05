@@ -243,7 +243,7 @@ export default function OrderTemplate({ data, wrapClass = 'qp-screen' }) {
               {hasAnyDiscount && <th className="ta-c">Disc</th>}
               <th className="ta-r">Rate (₹)</th>
               <th className="ta-c">GST Tax</th>
-              <th className="ta-r" style={{ whiteSpace: 'normal' }}>Amount (₹)<div className="qp-th-sub">(Tax Extra)</div></th>
+              <th className="ta-r" style={{ whiteSpace: 'normal' }}>Amount (₹)<div className="qp-th-sub">{data.is_tax_inclusive ? '(Tax Incl.)' : '(Tax Extra)'}</div></th>
             </tr>
           </thead>
           <tbody>

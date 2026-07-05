@@ -18,6 +18,7 @@ async function loadOrder(id) {
       validity_days:        data.validity_days         || 15,
       delivery_by:          data.delivery_by           || "",
       delivery_type:           data.delivery_type            || "",
+      is_tax_inclusive:        !!data.is_tax_inclusive,
       booking_at:              data.booking_at               || "",
       goods_sent_by:           data.goods_sent_by            || "",
       transport_payment_by:    data.transport_payment_by     || "",
