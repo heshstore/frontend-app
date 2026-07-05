@@ -42,15 +42,26 @@ const lbl = {
   textTransform: "uppercase",
   letterSpacing: "0.04em",
 };
-const sectionDivider = (title) => (
-  <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "22px 0 12px" }}>
-    <div style={{ flex: 1, height: 1, background: theme.border }} />
-    <span style={{ fontSize: 11, fontWeight: 700, color: theme.primary, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-      {title}
-    </span>
-    <div style={{ flex: 1, height: 1, background: theme.border }} />
-  </div>
-);
+// Color-codes each section so they're easy to tell apart at a glance.
+const SECTION_COLORS = {
+  Customer: theme.primary,
+  Items: theme.success,
+  "Extra Charges": "#b45309",
+  "Delivery & Payment": "#7c3aed",
+  Summary: theme.textMuted,
+};
+const sectionDivider = (title) => {
+  const color = SECTION_COLORS[title] || theme.primary;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "22px 0 12px" }}>
+      <div style={{ flex: 1, height: 1, background: theme.border }} />
+      <span style={{ fontSize: 11, fontWeight: 700, color, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+        {title}
+      </span>
+      <div style={{ flex: 1, height: 1, background: theme.border }} />
+    </div>
+  );
+};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 export const emptyRow = () => ({
@@ -377,7 +388,7 @@ function ItemRow({ row, items, onChange, isWholesaler, isTaxInclusive }) {
           <span>{row.gst_percent > 0 ? `${row.gst_percent}%` : "—"}</span>
           {amount > 0 && row.gst_percent > 0 && (
             <span style={{ fontSize: 13, color: theme.primary, fontWeight: 600 }}>
-              + ₹{gstAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+              + ₹{gstAmount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           )}
         </div>
@@ -396,7 +407,7 @@ function ItemRow({ row, items, onChange, isWholesaler, isTaxInclusive }) {
           {row.qty} × ₹{row.rate || 0} {discLabel}{row.gst_percent > 0 ? ` + GST ${row.gst_percent}%` : ""}
         </span>
         <span style={{ fontSize: 16, fontWeight: 700, color: theme.primary }}>
-          ₹{(amount + gstAmount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+          ₹{(amount + gstAmount).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </span>
       </div>
     </div>
@@ -446,7 +457,7 @@ function AddedItemsList({ rows, calcAmount, editingIndex, onEdit, onRemove }) {
               )}
             </div>
             <div style={{ fontSize: 14, fontWeight: 700, color: theme.text, flexShrink: 0, textAlign: "right", minWidth: 84, marginTop: 2 }}>
-              ₹{amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+              ₹{amount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               <div style={{ fontSize: 10, fontWeight: 400, color: theme.textMuted }}>excl. GST</div>
             </div>
             <button type="button" onClick={() => onEdit(i)} title="Edit item" aria-label="Edit item"
@@ -482,10 +493,10 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
 
   const [loading, setLoading]       = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [isDesktop, setIsDesktop]   = useState(window.innerWidth >= 900);
+  const [isDesktop, setIsDesktop]   = useState(window.innerWidth >= 1024);
 
   useEffect(() => {
-    const h = () => setIsDesktop(window.innerWidth >= 900);
+    const h = () => setIsDesktop(window.innerWidth >= 1024);
     window.addEventListener('resize', h);
     return () => window.removeEventListener('resize', h);
   }, []);
@@ -701,23 +712,23 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
       <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 12 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6, color: theme.textMuted }}>
           <span>Subtotal</span>
-          <span>₹{subTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+          <span>₹{subTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
         </div>
         {Object.keys(gstByRate).sort((a, b) => Number(a) - Number(b)).map(rate => (
           <div key={rate} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 5, color: '#16a34a' }}>
             <span>GST @{rate}%</span>
-            <span>+ ₹{gstByRate[rate].toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+            <span>+ ₹{gstByRate[rate].toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
         ))}
         {extraCharges > 0 && (
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 5, color: theme.textMuted }}>
             <span>Extra charges</span>
-            <span>₹{extraCharges.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+            <span>₹{extraCharges.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
         )}
         <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 17, borderTop: `1px solid ${theme.border}`, paddingTop: 10, marginTop: 6 }}>
           <span>Grand total</span>
-          <span style={{ color: theme.primary }}>₹{grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+          <span style={{ color: theme.primary }}>₹{grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
         </div>
       </div>
     </div>
@@ -726,7 +737,9 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
   return (
     <PageLayout title={pageTitle}>
       <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
-      <form onSubmit={handleSubmit} style={{ flex: 1, minWidth: 0, paddingBottom: 100 }}>
+      {/* 80/20 split on desktop (form / sticky summary); single column below the
+          1024px breakpoint — see isDesktop above. */}
+      <form onSubmit={handleSubmit} style={{ flex: isDesktop ? '0 1 80%' : 1, minWidth: 0, paddingBottom: 100 }}>
 
         {/* ── Customer ── */}
         {sectionDivider("Customer")}
@@ -881,12 +894,10 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
               </select>
             </div>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 8 }}>
-            <div>
-              <label style={lbl}>Delivery Location</label>
-              <input type="text" placeholder="e.g. Chennai" value={form.delivery_type || ""}
-                onChange={e => setForm(f => ({ ...f, delivery_type: e.target.value }))} style={inp} />
-            </div>
+          <div style={{ marginBottom: 8 }}>
+            <label style={lbl}>Delivery Location</label>
+            <input type="text" placeholder="e.g. Chennai" value={form.delivery_type || ""}
+              onChange={e => setForm(f => ({ ...f, delivery_type: e.target.value }))} style={inp} />
           </div>
           <div>
             <label style={lbl}>Delivery Instruction</label>
@@ -896,47 +907,18 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
           </div>
         </div>
 
-        {/* ── Summary (mobile only — desktop uses side panel) ── */}
-        {!isDesktop && sectionDivider("Summary")}
-        {!isDesktop && <div style={{ background: theme.surface, borderRadius: 10, padding: 16, marginBottom: 16 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, fontSize: 14, color: theme.textMuted }}>
-            <span>Sub Total (before GST)</span>
-            <span>₹{subTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
-          </div>
-
-          {Object.keys(gstByRate).sort((a, b) => Number(a) - Number(b)).map(rate => (
-            <div key={rate} style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 13 }}>
-              <span style={{ color: theme.textMuted }}>
-                GST @{rate}%
-                <span style={{ fontSize: 11, color: "#aaa", marginLeft: 6 }}>
-                  on ₹{(gstByRate[rate] / (Number(rate) / 100)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                </span>
-              </span>
-              <span style={{ color: "#16a34a", fontWeight: 600 }}>
-                + ₹{gstByRate[rate].toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-              </span>
+        {/* ── Summary (mobile only — desktop uses the sticky side panel) ── */}
+        {/* Same SummaryPanel component as desktop — was previously a separate,
+            hand-duplicated block here, which is exactly how it drifted out of
+            sync (missing maximumFractionDigits, no color-coding, etc). */}
+        {!isDesktop && (
+          <>
+            {sectionDivider("Summary")}
+            <div style={{ marginBottom: 16 }}>
+              <SummaryPanel />
             </div>
-          ))}
-
-          {totalGst > 0 && (
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, fontSize: 14, borderTop: `1px dashed ${theme.border}`, paddingTop: 6 }}>
-              <span style={{ color: theme.textMuted }}>Total GST</span>
-              <span style={{ color: "#16a34a", fontWeight: 700 }}>₹{totalGst.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
-            </div>
-          )}
-
-          {extraCharges > 0 && (
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, fontSize: 14, color: theme.textMuted }}>
-              <span>Extra Charges</span>
-              <span>₹{extraCharges.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
-            </div>
-          )}
-
-          <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: 18, borderTop: `1px solid ${theme.border}`, paddingTop: 10, marginTop: 4 }}>
-            <span>Grand Total</span>
-            <span style={{ color: theme.primary }}>₹{grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
-          </div>
-        </div>}
+          </>
+        )}
 
 
         {/* ── Submit ── */}
@@ -964,7 +946,7 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
 
       {/* Sticky summary panel — desktop only */}
       {isDesktop && (
-        <div style={{ width: 268, flexShrink: 0, position: 'sticky', top: 20 }}>
+        <div style={{ flex: '0 1 20%', minWidth: 240, maxWidth: 320, position: 'sticky', top: 20 }}>
           <SummaryPanel />
         </div>
       )}

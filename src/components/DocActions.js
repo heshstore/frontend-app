@@ -28,7 +28,7 @@ const fmtDate = (iso) => {
 };
 
 const fmtAmt = (n) =>
-  `₹${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+  `₹${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function DocActions({
   type, id, docNo, docDate, amount,
