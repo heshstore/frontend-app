@@ -100,20 +100,24 @@ export default function DocumentActionBar({
     const refNo   = docNo || `#${id}`;
     const dateStr = fmtDate(docDate);
     const amtStr  = amount ? fmtAmt(amount) : '';
-    const docLabel = type === 'invoice' ? 'Invoice' : type === 'order' ? 'Order Confirmation' : 'Quotation';
+    const docLabel = type === 'invoice' ? 'Invoice' : type === 'order' ? 'Order Form' : 'Quotation';
     const refLabel = type === 'invoice' ? 'Invoice No' : type === 'order' ? 'Order No' : 'Quotation No';
     const lines   = [
       `Hello ${name},`,
       '',
-      `Please find your ${docLabel} from *${company.name}*.`,
+      `Please find your *${docLabel}* details below:`,
       '',
       `*${refLabel}:* ${refNo}`,
       dateStr ? `*Date:* ${dateStr}`   : null,
       amtStr  ? `*Amount:* ${amtStr}` : null,
-      publicPdfUrl ? `\n*View PDF:* ${publicPdfUrl}` : null,
+      publicPdfUrl ? '' : null,
+      publicPdfUrl ? `*View / Download ${docLabel}:*` : null,
+      publicPdfUrl ? publicPdfUrl : null,
+      '',
+      'Thank you for your business.',
       '',
       'Regards,',
-      company.name,
+      `${company.shortName} Team`,
     ].filter((l) => l !== null);
     const waPhone = normalizePhoneForWhatsApp(customerMobile);
     const url     = waPhone

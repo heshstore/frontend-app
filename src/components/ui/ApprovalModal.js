@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { theme } from '../../theme';
+import { toast } from '../../utils/toast';
+
+const PAYMENT_MODES = ['Bank Hesh', 'Bank', 'Cash'];
+const todayStr = () => new Date().toISOString().slice(0, 10);
 
 const inp = {
   width: '100%',
@@ -29,6 +33,14 @@ export default function ApprovalModal({ order, onConfirm, onClose, initialValues
   const [processWithoutAdvance, setProcessWithoutAdvance] = useState(
     initialValues?.process_without_advance ?? false,
   );
+  const [paymentDate, setPaymentDate] = useState(
+    initialValues?.advance_payment_date
+      ? String(initialValues.advance_payment_date).slice(0, 10)
+      : todayStr(),
+  );
+  const [paymentMode, setPaymentMode] = useState(
+    initialValues?.advance_payment_mode ?? '',
+  );
   const [notes,                setNotes]                = useState(
     initialValues?.remarks ?? '',
   );
@@ -51,11 +63,18 @@ export default function ApprovalModal({ order, onConfirm, onClose, initialValues
   }, [onClose]);
 
   const handleConfirm = async () => {
+    const advance = Number(advanceAmount) || 0;
+    if (advance > 0 && (!paymentDate || !paymentMode)) {
+      toast.error('Payment date and mode of payment are required for the advance received');
+      return;
+    }
     setSubmitting(true);
     try {
       await onConfirm({
-        advance_amount:         Number(advanceAmount) || 0,
+        advance_amount:         advance,
         process_without_advance: processWithoutAdvance,
+        advance_payment_date:   advance > 0 ? paymentDate : null,
+        advance_payment_mode:   advance > 0 ? paymentMode : null,
         remarks: notes.trim() || null,
       });
     } finally {
@@ -90,13 +109,18 @@ export default function ApprovalModal({ order, onConfirm, onClose, initialValues
             <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 2 }}>
               {order.order_no || order.order_number || `Order #${order.id}`} · ₹{total.toLocaleString('en-IN')}
             </div>
+            {order.payment_terms && (
+              <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 2 }}>
+                Payment Terms: <strong style={{ color: '#111827' }}>{order.payment_terms}</strong>
+              </div>
+            )}
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: theme.textMuted, lineHeight: 1 }}>×</button>
         </div>
 
         {/* Body */}
         <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {/* Advance amount */}
+          {/* Advance amount — mutually exclusive with "Process without advance payment" below */}
           <div>
             <label style={lbl}>Advance Received (₹)</label>
             <input
@@ -105,8 +129,12 @@ export default function ApprovalModal({ order, onConfirm, onClose, initialValues
               step="0.01"
               placeholder="0"
               value={advanceAmount}
-              onChange={(e) => setAdvanceAmount(e.target.value)}
-              style={inp}
+              onChange={(e) => {
+                setAdvanceAmount(e.target.value);
+                if (Number(e.target.value) > 0) setProcessWithoutAdvance(false);
+              }}
+              disabled={processWithoutAdvance}
+              style={{ ...inp, background: processWithoutAdvance ? '#f3f4f6' : '#fff', color: processWithoutAdvance ? theme.textMuted : undefined }}
               autoFocus
             />
             {advance > 0 && (
@@ -116,15 +144,37 @@ export default function ApprovalModal({ order, onConfirm, onClose, initialValues
             )}
           </div>
 
-          {/* Process without advance */}
-          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}>
+          {/* Date + Mode of Payment — only relevant once an advance is actually being recorded */}
+          {advance > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div>
+                <label style={lbl}>Date</label>
+                <input
+                  type="date"
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                  style={inp}
+                />
+              </div>
+              <div>
+                <label style={lbl}>Mode of Payment</label>
+                <select value={paymentMode} onChange={(e) => setPaymentMode(e.target.value)} style={inp}>
+                  <option value="">— Select —</option>
+                  {PAYMENT_MODES.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </div>
+            </div>
+          )}
+
+          {/* Process without advance — mutually exclusive with Advance Received above */}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: advance > 0 ? 'not-allowed' : 'pointer', userSelect: 'none', opacity: advance > 0 ? 0.5 : 1 }}>
             <div
-              onClick={() => setProcessWithoutAdvance(v => !v)}
+              onClick={() => { if (advance > 0) return; setProcessWithoutAdvance(v => !v); }}
               style={{
                 width: 20, height: 20, borderRadius: 5, border: `2px solid ${processWithoutAdvance ? theme.primary : theme.border}`,
                 background: processWithoutAdvance ? theme.primary : '#fff',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                flexShrink: 0, transition: 'all 0.15s', cursor: 'pointer',
+                flexShrink: 0, transition: 'all 0.15s', cursor: advance > 0 ? 'not-allowed' : 'pointer',
               }}
             >
               {processWithoutAdvance && <span style={{ color: '#fff', fontSize: 12, fontWeight: 700 }}>✓</span>}

@@ -12,7 +12,7 @@
  */
 import React from 'react';
 import { company, bank } from './config/company';
-import { inr, fmtDate, resolveImageUrl } from './utils/docFormatters';
+import { inr, fmtDate, resolveImageUrl, splitAddressBlock } from './utils/docFormatters';
 
 const BLUE = '#016bb2';
 
@@ -119,13 +119,13 @@ const CSS = `
 .qp-info-body { padding: 6pt 8pt; }
 .qp-info-name { font-size: 9.5pt; font-weight: 700; color: #0f172a; margin-bottom: 5pt; }
 .qp-info-rule { border: none; border-top: 0.4pt solid #cbd5e1; margin: 5pt 0; }
-.qp-info-addr { font-size: 8pt; color: #374151; line-height: 1.3; }
-.qp-info-line { font-size: 8pt; color: #374151; margin-bottom: 3pt; }
+.qp-info-addr { font-size: 8pt; color: #374151; line-height: 1.3; overflow-wrap: break-word; }
+.qp-info-line { font-size: 8pt; color: #374151; margin-bottom: 3pt; overflow-wrap: break-word; }
 .qp-info-line strong { color: #0f172a; }
 .qp-info-row { display: flex; gap: 3pt; font-size: 8pt; margin-bottom: 5pt; }
 .qp-info-row:last-child { margin-bottom: 0; }
 .qp-info-row-label { font-weight: 700; color: #0f172a; white-space: nowrap; }
-.qp-info-row-val   { color: #374151; }
+.qp-info-row-val   { color: #374151; min-width: 0; overflow-wrap: break-word; }
 
 /* ── Items table (10 cols) ──────────────────────────────────────────────── */
 .qp-table {
@@ -202,7 +202,7 @@ const CSS = `
 .qp-bd-heading { font-size: 9.5pt; font-weight: 700; color: ${BLUE}; margin-bottom: 5pt; }
 .qp-bd-row { display: flex; gap: 4pt; font-size: 8pt; margin-bottom: 3pt; }
 .qp-bd-key { font-weight: 700; color: #0f172a; width: 112pt; flex: 0 0 auto; }
-.qp-bd-val { color: #374151; }
+.qp-bd-val { color: #374151; min-width: 0; overflow-wrap: break-word; }
 .qp-bd-rule { border: none; border-top: 0.5pt solid #cbd5e1; margin: 10pt 0 8pt; }
 
 .qp-divider { flex: 0 0 auto; align-self: stretch; width: 0.75pt; background: #999; }
@@ -260,23 +260,33 @@ function InfoRow({ label, value }) {
   );
 }
 
-function PartyBlock({ name, address, phone, gstin }) {
+function PartyBlock({ name, address, phone, phone2, email, gstin }) {
+  const { street, cityLine, stateLine } = splitAddressBlock(address);
   return (
     <div className="qp-info-body">
-      <div className="qp-info-name">{name || '—'}</div>
+      <div className="qp-info-name">{(name || '—').toUpperCase()}</div>
       <hr className="qp-info-rule" />
-      <div className="qp-info-addr">{address || '—'}</div>
-      {phone && (
-        <div className="qp-info-line" style={{ marginTop: 5 }}>
-          <strong>Mobile:</strong> {phone}
+      {street && <div className="qp-info-addr">{street}</div>}
+      {cityLine && <div className="qp-info-addr">{cityLine}</div>}
+      {stateLine && <div className="qp-info-addr" style={{ marginBottom: 5 }}>{stateLine}</div>}
+      {!street && !cityLine && !stateLine && <div className="qp-info-addr" style={{ marginBottom: 5 }}>—</div>}
+      {email && (
+        <div className="qp-info-line" style={{ marginTop: 3 }}>
+          <strong>Email:</strong> {email}
         </div>
       )}
-      {gstin && (
-        <>
-          <hr className="qp-info-rule" />
-          <div className="qp-info-line"><strong>GSTIN:</strong> {gstin}</div>
-        </>
+      {phone && (
+        <div className="qp-info-line" style={{ marginTop: 3 }}>
+          <strong>Mobile 1:</strong> <strong>{phone}</strong>
+        </div>
       )}
+      {phone2 && (
+        <div className="qp-info-line" style={{ marginTop: 3 }}>
+          <strong>Mobile 2:</strong> <strong>{phone2}</strong>
+        </div>
+      )}
+      <hr className="qp-info-rule" />
+      <div className="qp-info-line"><strong>GSTIN:</strong> <strong>{gstin || 'URD'}</strong></div>
     </div>
   );
 }
@@ -347,6 +357,8 @@ export default function QuotationTemplate({ data, wrapClass = 'qp-screen' }) {
 
   const custName = data.customer_name || '';
   const phone    = (data.customer_phone || '').replace(/^\+91/, '');
+  const phone2   = (data.customer_phone2 || data.customer_mobile2 || '').replace(/^\+91/, '');
+  const email    = data.customer_email || '';
   const gstin    = data.gst_number || '';
 
   const validity = data.valid_till
@@ -408,7 +420,7 @@ export default function QuotationTemplate({ data, wrapClass = 'qp-screen' }) {
 
           <div className="qp-info-col">
             <div className="qp-info-head">Bill To</div>
-            <PartyBlock name={custName} address={data.billing_address} phone={phone} gstin={gstin} />
+            <PartyBlock name={custName} address={data.billing_address} phone={phone} phone2={phone2} email={email} gstin={gstin} />
           </div>
 
           <div className="qp-info-col">
@@ -417,6 +429,8 @@ export default function QuotationTemplate({ data, wrapClass = 'qp-screen' }) {
               name={custName}
               address={data.shipping_address || data.billing_address}
               phone={phone}
+              phone2={phone2}
+              email={email}
               gstin={gstin}
             />
           </div>
@@ -429,9 +443,19 @@ export default function QuotationTemplate({ data, wrapClass = 'qp-screen' }) {
               <InfoRow label="Salesman:" value={data.salesman_name || data.sales_person || '—'} />
               <InfoRow label="Validity:" value={validity} />
               <hr className="qp-info-rule" />
-              <InfoRow label="Payment Terms:" value="Advance 70% & Before Dispatch 30%" />
-              <InfoRow label="Delivery Location:" value={data.delivery_type || data.delivery_by || '—'} />
-              <InfoRow label="GST:" value={taxLabel} />
+              <InfoRow
+                label="Payment Terms:"
+                value={
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                    <span>{data.payment_terms || '—'}</span>
+                    {data.is_wholesaler && (
+                      <span style={{ fontSize: 9, fontWeight: 700, color: '#000' }}>
+                        Wholesaler
+                      </span>
+                    )}
+                  </div>
+                }
+              />
             </div>
           </div>
 

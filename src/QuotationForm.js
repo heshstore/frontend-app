@@ -3,6 +3,15 @@ import { useSearchParams } from "react-router-dom";
 import { apiFetch } from "./utils/api";
 import DocumentForm from "./components/forms/DocumentForm";
 
+// Maps a document's stored payment_terms string back to the dropdown's own
+// value shape — either one of the fixed option strings, or the "CREDIT"
+// sentinel plus the parsed day count for the Wholesaler/manual-credit case.
+function parsePaymentTerms(str) {
+  const m = /^Credit for (\d+) days$/.exec(str || "");
+  if (m) return { payment_terms: "CREDIT", credit_days: Number(m[1]) };
+  return { payment_terms: str || "", credit_days: 15 };
+}
+
 // ── Quotation-specific data loader ───────────────────────────────────────────
 // Supports sentinel id "_prefill_<customerId>" to prefill customer from CRM lead flow
 async function loadQuotation(id) {
@@ -15,7 +24,7 @@ async function loadQuotation(id) {
     if (!res.ok) return null;
     const c = await res.json();
     return {
-      billTo:         { id: c.id, companyName: c.companyName },
+      billTo:         { id: c.id, companyName: c.companyName, isWholesaler: c.isWholesaler, creditLimit: c.creditLimit, credit_days: c.credit_days },
       shipTo:         { id: c.id, companyName: c.companyName },
       shipSameAsBill: true,
       form: {
@@ -37,8 +46,15 @@ async function loadQuotation(id) {
   const res  = await apiFetch(`/quotations/${id}`);
   const data = await res.json();
 
+  let customer = null;
+  if (data.customer_id) {
+    const cRes = await apiFetch(`/customers/${data.customer_id}`);
+    if (cRes.ok) customer = await cRes.json();
+  }
+  const paymentTerms = parsePaymentTerms(data.payment_terms);
+
   return {
-    billTo:         { id: data.customer_id,  companyName: data.customer_name },
+    billTo:         { id: data.customer_id,  companyName: data.customer_name, isWholesaler: customer?.isWholesaler, creditLimit: customer?.creditLimit, credit_days: customer?.credit_days },
     shipTo:         { id: data.ship_to_id || data.customer_id, companyName: data.customer_name },
     shipSameAsBill: data.bill_to_id === data.ship_to_id,
     form: {
@@ -50,6 +66,8 @@ async function loadQuotation(id) {
       transport_payment_by:  data.transport_payment_by   || "",
       delivery_type:         data.delivery_type          || "",
       payment_type:          data.payment_type           || "Credit",
+      payment_terms:         paymentTerms.payment_terms,
+      credit_days:           paymentTerms.credit_days,
       delivery_instructions: data.delivery_instructions  || "",
       charges_packing:      data.charges_packing      || "",
       charges_cartage:      data.charges_cartage      || "",

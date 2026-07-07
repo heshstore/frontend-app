@@ -5,6 +5,7 @@
  * Set in frontend/.env or frontend/.env.production:
  *
  *   REACT_APP_COMPANY_NAME=Hesh Opto Lab Private Limited
+ *   REACT_APP_COMPANY_SHORT_NAME=Hesh
  *   REACT_APP_COMPANY_ADDRESS=123 Main Street, Chennai, Tamil Nadu - 600001
  *   REACT_APP_COMPANY_PHONE=+91 98765 43210
  *   REACT_APP_COMPANY_EMAIL=info@heshstore.in
@@ -30,6 +31,7 @@ const e = (key, fallback = '') =>
 // even when REACT_APP_* env vars aren't wired up in a given environment.
 export const company = {
   name:         e('COMPANY_NAME',    'Hesh Opto Lab Private Limited'),
+  shortName:    e('COMPANY_SHORT_NAME', 'Hesh'),
   state:        e('COMPANY_STATE',   'Tamil Nadu'),
   address:      e('COMPANY_ADDRESS', 'No. 207 / 208 / 209, Sri Selva Vinayagar Nagar, Alinjivakkam, Redhills, Chennai, Tamil Nadu, 600052'),
   phone:        e('COMPANY_PHONE',   '7010366206'),

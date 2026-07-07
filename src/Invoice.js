@@ -4,6 +4,19 @@ import { apiFetch } from "./utils/api";
 import { toast } from "./utils/toast";
 import DocumentOwnershipPanel from "./components/ownership/DocumentOwnershipPanel";
 import { formatPersonLine, normalizeOwnership } from "./utils/documentOwnership";
+import { splitAddressBlock } from "./utils/docFormatters";
+
+function PartyAddressLines({ address }) {
+  const { street, cityLine, stateLine } = splitAddressBlock(address);
+  if (!street && !cityLine && !stateLine) return <>—<br/></>;
+  return (
+    <>
+      {street && <>{street}<br/></>}
+      {cityLine && <>{cityLine}<br/></>}
+      {stateLine && <>{stateLine}<br/></>}
+    </>
+  );
+}
 
 export default function Invoice() {
   const { id } = useParams();
@@ -116,7 +129,7 @@ const grandTotal =
       <div className="billing">
         <div>
           <b>Billing to:</b><br/>
-          {invoice.customer_name}
+          <b>{(invoice.customer_name || "—").toUpperCase()}</b>
           {invoice.is_wholesaler !== undefined && (
             <span style={{
               marginLeft: 6,
@@ -130,24 +143,35 @@ const grandTotal =
               {invoice.is_wholesaler ? "Wholesaler" : "Retailer"}
             </span>
           )}<br/>
-          {invoice.address}<br/>
-          {invoice.city} - {invoice.pincode}<br/>
-          GST NO.: {invoice.gst_number}<br/>
-          Phone: {invoice.mobile}
+          <PartyAddressLines address={invoice.billing_address} />
+          {invoice.customer_email && <>Email: {invoice.customer_email}<br/></>}
+          Mobile 1: <b>{invoice.mobile}</b><br/>
+          {invoice.mobile2 && <>Mobile 2: <b>{invoice.mobile2}</b><br/></>}
+          GST No.: <b>{invoice.gst_number || "URD"}</b>
         </div>
 
         <div>
           <b>Delivery to:</b><br/>
-          {invoice.customer_name}<br/>
-          {invoice.address}<br/>
-          Phone: {invoice.mobile}
+          <b>{(invoice.customer_name || "—").toUpperCase()}</b><br/>
+          <PartyAddressLines address={invoice.shipping_address || invoice.billing_address} />
+          {invoice.customer_email && <>Email: {invoice.customer_email}<br/></>}
+          Mobile 1: <b>{invoice.mobile}</b><br/>
+          {invoice.mobile2 && <>Mobile 2: <b>{invoice.mobile2}</b><br/></>}
+          GST No.: <b>{invoice.gst_number || "URD"}</b>
         </div>
 
         <div>
           Sales Man: {salesmanLine || "—"}<br/>
           PI No: {invoice.order_number || invoice.order_no}<br/>
           PI Date: {new Date().toLocaleDateString()}<br/>
-          PI Validity: One Month
+          PI Validity: One Month<br/>
+          Payment Terms: {invoice.payment_terms || "—"}
+          {invoice.is_wholesaler && (
+            <>
+              <br/>
+              <b style={{ fontSize: 9, color: "#000" }}>Wholesaler</b>
+            </>
+          )}
         </div>
       </div>
 

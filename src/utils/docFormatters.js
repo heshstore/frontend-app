@@ -23,6 +23,34 @@ export const fmtDate = (d) => {
   });
 };
 
+/**
+ * Customer snapshots store the full address as a single comma-joined blob
+ * built (in this fixed relative order) from street/city/state/pincode/country
+ * — see snapshotCustomer in the backend quotation/orders services — but
+ * empty fields are dropped, so the blob can have anywhere from 1 to 5 parts.
+ * Address/country are the only genuinely optional fields (city/state/pincode
+ * are required Customer columns), so instead of counting from either end we
+ * anchor on the pincode (the one segment that looks like a 4-6 digit number)
+ * and count exactly 2 fields back for state/city — that holds regardless of
+ * whether the street address or country segment is present.
+ */
+export function splitAddressBlock(fullAddress) {
+  const parts = String(fullAddress || '').split(',').map((p) => p.trim()).filter(Boolean);
+  const pincodeIdx = parts.findIndex((p) => /^\d{4,6}$/.test(p));
+  if (pincodeIdx === -1) return { street: parts.join(', '), cityLine: '', stateLine: '' };
+  let pincode = parts[pincodeIdx];
+  if (/^\d{6}$/.test(pincode)) pincode = `${pincode.slice(0, 3)} ${pincode.slice(3)}`;
+  const state = pincodeIdx >= 1 ? parts[pincodeIdx - 1] : '';
+  const city = pincodeIdx >= 2 ? parts[pincodeIdx - 2] : '';
+  const country = parts.slice(pincodeIdx + 1).join(', ');
+  const street = pincodeIdx >= 3 ? parts.slice(0, pincodeIdx - 2).join(', ') : '';
+  return {
+    street,
+    cityLine: [city, pincode].filter(Boolean).join(' - '),
+    stateLine: [state, country].filter(Boolean).join(', '),
+  };
+}
+
 const _ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
   'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen',
   'Seventeen', 'Eighteen', 'Nineteen'];
@@ -162,7 +190,7 @@ export const DOC_TEMPLATE_CSS = `
 .qp-addr-line { font-size: 7.5pt; color: #475569; line-height: 1.55; margin-top: 2pt; word-break: break-word; }
 .qp-meta-row  { display: flex; justify-content: space-between; align-items: baseline; gap: 4pt; font-size: 8pt; padding: 2pt 0; }
 .qp-meta-key  { color: #64748b; font-weight: 600; white-space: nowrap; }
-.qp-meta-val  { font-weight: 600; text-align: right; }
+.qp-meta-val  { font-weight: 600; text-align: right; min-width: 0; overflow-wrap: break-word; }
 
 /* ── Items table (9 cols) ───────────────────────────────────────────────── */
 .qp-table {

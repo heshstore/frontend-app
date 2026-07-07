@@ -10,7 +10,7 @@
  */
 import React from 'react';
 import { company, bank, hasBankDetails } from './config/company';
-import { inr, fmtDate, amountInWords, DOC_TEMPLATE_CSS, resolveImageUrl } from './utils/docFormatters';
+import { inr, fmtDate, amountInWords, DOC_TEMPLATE_CSS, resolveImageUrl, splitAddressBlock } from './utils/docFormatters';
 import DocumentOwnershipPanel from './components/ownership/DocumentOwnershipPanel';
 
 /* ── Order status display ──────────────────────────────────────────────── */
@@ -35,6 +35,23 @@ const STATUS_COLOR = {
   COMPLETED:          { bg: '#dcfce7', text: '#15803d' },
   CANCELLED:          { bg: '#fee2e2', text: '#dc2626' },
 };
+
+function PartyDetails({ name, address, phone, phone2, email, gstin }) {
+  const { street, cityLine, stateLine } = splitAddressBlock(address);
+  return (
+    <>
+      <div className="qp-cust-name">{(name || '—').toUpperCase()}</div>
+      {street && <div className="qp-addr-line">{street}</div>}
+      {cityLine && <div className="qp-addr-line">{cityLine}</div>}
+      {stateLine && <div className="qp-addr-line">{stateLine}</div>}
+      {!street && !cityLine && !stateLine && <div className="qp-addr-line">—</div>}
+      {email && <div className="qp-addr-line">Email: {email}</div>}
+      {phone && <div className="qp-addr-line">Mobile 1: <strong>{phone}</strong></div>}
+      {phone2 && <div className="qp-addr-line">Mobile 2: <strong>{phone2}</strong></div>}
+      <div className="qp-addr-line">GSTIN: <strong>{gstin || 'URD'}</strong></div>
+    </>
+  );
+}
 
 /* ═══════════════════════════════════════════════════════════════════════ */
 export default function OrderTemplate({ data, wrapClass = 'qp-screen' }) {
@@ -86,7 +103,7 @@ export default function OrderTemplate({ data, wrapClass = 'qp-screen' }) {
   const statusLabel = STATUS_LABEL[statusKey] || statusKey;
   const statusColor = STATUS_COLOR[statusKey] || { bg: '#f1f5f9', text: '#475569' };
 
-  const payTerms = company.paymentTerms || '';
+  const payTerms = data.payment_terms || company.paymentTerms || '';
   const hasPayment = paidAmount > 0 || pendingAmt > 0;
 
   return (
@@ -167,36 +184,55 @@ export default function OrderTemplate({ data, wrapClass = 'qp-screen' }) {
           {/* Bill To */}
           <div className="qp-info-col">
             <div className="qp-block-label">Bill To</div>
-            <div className="qp-cust-name">{data.customer_name || '—'}</div>
-            {data.billing_address && (
-              <div className="qp-addr-line">{data.billing_address}</div>
-            )}
-            {data.gst_number && (
-              <div className="qp-addr-line">GSTIN: <strong>{data.gst_number}</strong></div>
-            )}
-            {data.customer_phone && (
-              <div className="qp-addr-line">Ph: {data.customer_phone}</div>
-            )}
+            <PartyDetails
+              name={data.customer_name}
+              address={data.billing_address}
+              phone={data.customer_phone}
+              phone2={data.customer_phone2 || data.customer_mobile2}
+              email={data.customer_email}
+              gstin={data.gst_number}
+            />
           </div>
 
           {/* Delivery To */}
           <div className="qp-info-col">
             <div className="qp-block-label">Delivery To</div>
-            <div className="qp-cust-name">{data.customer_name || '—'}</div>
-            {(data.shipping_address || data.billing_address) && (
-              <div className="qp-addr-line">
-                {data.shipping_address || data.billing_address}
-              </div>
-            )}
+            <PartyDetails
+              name={data.customer_name}
+              address={data.shipping_address || data.billing_address}
+              phone={data.customer_phone}
+              phone2={data.customer_phone2 || data.customer_mobile2}
+              email={data.customer_email}
+              gstin={data.gst_number}
+            />
           </div>
 
-          {/* Delivery Details */}
+          {/* Order Details */}
           <div className="qp-info-col">
-            <div className="qp-block-label">Delivery Details</div>
+            <div className="qp-block-label">Order Details</div>
             {data.due_date && (
               <div className="qp-meta-row">
-                <span className="qp-meta-key">Exp. Dispatch</span>
+                <span className="qp-meta-key">Delivery Date</span>
                 <span className="qp-meta-val">{fmtDate(data.due_date)}</span>
+              </div>
+            )}
+            {data.po_number && (
+              <div className="qp-meta-row">
+                <span className="qp-meta-key">PO Number</span>
+                <span className="qp-meta-val">{data.po_number}</span>
+              </div>
+            )}
+            {/* View-only — the Print page (wrapClass="") is also used to
+                generate the PDF/WhatsApp/Email versions of this document,
+                none of which can usefully carry a link back into the app. */}
+            {data.po_document_url && wrapClass === 'qp-screen' && (
+              <div className="qp-meta-row">
+                <span className="qp-meta-key">PO Document</span>
+                <span className="qp-meta-val">
+                  <a href={resolveImageUrl(data.po_document_url)} target="_blank" rel="noreferrer" style={{ color: '#005fb8' }}>
+                    View PDF
+                  </a>
+                </span>
               </div>
             )}
             {data.booking_at && <div className="qp-meta-row">
@@ -379,6 +415,9 @@ export default function OrderTemplate({ data, wrapClass = 'qp-screen' }) {
           <div className="qp-terms-bar">
             <div className="qp-terms-bar-label">Payment Terms</div>
             <div className="qp-terms-bar-text">{payTerms}</div>
+            {data.is_wholesaler && (
+              <div style={{ fontSize: 9, fontWeight: 700, color: '#000' }}>Wholesaler</div>
+            )}
           </div>
         )}
 

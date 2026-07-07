@@ -34,6 +34,7 @@ export default function EditCustomer() {
     tag:          '',
     creditLimit:  '',
     credit_days:  '',
+    stopPaymentReminder: false,
   });
 
   useEffect(() => {
@@ -67,6 +68,7 @@ export default function EditCustomer() {
           tag:          data.tag          || '',
           creditLimit:  data.creditLimit  ?? '',
           credit_days:  data.credit_days  ?? '',
+          stopPaymentReminder: !!data.stopPaymentReminder,
           mobile1: data.mobile1?.replace(/^\+?\d{0,3}(?=\d{10}$)/, '').slice(-10) || '',
           mobile2: data.mobile2?.replace(/^\+?\d{0,3}(?=\d{10}$)/, '').slice(-10) || '',
           countryCode1: data.mobile1 && data.mobile1.length > 10 ? data.mobile1.slice(0, data.mobile1.length - 10) : '+91',
@@ -99,6 +101,7 @@ export default function EditCustomer() {
           tag:          form.tag,
           creditLimit:  Number(form.creditLimit || 0),
           credit_days:  Number(form.credit_days || 0),
+          stopPaymentReminder: form.stopPaymentReminder,
         }),
       });
       const data = await res.json();
@@ -214,6 +217,16 @@ export default function EditCustomer() {
               </FormField>
               <FormField label="Credit days" help="Payment due in N days">
                 <input name="credit_days" type="number" min="0" value={form.credit_days} onChange={handleChange} style={inputStyle} />
+              </FormField>
+              <FormField label="Payment reminders" colSpan={2}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#374151', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={form.stopPaymentReminder}
+                    onChange={(e) => setForm(prev => ({ ...prev, stopPaymentReminder: e.target.checked }))}
+                  />
+                  Stop Payment Reminder — never send payment reminders to staff or this customer
+                </label>
               </FormField>
             </FormGrid>
           </FormCard>

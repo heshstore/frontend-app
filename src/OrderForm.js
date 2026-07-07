@@ -3,15 +3,32 @@ import { useSearchParams } from "react-router-dom";
 import { apiFetch } from "./utils/api";
 import DocumentForm from "./components/forms/DocumentForm";
 
+// Maps a document's stored payment_terms string back to the dropdown's own
+// value shape — either one of the fixed option strings, or the "CREDIT"
+// sentinel plus the parsed day count for the Wholesaler/manual-credit case.
+function parsePaymentTerms(str) {
+  const m = /^Credit for (\d+) days$/.exec(str || "");
+  if (m) return { payment_terms: "CREDIT", credit_days: Number(m[1]) };
+  return { payment_terms: str || "", credit_days: 15 };
+}
+
 // ── Order-specific data loader ────────────────────────────────────────────────
 // Maps the Order API response shape into the DocumentForm expected shape.
 async function loadOrder(id) {
   const res  = await apiFetch(`/orders/${id}`);
   const data = await res.json();
 
+  const customerId = data.customer?.id || data.customer_id;
+  let customer = null;
+  if (customerId) {
+    const cRes = await apiFetch(`/customers/${customerId}`);
+    if (cRes.ok) customer = await cRes.json();
+  }
+  const paymentTerms = parsePaymentTerms(data.payment_terms);
+
   return {
-    billTo:         { id: data.customer?.id || data.customer_id, companyName: data.customer_name },
-    shipTo:         { id: data.customer?.id || data.customer_id, companyName: data.customer_name },
+    billTo:         { id: customerId, companyName: data.customer_name, isWholesaler: customer?.isWholesaler, creditLimit: customer?.creditLimit, credit_days: customer?.credit_days },
+    shipTo:         { id: customerId, companyName: data.customer_name },
     shipSameAsBill: true,
     form: {
       salesman_id:          data.salesman_id          || "",
@@ -21,12 +38,17 @@ async function loadOrder(id) {
       booking_at:              data.booking_at               || "",
       goods_sent_by:           data.goods_sent_by            || "",
       transport_payment_by:    data.transport_payment_by     || "",
+      payment_terms:           paymentTerms.payment_terms,
+      credit_days:             paymentTerms.credit_days,
       delivery_instructions:   data.delivery_instructions    || "",
       charges_packing:      data.charges_packing      || "",
       charges_cartage:      data.charges_cartage      || "",
       charges_forwarding:   data.charges_forwarding   || "",
       charges_installation: data.charges_installation || "",
       charges_loading:      data.charges_loading      || "",
+      due_date:             data.due_date ? String(data.due_date).slice(0, 10) : "",
+      po_number:            data.po_number            || "",
+      po_document_url:      data.po_document_url      || "",
     },
     rows: (data.items || []).map(it => ({
       sku:            it.sku            || "",
@@ -53,7 +75,9 @@ async function submitOrder(payload, editId) {
     { method: editId ? "PUT" : "POST", body: JSON.stringify(payload) }
   );
   if (res.ok) {
-    return { ok: true, message: editId ? "Order updated ✅" : "Order created ✅", redirect: "/orders" };
+    const isDraft = payload?.status === 'DRAFT';
+    const verb = editId ? (isDraft ? "saved as draft" : "updated") : (isDraft ? "saved as draft" : "created");
+    return { ok: true, message: `Order ${verb} ✅`, redirect: "/orders" };
   }
   const err = await res.json().catch(() => ({}));
   return { ok: false, message: err.message || "Failed to save order" };
@@ -75,6 +99,8 @@ export default function OrderForm() {
       onSubmit={onSubmit}
       submitLabel="Create Order ✓"
       updateLabel="Update Order ✓"
+      allowDraft
+      docType="order"
     />
   );
 }

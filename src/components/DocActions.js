@@ -79,7 +79,7 @@ export default function DocActions({
   /* ── WhatsApp ──────────────────────────────────────────────────────── */
   const handleWhatsApp = () => {
     trackDocAction(type, id, 'whatsapp');
-    const docLabel = type === 'invoice' ? 'Invoice' : type === 'order' ? 'Order' : 'Quotation';
+    const docLabel = type === 'invoice' ? 'Invoice' : type === 'order' ? 'Order Form' : 'Quotation';
     const name     = customerName || 'there';
     const refNo    = docNo || `#${id}`;
     const dateStr  = fmtDate(docDate);
@@ -88,14 +88,19 @@ export default function DocActions({
     const lines = [
       `Hello ${name},`,
       ``,
-      `Here is your ${docLabel} from *${company.name}*.`,
+      `Please find your *${docLabel}* details below:`,
       ``,
       `*${docLabel} No:* ${refNo}`,
       dateStr ? `*Date:* ${dateStr}` : null,
       amtStr  ? `*Amount:* ${amtStr}` : null,
-      publicPdfUrl ? `\n*View PDF:* ${publicPdfUrl}` : null,
+      publicPdfUrl ? `` : null,
+      publicPdfUrl ? `*View / Download ${docLabel}:*` : null,
+      publicPdfUrl ? publicPdfUrl : null,
       ``,
-      `_${company.name}_`,
+      `Thank you for your business.`,
+      ``,
+      `Regards,`,
+      `${company.shortName} Team`,
     ].filter((l) => l !== null);
 
     const msg     = lines.join('\n');

@@ -98,18 +98,18 @@ export default function OrderList() {
       (o.customer_name || "").toLowerCase().includes(text) ||
       (o.mobile || "").includes(text) ||
       String(o.id).includes(text) ||
-      (o.order_number || "").toLowerCase().includes(text);
+      (o.order_no || "").toLowerCase().includes(text);
     const matchStatus = !status || o.status === status;
     return matchText && matchStatus;
   });
 
   // STEP 2: "Send For Approval" (GENERATED) — opens advance modal, submits to PENDING_APPROVAL
-  const handleSendForApprovalConfirm = async ({ advance_amount, process_without_advance, remarks }) => {
+  const handleSendForApprovalConfirm = async ({ advance_amount, process_without_advance, advance_payment_date, advance_payment_mode, remarks }) => {
     if (!sendForApprovalOrder) return;
     try {
       const res = await apiFetch(`/orders/${sendForApprovalOrder.id}/send-for-approval`, {
         method: 'PATCH',
-        body: JSON.stringify({ advance_amount, process_without_advance, remarks: remarks || null }),
+        body: JSON.stringify({ advance_amount, process_without_advance, advance_payment_date, advance_payment_mode, remarks: remarks || null }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -148,6 +148,8 @@ export default function OrderList() {
         initialValues={{
           advance_amount:         sendForApprovalOrder.advance_amount,
           process_without_advance: sendForApprovalOrder.process_without_advance,
+          advance_payment_date:   sendForApprovalOrder.advance_payment_date,
+          advance_payment_mode:   sendForApprovalOrder.advance_payment_mode,
           remarks:                sendForApprovalOrder.approval_remarks,
         }}
       />
@@ -223,7 +225,7 @@ export default function OrderList() {
           >
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 600, fontSize: 15, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                {row.order_number || `ORD-${String(row.id).padStart(5, '0')}`}
+                {row.order_no || `Ord-${String(row.id).padStart(5, '0')}`}
                 <StatusBadge status={row.status} />
                 {row.is_wholesaler !== undefined && <PricingBadge isWholesaler={row.is_wholesaler} />}
               </div>
@@ -256,7 +258,7 @@ export default function OrderList() {
                 {/* Left */}
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   <button
-                    onClick={() => openPanel(`Order #${row.order_number || row.id}`, <OrderDetail orderId={row.id} />)}
+                    onClick={() => openPanel(`Order #${row.order_no || row.id}`, <OrderDetail orderId={row.id} />)}
                     style={btn({ background: '#f8fafc', color: '#374151', border: '1px solid #e2e8f0' })}
                   >
                     👁 View<CountBadge n={row.view_count} color="#374151" />
@@ -267,14 +269,6 @@ export default function OrderList() {
                   >
                     ✏ Edit<CountBadge n={row.edit_count} color="#15803d" />
                   </button>
-                  {(row.status === ORDER_STATUS.GENERATED || row.status === ORDER_STATUS.REJECTED) && (
-                    <button
-                      onClick={() => setSendForApprovalOrder(row)}
-                      style={btn({ background: '#fef9c3', color: '#a16207', border: '1px solid #fde68a' })}
-                    >
-                      ↑ Send for Approval
-                    </button>
-                  )}
                   <button
                     onClick={() => handleCancel(row)}
                     style={btn({ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' })}
@@ -284,20 +278,30 @@ export default function OrderList() {
                 </div>
 
                 {/* Right */}
-                <DocActions
-                  type="order"
-                  id={row.id}
-                  docNo={row.order_number}
-                  docDate={row.created_at}
-                  amount={row.total_amount}
-                  customerMobile={row.customer_phone}
-                  customerName={row.customer_name}
-                  customerEmail={row.customer_email}
-                  emailCount={row.email_sent_count}
-                  printCount={row.print_count}
-                  pdfCount={row.pdf_count}
-                  whatsappCount={row.whatsapp_count}
-                />
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <DocActions
+                    type="order"
+                    id={row.id}
+                    docNo={row.order_no}
+                    docDate={row.created_at}
+                    amount={row.total_amount}
+                    customerMobile={row.customer_phone}
+                    customerName={row.customer_name}
+                    customerEmail={row.customer_email}
+                    emailCount={row.email_sent_count}
+                    printCount={row.print_count}
+                    pdfCount={row.pdf_count}
+                    whatsappCount={row.whatsapp_count}
+                  />
+                  {(row.status === ORDER_STATUS.GENERATED || row.status === ORDER_STATUS.REJECTED) && (
+                    <button
+                      onClick={() => setSendForApprovalOrder(row)}
+                      style={btn({ background: '#dbeafe', color: '#1d4ed8', border: '1px solid #93c5fd' })}
+                    >
+                      ↑ Send for Approval
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           )}

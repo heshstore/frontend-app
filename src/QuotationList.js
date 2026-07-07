@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { apiFetch } from './utils/api';
+import { apiFetch, getToken } from './utils/api';
 import { API_URL } from './config';
 import { theme, buttonStyle } from './theme';
 import DocActions from './components/DocActions';
@@ -11,16 +11,103 @@ import EmptyState from './components/ui/EmptyState';
 import { SkeletonList } from './components/ui/SkeletonCard';
 import { toast } from './utils/toast';
 import { useConfirm } from './components/ui/ConfirmModal';
-import DocumentOwnershipPanel from './components/ownership/DocumentOwnershipPanel';
+
+// ── Convert-to-order popup — collects delivery date / PO number / PO upload
+// before the order is actually created, so they land on the order straight
+// away instead of needing a follow-up edit.
+const modalOverlay = {
+  position: 'fixed', inset: 0, zIndex: 10000,
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  background: 'rgba(0,0,0,0.45)', padding: 16,
+};
+const modalCard = {
+  background: '#fff', borderRadius: 12, padding: '24px 24px 20px',
+  maxWidth: 440, width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.22)',
+};
+const modalLbl = {
+  display: 'block', fontSize: 12, fontWeight: 600, color: '#6b7280',
+  marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em',
+};
+const modalInp = {
+  width: '100%', padding: '9px 11px', borderRadius: 7,
+  border: '1px solid #d1d5db', fontSize: 14, boxSizing: 'border-box',
+};
+
+function ConvertToOrderModal({ open, onCancel, onConfirm, submitting }) {
+  const [dueDate, setDueDate]   = useState('');
+  const [poNumber, setPoNumber] = useState('');
+  const [poFile, setPoFile]     = useState(null);
+
+  useEffect(() => {
+    if (open) { setDueDate(''); setPoNumber(''); setPoFile(null); }
+  }, [open]);
+
+  if (!open) return null;
+
+  return (
+    <div style={modalOverlay} onClick={submitting ? undefined : onCancel}>
+      <div style={modalCard} onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: '#111', marginBottom: 4 }}>Convert to order</div>
+        <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.5, marginBottom: 16 }}>
+          A new order will be created from this quotation. Delivery date drives the production timeline, so it's required — PO number/document can still be added later from the order.
+        </div>
+
+        <div style={{ marginBottom: 12 }}>
+          <label style={modalLbl}>Delivery Date <span style={{ color: '#dc2626' }}>*</span></label>
+          <input type="date" required value={dueDate} onChange={e => setDueDate(e.target.value)} style={modalInp} />
+        </div>
+
+        <div style={{ marginBottom: 12 }}>
+          <label style={modalLbl}>PO Number</label>
+          <input type="text" placeholder="Customer PO number" value={poNumber}
+            onChange={e => setPoNumber(e.target.value)} style={modalInp} />
+        </div>
+
+        <div style={{ marginBottom: 4 }}>
+          <label style={modalLbl}>Upload PO (PDF)</label>
+          <input
+            type="file"
+            accept="application/pdf"
+            onChange={e => setPoFile(e.target.files?.[0] || null)}
+            style={modalInp}
+          />
+          {poFile && <div style={{ fontSize: 12, color: '#15803d', marginTop: 4 }}>{poFile.name}</div>}
+        </div>
+
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
+          <button
+            onClick={onCancel}
+            disabled={submitting}
+            style={{ padding: '8px 18px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: submitting ? 'not-allowed' : 'pointer', border: 'none', background: '#f3f4f6', color: '#374151' }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => {
+              if (!dueDate) { toast.error('Delivery date is required'); return; }
+              onConfirm({ dueDate, poNumber, poFile });
+            }}
+            disabled={submitting}
+            style={{ padding: '8px 18px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: submitting ? 'not-allowed' : 'pointer', border: 'none', background: '#0066B3', color: '#fff', opacity: submitting ? 0.8 : 1 }}
+          >
+            {submitting ? '⏳ Converting…' : 'Convert to order'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const EDITABLE_STATUSES    = ['DRAFT', 'GENERATED'];
 const CONVERTIBLE_STATUSES = ['GENERATED'];
 
+// Anything short of CONVERTED still needs action, so it's flagged red —
+// only a quotation that has actually produced an order gets the green border.
 const STATUS_BORDER = {
-  DRAFT:     '#9ca3af',
-  GENERATED: '#0d6efd',
+  DRAFT:     '#dc3545',
+  GENERATED: '#dc3545',
   CANCELLED: '#dc3545',
-  CONVERTED: '#0066B3',
+  CONVERTED: '#15803d',
 };
 
 const STATUS_CHIPS = [
@@ -64,6 +151,7 @@ export default function QuotationList() {
   });
   const [expanded, setExpanded] = useState(null);
   const [confirm, confirmModal] = useConfirm();
+  const [convertModalId, setConvertModalId] = useState(null); // quotation id the popup is open for
 
   const loadQuotations = useCallback(async () => {
     setLoading(true);
@@ -126,16 +214,30 @@ export default function QuotationList() {
     } catch { toast.error('Cancel failed'); }
   };
 
-  const handleConvert = async (id) => {
-    if (!await confirm(
-      'Convert to order?',
-      'A new order will be created from this quotation. The quotation status will change to Converted.',
-      { confirmLabel: 'Convert to order' },
-    )) return;
-
+  const handleConvert = async (id, { dueDate, poNumber, poFile } = {}) => {
     setConverting(id);
     try {
-      const res  = await apiFetch(`/quotations/${id}/convert-to-order`, { method: 'POST' });
+      let po_document_url;
+      if (poFile) {
+        const body = new FormData();
+        body.append('po', poFile);
+        const uploadRes = await fetch(`${API_URL}/orders/upload-po`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${getToken()}` },
+          body,
+        });
+        if (!uploadRes.ok) throw new Error('PO upload failed');
+        po_document_url = (await uploadRes.json()).url;
+      }
+
+      const res  = await apiFetch(`/quotations/${id}/convert-to-order`, {
+        method: 'POST',
+        body: JSON.stringify({
+          due_date: dueDate || undefined,
+          po_number: poNumber || undefined,
+          po_document_url,
+        }),
+      });
       const data = await res.json();
       if (res.ok) {
         const orderId = data.order_id;
@@ -160,15 +262,22 @@ export default function QuotationList() {
         }
       }
     } catch (err) {
-      toast.error('Conversion failed — please try again');
+      toast.error(err.message === 'PO upload failed' ? 'PO upload failed — please try again' : 'Conversion failed — please try again');
     } finally {
       setConverting(null);
+      setConvertModalId(null);
     }
   };
 
   return (
     <>
       {confirmModal}
+      <ConvertToOrderModal
+        open={convertModalId != null}
+        submitting={converting === convertModalId}
+        onCancel={() => setConvertModalId(null)}
+        onConfirm={(details) => handleConvert(convertModalId, details)}
+      />
       <div>
 
         {/* Page title row */}
@@ -226,53 +335,73 @@ export default function QuotationList() {
           const isReadOnly        = !isEditable;
           const hasPhone          = !!(q.customer_phone || q.customer_mobile);
           const convertBlocked    = isConvertible && !hasPhone; // phone missing — warn user
+          const isConverted       = q.status === 'CONVERTED';
+          const customerMobile    = q.customer_phone || q.customer_mobile;
 
           return (
             <div
               key={q.id}
               style={{
-                border: `1px solid ${theme.border}`,
+                border: `1px solid ${isConverted ? '#bbf7d0' : theme.border}`,
                 borderLeft: `4px solid ${STATUS_BORDER[q.status] || '#6c757d'}`,
                 borderRadius: 8,
                 marginBottom: 12,
-                background: '#fff',
+                background: isConverted ? '#f3fbf6' : '#fff',
                 overflow: 'hidden',
               }}
             >
               {/* Card header */}
               <div
                 onClick={() => setExpanded(expanded === q.id ? null : q.id)}
-                style={{ padding: '12px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}
+                style={{ padding: '14px 16px', cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: 12 }}
               >
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, fontSize: 15, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    {q.quotation_no || `QUO-${q.id}`}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: 16, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', color: '#0f172a' }}>
+                    {q.quotation_no || `Quo-${q.id}`}
                     <StatusBadge status={q.status} />
                     {q.is_wholesaler !== undefined && <PricingBadge isWholesaler={q.is_wholesaler} />}
                   </div>
-                  <div style={{ fontSize: 13, color: theme.textMuted, marginTop: 3 }}>
-                    {q.customer_name || '—'} · ₹{Number(q.total_amount || 0).toLocaleString('en-IN')}
+
+                  <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginTop: 8 }}>
+                    <span style={{ fontSize: 14, color: '#1e293b', fontWeight: 600 }}>
+                      {q.customer_name || '—'}
+                    </span>
+                    {customerMobile && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, color: '#64748b' }}>
+                        <span aria-hidden="true">📞</span>{customerMobile}
+                      </span>
+                    )}
+                    <span style={{ fontSize: 13.5, color: '#0f172a', fontWeight: 600 }}>
+                      ₹{Number(q.total_amount || 0).toLocaleString('en-IN')}
+                    </span>
                   </div>
-                  <DocumentOwnershipPanel data={q} docType="quotation" variant="list" />
-                  <div style={{ fontSize: 12, color: theme.textMuted }}>
+
+                  <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 6 }}>
+                    <span style={{ fontWeight: 600 }}>Salesman:</span> {q.salesman_name || '—'}
+                  </div>
+
+                  {isConverted && q.converted_order_id && (
+                    <div style={{ marginTop: 6 }}>
+                      <span
+                        onClick={(e) => { e.stopPropagation(); navigate(`/orders/${q.converted_order_id}`); }}
+                        style={{ fontSize: 12.5, color: '#0066B3', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}
+                      >
+                        Quotation converted to order No {q.converted_order_no || `#${q.converted_order_id}`} →
+                      </span>
+                    </div>
+                  )}
+
+                  <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 6 }}>
                     {q.created_at ? new Date(q.created_at).toLocaleDateString('en-IN') : ''}
                     {q.valid_till ? ` · Valid till ${new Date(q.valid_till).toLocaleDateString('en-IN')}` : ''}
-                    {q.status === 'CONVERTED' && q.converted_order_id
-                      ? <span
-                          onClick={(e) => { e.stopPropagation(); navigate(`/orders/${q.converted_order_id}`); }}
-                          style={{ marginLeft: 8, color: '#0066B3', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}
-                        >
-                          → Order #{q.converted_order_id}
-                        </span>
-                      : null}
                   </div>
                 </div>
-                <span style={{ fontSize: 18, color: theme.textMuted }}>{expanded === q.id ? '▲' : '▼'}</span>
+                <span style={{ fontSize: 16, color: theme.textMuted, flexShrink: 0, marginTop: 2 }}>{expanded === q.id ? '▲' : '▼'}</span>
               </div>
 
               {/* Expanded */}
               {expanded === q.id && (
-                <div style={{ borderTop: `1px solid ${theme.border}`, padding: '12px 16px' }}>
+                <div style={{ borderTop: `1px solid ${isConverted ? '#dcfce7' : theme.border}`, padding: '14px 16px', background: isConverted ? '#fafefc' : '#fff' }}>
                   <div style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     flexWrap: 'wrap', gap: 8,
@@ -336,7 +465,7 @@ export default function QuotationList() {
                         printCount={q.print_count}
                         pdfCount={q.pdf_count}
                         whatsappCount={q.whatsapp_count}
-                        publicPdfUrl={q.quotation_no ? `${API_URL}/quotations/public/${encodeURIComponent(q.quotation_no)}/pdf` : ''}
+                        publicPdfUrl={q.quotation_no ? `${API_URL}/q/${encodeURIComponent(q.quotation_no)}` : ''}
                       />
 
                       {isConvertible && (
@@ -347,7 +476,7 @@ export default function QuotationList() {
                                 toast.error('Customer mobile number missing — update the customer record first');
                                 return;
                               }
-                              handleConvert(q.id);
+                              setConvertModalId(q.id);
                             }}
                             disabled={converting === q.id}
                             title={convertBlocked ? 'Customer mobile number required to convert' : 'Convert this quotation to an order'}

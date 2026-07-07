@@ -66,6 +66,7 @@ export default function AddCustomer() {
     gstNumber:     '',
     customerType:  '',
     tag:           '',
+    stopPaymentReminder: false,
   });
 
   const [city,    setCity]    = useState('');
@@ -617,6 +618,16 @@ export default function AddCustomer() {
                 placeholder="e.g. 33AABCH5436K1ZM"
                 style={inputStyle}
               />
+            </FormField>
+            <FormField label="Payment reminders">
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#374151', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={form.stopPaymentReminder}
+                  onChange={(e) => setForm(prev => ({ ...prev, stopPaymentReminder: e.target.checked }))}
+                />
+                Stop Payment Reminder — never send payment reminders to staff or this customer
+              </label>
             </FormField>
           </FormCard>
         </FormSection>

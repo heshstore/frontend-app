@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { apiFetch } from './utils/api';
-import { normalizePhoneForWhatsApp } from './utils/phone';
 import { ORDER_STATUS_LABELS } from './constants/orderStatus';
 import DocActions from './components/DocActions';
 import DocumentOwnershipPanel from './components/ownership/DocumentOwnershipPanel';
+import CountBadge from './components/CountBadge';
 import { trackDocAction } from './utils/trackDocAction';
+import { resolveImageUrl } from './utils/docFormatters';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -156,18 +157,22 @@ function AmountRow({ label, value, color, large }) {
   );
 }
 
-function ActionBtn({ label, bg, color = '#fff', onClick, href, target }) {
-  const style = {
-    flex: 1, padding: '11px 0', border: 'none', borderRadius: 10,
-    background: bg, color, fontSize: 13, fontWeight: 700,
-    cursor: 'pointer', textAlign: 'center', textDecoration: 'none',
-    display: 'block', minHeight: 44,
-  };
-  if (href) {
-    return <a href={href} target={target} rel="noreferrer" style={style}>{label}</a>;
-  }
-  return <button onClick={onClick} style={style}>{label}</button>;
-}
+// Same small-pill action button used in the Quotation list card — kept
+// visually identical so Quotation/Order/Invoice actions all look the same.
+const actionBtn = (extra = {}) => ({
+  padding: '6px 13px',
+  fontSize: 12,
+  fontWeight: 600,
+  borderRadius: 5,
+  height: 32,
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 4,
+  cursor: 'pointer',
+  border: 'none',
+  whiteSpace: 'nowrap',
+  ...extra,
+});
 
 // ── Main component ────────────────────────────────────────────────────────────
 
@@ -249,7 +254,6 @@ export default function OrderDetail({ orderId: propId }) {
   const statusSt    = STATUS_STYLE[order.status] ?? { bg: '#f1f5f9', color: '#374151' };
   const completedN  = stagesCompleted(order.status);
   const pending     = order.pending_amount ?? (order.total_amount - (order.paid_amount || 0));
-  const waPhone     = normalizePhoneForWhatsApp(order.customer_phone);
 
   return (
     <div style={{
@@ -310,7 +314,7 @@ export default function OrderDetail({ orderId: propId }) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
               <div style={{ fontSize: 22, fontWeight: 800, color: '#111827' }}>
-                Order #{order.order_number || order.id}
+                Order #{order.order_no || order.order_number || order.id}
               </div>
               <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
                 {fmtDate(order.order_date || order.created_at)}
@@ -345,8 +349,44 @@ export default function OrderDetail({ orderId: propId }) {
           {order.delivery_type && (
             <InfoRow label="Delivery Location" value={order.delivery_type} />
           )}
+          {order.due_date && (
+            <InfoRow label="Delivery Date" value={fmtDate(order.due_date)} />
+          )}
+          {order.po_number && (
+            <InfoRow label="PO Number" value={order.po_number} />
+          )}
+          {order.po_document_url && (
+            <InfoRow
+              label="PO Document"
+              value={
+                <a
+                  href={resolveImageUrl(order.po_document_url)}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}
+                >
+                  View PDF
+                </a>
+              }
+            />
+          )}
           {order.payment_type && (
             <InfoRow label="Payment Type" value={order.payment_type} />
+          )}
+          {order.payment_terms && (
+            <InfoRow
+              label="Payment Terms"
+              value={
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                  <span>{order.payment_terms}</span>
+                  {order.is_wholesaler && (
+                    <span style={{ fontSize: 9, fontWeight: 700, color: '#000' }}>
+                      Wholesaler
+                    </span>
+                  )}
+                </div>
+              }
+            />
           )}
           <DocumentOwnershipPanel data={order} docType="order" variant="screen" />
         </Card>
@@ -438,29 +478,35 @@ export default function OrderDetail({ orderId: propId }) {
           )}
         </Card>
 
-        {/* Section 5 — Actions */}
+        {/* Section 5 — Actions (same View / Print / PDF / WhatsApp / Email
+            layout used on the Quotation card, so all document types match) */}
         <Card>
           <CardLabel>Actions</CardLabel>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <ActionBtn
-              label="View Invoice"
-              bg="#2563eb"
-              onClick={() => navigate(`/invoice/${id}`)}
-            />
-            {waPhone && (
-              <ActionBtn
-                label="WhatsApp"
-                bg="#25D366"
-                href={`https://wa.me/${waPhone}`}
-                target="_blank"
-              />
-            )}
-          </div>
-          <div style={{ marginTop: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+            {/* Left */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {isPanelMode && (
+                <button
+                  onClick={() => window.open(`/orders/${id}`, '_blank')}
+                  style={actionBtn({ background: '#f8fafc', color: '#374151', border: '1px solid #e2e8f0' })}
+                >
+                  👁 View<CountBadge n={order.view_count} color="#374151" />
+                </button>
+              )}
+              <button
+                onClick={() => navigate(`/invoice/${id}`)}
+                style={actionBtn({ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' })}
+              >
+                🧾 View Invoice
+              </button>
+            </div>
+
+            {/* Right */}
             <DocActions
               type="order"
               id={id}
-              docNo={order.order_number}
+              docNo={order.order_no || order.order_number}
+              docDate={order.order_date || order.created_at}
               amount={order.total_amount}
               customerMobile={order.customer_phone}
               customerName={order.customer_name}

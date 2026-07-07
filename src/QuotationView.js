@@ -39,7 +39,7 @@ export default function QuotationView() {
   );
 
   const publicPdfUrl = data?.quotation_no
-    ? `${API_URL}/quotations/public/${encodeURIComponent(data.quotation_no)}/pdf`
+    ? `${API_URL}/q/${encodeURIComponent(data.quotation_no)}`
     : '';
 
   return (

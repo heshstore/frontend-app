@@ -13,15 +13,24 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiFetch, getCurrentUser } from "../../utils/api";
+import { apiFetch, getCurrentUser, getToken } from "../../utils/api";
 import { getUserCapabilities } from "../../config/roleCapabilities";
 import { theme } from "../../theme";
 import PageLayout from "../layout/PageLayout";
 import { toast } from "../../utils/toast";
+import { API_URL } from "../../config";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const DELIVERY_TYPES = ["Courier", "Transport", "Bus", "Railways", "Air", "Porter", "Self-Pickup", "Hesh Vehicle"];
 const PAYMENT_TYPES  = ["Paid at Booking", "Payable at Pickup"];
+
+const PAYMENT_TERMS_OPTIONS = [
+  "100% Advance",
+  "70% Advance & 30% Before Delivery",
+  "50% Advance & 50% Before Delivery",
+  "60% Advance, 30% Before Dispatch & 10% After Work Completion",
+];
+const CREDIT_DAYS_OPTIONS = [7, 15, 30, 45];
 
 // ── Shared styles ────────────────────────────────────────────────────────────
 const inp = {
@@ -49,6 +58,7 @@ const SECTION_COLORS = {
   Items: theme.success,
   "Extra Charges": "#b45309",
   "Delivery & Payment": "#7c3aed",
+  "Purchase Order": "#0e7490",
   Summary: theme.textMuted,
 };
 const sectionDivider = (title) => {
@@ -92,6 +102,11 @@ export const defaultForm = () => {
     charges_forwarding: "",
     charges_installation: "",
     charges_loading: "",
+    due_date: "",
+    po_number: "",
+    po_document_url: "",
+    payment_terms: "",
+    credit_days: 15,
   };
 };
 
@@ -464,39 +479,69 @@ function AddedItemsList({ rows, calcAmount, editingIndex, onEdit, onRemove }) {
           : "";
         return (
           <div key={i} style={{
-            display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 12px",
+            display: "flex", alignItems: "flex-start", gap: 12, padding: "14px",
             borderBottom: i < rows.length - 1 ? `1px solid ${theme.border}` : "none",
             background: editingIndex === i ? theme.primaryLight : "#fff",
           }}>
+            {/* S.No */}
+            <div style={{
+              flexShrink: 0, width: 22, height: 22, borderRadius: "50%", marginTop: 3,
+              background: theme.surface, color: theme.textMuted,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 11, fontWeight: 700,
+            }}>
+              {i + 1}
+            </div>
+
+            {/* Photo — same position as the draft item-entry form */}
             {row._image
-              ? <img src={row._image} alt="" style={{ width: 36, height: 36, borderRadius: 6, objectFit: "cover", flexShrink: 0 }} />
-              : <div style={{ width: 36, height: 36, borderRadius: 6, background: theme.surface, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>📦</div>
+              ? <img src={row._image} alt="" style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
+              : <div style={{ width: 44, height: 44, borderRadius: 8, background: theme.surface, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>📦</div>
             }
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: theme.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+
+            <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 5 }}>
+              {row.sku && (
+                <span style={{
+                  alignSelf: "flex-start", fontSize: 11, fontWeight: 600,
+                  background: theme.primaryLight, color: theme.primary,
+                  borderRadius: 4, padding: "2px 7px",
+                }}>
+                  {row.sku}
+                </span>
+              )}
+              <div style={{ fontSize: 14, fontWeight: 700, color: theme.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {row.item_name || row.sku}
               </div>
-              <div style={{ fontSize: 11, color: theme.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {row.qty} × ₹{Number(row.rate || 0).toLocaleString("en-IN")}{row.sku ? ` · ${row.sku}` : ""}
-                {discLabel && <span style={{ color: "#ca8a04", fontWeight: 600 }}> · {discLabel}</span>}
-                {row.gst_percent > 0 && ` · GST ${row.gst_percent}%${row.is_tax_inclusive ? " (incl.)" : ""}`}
+              <div style={{ fontSize: 13, color: theme.primary, fontWeight: 600, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                <span>{row.qty} × ₹{Number(row.rate || 0).toLocaleString("en-IN")}</span>
+                {discLabel && <span style={{ color: "#ca8a04" }}>· {discLabel}</span>}
               </div>
+              {row.gst_percent > 0 && (
+                <span style={{
+                  alignSelf: "flex-start", fontSize: 11, fontWeight: 600,
+                  background: theme.surface, color: theme.textMuted, borderRadius: 5,
+                  padding: "2px 7px",
+                }}>
+                  GST {row.gst_percent}%{row.is_tax_inclusive ? " (incl.)" : ""}
+                </span>
+              )}
               {row.instruction && (
-                <div style={{ fontSize: 11, color: theme.textMuted, fontStyle: "italic", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <div style={{ fontSize: 12, color: theme.textMuted, fontStyle: "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   “{row.instruction}”
                 </div>
               )}
             </div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: theme.text, flexShrink: 0, textAlign: "right", minWidth: 84, marginTop: 2 }}>
+
+            <div style={{ fontSize: 14, fontWeight: 700, color: theme.text, flexShrink: 0, textAlign: "right", minWidth: 84, marginTop: 3 }}>
               ₹{amount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               <div style={{ fontSize: 10, fontWeight: 400, color: theme.textMuted }}>excl. GST</div>
             </div>
             <button type="button" onClick={() => onEdit(i)} title="Edit item" aria-label="Edit item"
-              style={{ flexShrink: 0, width: 28, height: 28, borderRadius: 6, background: "none", border: "none", cursor: "pointer", color: theme.textMuted, fontSize: 15, marginTop: 2 }}>
+              style={{ flexShrink: 0, width: 28, height: 28, borderRadius: 6, background: "none", border: "none", cursor: "pointer", color: theme.textMuted, fontSize: 15, marginTop: 3 }}>
               ✎
             </button>
             <button type="button" onClick={() => onRemove(i)} title="Remove item" aria-label="Remove item"
-              style={{ flexShrink: 0, width: 28, height: 28, borderRadius: "50%", background: "#fee2e2", border: "none", cursor: "pointer", color: "#dc2626", fontSize: 13, fontWeight: 700, marginTop: 2 }}>
+              style={{ flexShrink: 0, width: 28, height: 28, borderRadius: "50%", background: "#fee2e2", border: "none", cursor: "pointer", color: "#dc2626", fontSize: 13, fontWeight: 700, marginTop: 3 }}>
               ✕
             </button>
           </div>
@@ -507,7 +552,8 @@ function AddedItemsList({ rows, calcAmount, editingIndex, onEdit, onRemove }) {
 }
 
 // ── DocumentForm ──────────────────────────────────────────────────────────────
-export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, submitLabel, updateLabel, allowDraft }) {
+export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, submitLabel, updateLabel, allowDraft, docType = 'quotation' }) {
+  const isOrder = docType === 'order';
   const navigate = useNavigate();
 
   // Only Admin/COO punch orders/quotations on someone else's behalf — everyone
@@ -526,6 +572,7 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
   const [items, setItems] = useState([]);
   const [users, setUsers] = useState([]);
   const [form, setForm]   = useState(defaultForm());
+  const [poUploading, setPoUploading] = useState(false);
 
   const [loading, setLoading]       = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -536,6 +583,18 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
     window.addEventListener('resize', h);
     return () => window.removeEventListener('resize', h);
   }, []);
+
+  // Wholesaler customers always get "Credit for {credit_days} days" auto-assigned
+  // from their own credit-limit record — the dropdown below locks to this value
+  // rather than letting it be picked manually (server re-derives/enforces this
+  // regardless, but the UI should reflect it rather than show a stale choice).
+  useEffect(() => {
+    if (billTo?.isWholesaler) {
+      setForm(f => ({ ...f, payment_terms: "CREDIT", credit_days: billTo.credit_days ?? 0 }));
+    }
+  }, [billTo]);
+
+  const wholesalerNeedsCreditLimit = !!billTo?.isWholesaler && !(Number(billTo?.creditLimit) > 0);
 
   // Load master data
   useEffect(() => {
@@ -595,6 +654,30 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
     setFormResetKey(k => k + 1);
   };
 
+  const handlePoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPoUploading(true);
+    try {
+      const body = new FormData();
+      body.append('po', file);
+      const res = await fetch(`${API_URL}/orders/upload-po`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${getToken()}` },
+        body,
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setForm(f => ({ ...f, po_document_url: data.url }));
+      toast.success('PO uploaded');
+    } catch {
+      toast.error('PO upload failed');
+    } finally {
+      setPoUploading(false);
+      e.target.value = '';
+    }
+  };
+
   const removeRow = (index) => {
     setRows(prev => prev.filter((_, i) => i !== index));
     if (editingIndex === index) handleCancelEdit();
@@ -635,7 +718,11 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
   const totalGst     = Object.values(gstByRate).reduce((s, v) => s + v, 0);
   const extraCharges = ["charges_packing","charges_cartage","charges_forwarding","charges_installation","charges_loading"]
     .reduce((s, k) => s + Number(form[k] || 0), 0);
-  const grandTotal = subTotal + totalGst + extraCharges;
+  // Rounded to the nearest rupee, matching the backend — roundOff is the
+  // (possibly negative) adjustment shown as its own summary line.
+  const rawGrandTotal = subTotal + totalGst + extraCharges;
+  const grandTotal = Math.round(rawGrandTotal);
+  const roundOff = Math.round((grandTotal - rawGrandTotal) * 100) / 100;
 
   // Submit — build standard payload and delegate to caller.
   // submitStatus: 'GENERATED' (default, confirm) or 'DRAFT' (save without items).
@@ -643,20 +730,40 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
     e.preventDefault();
     if (submitting) return;
     if (!billTo) { toast.error("Please select a Bill To customer"); return; }
+    if (wholesalerNeedsCreditLimit) {
+      toast.error("This customer is a Wholesaler with no Credit Limit assigned. Set a credit limit for this customer before continuing.");
+      return;
+    }
+    if (submitStatus !== 'DRAFT' && !form.payment_terms) {
+      toast.error("Please select Payment Terms");
+      return;
+    }
 
     const validRows = rows.filter(r => r.item_name || r.sku);
     if (submitStatus !== 'DRAFT' && validRows.length === 0) {
       toast.error("Please add at least one item before submitting");
       return;
     }
+    // Production planning schedules off the delivery date, so it's required
+    // once the order is actually confirmed — draft saves-in-progress are exempt.
+    if (isOrder && submitStatus !== 'DRAFT' && !form.due_date) {
+      toast.error("Delivery date is required");
+      return;
+    }
 
     setSubmitting(true);
+    const isCredit = form.payment_terms === "CREDIT";
+    const resolvedPaymentTerms = isCredit
+      ? `Credit for ${Number(form.credit_days) || 0} days`
+      : (form.payment_terms || null);
     const payload = {
       customer_id:   billTo.id,
       customer_name: billTo.companyName,
       bill_to_id:    billTo.id,
       ship_to_id:    shipSameAsBill ? billTo.id : (shipTo?.id || billTo.id),
       is_wholesaler: !!billTo.isWholesaler,
+      payment_terms: resolvedPaymentTerms,
+      credit_days:   isCredit ? (Number(form.credit_days) || 0) : null,
       status:            submitStatus,
       salesman_id:       form.salesman_id || null,
       validity_days:     Number(form.validity_days) || 15,
@@ -671,6 +778,11 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
       charges_forwarding:   Number(form.charges_forwarding)   || 0,
       charges_installation: Number(form.charges_installation) || 0,
       charges_loading:      Number(form.charges_loading)      || 0,
+      ...(isOrder ? {
+        due_date:         form.due_date || null,
+        po_number:        form.po_number || null,
+        po_document_url:  form.po_document_url || null,
+      } : {}),
       items: validRows.map(r => ({
         sku:            r.sku,
         item_name:      r.item_name,
@@ -763,9 +875,15 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
             <span>₹{extraCharges.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
         )}
+        {roundOff !== 0 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 5, color: theme.textMuted }}>
+            <span>Rounded off</span>
+            <span>{roundOff > 0 ? '+' : '−'} ₹{Math.abs(roundOff).toFixed(2)}</span>
+          </div>
+        )}
         <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 17, borderTop: `1px solid ${theme.border}`, paddingTop: 10, marginTop: 6 }}>
           <span>Grand total</span>
-          <span style={{ color: theme.primary }}>₹{grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          <span style={{ color: theme.primary }}>₹{grandTotal.toLocaleString('en-IN')}</span>
         </div>
       </div>
     </div>
@@ -886,11 +1004,19 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
             )}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <div>
-              <label style={lbl}>Validity (days)</label>
-              <input type="number" min="1" value={form.validity_days}
-                onChange={e => setForm(f => ({ ...f, validity_days: e.target.value }))} style={inp} />
-            </div>
+            {isOrder ? (
+              <div>
+                <label style={lbl}>Delivery Date <span style={{ color: "#dc2626" }}>*</span></label>
+                <input type="date" required value={form.due_date || ""}
+                  onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))} style={inp} />
+              </div>
+            ) : (
+              <div>
+                <label style={lbl}>Validity (days)</label>
+                <input type="number" min="1" value={form.validity_days}
+                  onChange={e => setForm(f => ({ ...f, validity_days: e.target.value }))} style={inp} />
+              </div>
+            )}
             <div>
               <label style={lbl}>Booking At</label>
               <input type="text" placeholder="e.g. Transport office name" value={form.booking_at || ""}
@@ -922,7 +1048,64 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
               onChange={e => setForm(f => ({ ...f, delivery_instructions: e.target.value }))}
               style={{ ...inp, resize: "vertical", lineHeight: 1.5 }} />
           </div>
+
+          {/* ── Payment Terms ── */}
+          <div>
+            <label style={lbl}>Payment Terms {!wholesalerNeedsCreditLimit && <span style={{ color: "#dc2626" }}>*</span>}</label>
+            {wholesalerNeedsCreditLimit ? (
+              <div style={{ padding: "12px 14px", borderRadius: 8, background: "#fef2f2", border: "1px solid #fecaca", color: "#991b1b", fontSize: 13, lineHeight: 1.5 }}>
+                This customer is a Wholesaler with no Credit Limit assigned.{" "}
+                <a href="/customers/credit-limit" style={{ color: "#b91c1c", fontWeight: 700 }}>
+                  Set a credit limit
+                </a>{" "}
+                before continuing.
+              </div>
+            ) : billTo?.isWholesaler ? (
+              <div style={{ ...inp, display: "flex", alignItems: "center", background: "#fefce8", color: "#a16207", cursor: "default", borderStyle: "dashed", fontWeight: 600 }}>
+                Credit for {billTo.credit_days ?? 0} days — auto-assigned (Wholesaler)
+              </div>
+            ) : (
+              <div style={{ display: "grid", gridTemplateColumns: form.payment_terms === "CREDIT" ? "1fr 1fr" : "1fr", gap: 10 }}>
+                <select value={form.payment_terms || ""} onChange={e => setForm(f => ({ ...f, payment_terms: e.target.value }))} style={inp}>
+                  <option value="">— Select —</option>
+                  {PAYMENT_TERMS_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+                  <option value="CREDIT">Credit</option>
+                </select>
+                {form.payment_terms === "CREDIT" && (
+                  <select value={form.credit_days} onChange={e => setForm(f => ({ ...f, credit_days: Number(e.target.value) }))} style={inp}>
+                    {CREDIT_DAYS_OPTIONS.map(d => <option key={d} value={d}>{d} days</option>)}
+                  </select>
+                )}
+              </div>
+            )}
+          </div>
         </div>
+
+        {/* ── Purchase Order ── */}
+        {isOrder && (
+          <>
+            {sectionDivider("Purchase Order")}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div>
+                <label style={lbl}>PO Number</label>
+                <input type="text" placeholder="Customer PO number" value={form.po_number || ""}
+                  onChange={e => setForm(f => ({ ...f, po_number: e.target.value }))} style={inp} />
+              </div>
+              <div>
+                <label style={lbl}>Upload PO (PDF)</label>
+                <input type="file" accept="application/pdf" onChange={handlePoUpload} disabled={poUploading} style={inp} />
+                {poUploading && <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 4 }}>Uploading…</div>}
+                {!poUploading && form.po_document_url && (
+                  <div style={{ fontSize: 12, color: theme.success, marginTop: 4 }}>
+                    <a href={form.po_document_url.startsWith('http') ? form.po_document_url : `${API_URL}${form.po_document_url}`} target="_blank" rel="noreferrer" style={{ color: theme.success }}>
+                      ✓ View uploaded PO
+                    </a>
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
 
         {/* ── Summary (mobile only — desktop uses the sticky side panel) ── */}
         {/* Same SummaryPanel component as desktop — was previously a separate,
@@ -943,17 +1126,17 @@ export default function DocumentForm({ pageTitle, editId, loadData, onSubmit, su
           {allowDraft && (
             <button
               type="button"
-              disabled={submitting}
+              disabled={submitting || wholesalerNeedsCreditLimit}
               onClick={(e) => handleSubmit(e, 'DRAFT')}
-              style={{ flex: 1, padding: "14px", borderRadius: 10, background: submitting ? "#f3f4f6" : "#f8fafc", color: "#374151", border: "1.5px solid #d1d5db", cursor: submitting ? "not-allowed" : "pointer", fontWeight: 600, fontSize: 15 }}
+              style={{ flex: 1, padding: "14px", borderRadius: 10, background: submitting ? "#f3f4f6" : "#f8fafc", color: "#374151", border: "1.5px solid #d1d5db", cursor: (submitting || wholesalerNeedsCreditLimit) ? "not-allowed" : "pointer", fontWeight: 600, fontSize: 15 }}
             >
               {submitting ? "Saving…" : "Save as Draft"}
             </button>
           )}
           <button
             type="submit"
-            disabled={submitting}
-            style={{ flex: allowDraft ? 2 : 1, padding: "14px", borderRadius: 10, background: submitting ? "#93c5fd" : theme.primary, color: "#fff", border: "none", cursor: submitting ? "not-allowed" : "pointer", fontWeight: 700, fontSize: 16, letterSpacing: "0.02em" }}
+            disabled={submitting || wholesalerNeedsCreditLimit}
+            style={{ flex: allowDraft ? 2 : 1, padding: "14px", borderRadius: 10, background: submitting ? "#93c5fd" : theme.primary, color: "#fff", border: "none", cursor: (submitting || wholesalerNeedsCreditLimit) ? "not-allowed" : "pointer", fontWeight: 700, fontSize: 16, letterSpacing: "0.02em" }}
           >
             {submitting ? "Saving…" : editId ? (updateLabel || "Update ✓") : (submitLabel || "Submit ✓")}
           </button>
