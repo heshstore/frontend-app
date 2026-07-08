@@ -29,7 +29,9 @@ export default function PendingApproval() {
   const [search,   setSearch]   = useState("");
   const [expanded, setExpanded] = useState(null);
 
-  const [pendingIds, setPendingIds] = useState(new Set());
+  const [pendingIds,  setPendingIds]  = useState(new Set());
+  const [approvedIds, setApprovedIds] = useState(new Set());
+  const [prodIds,     setProdIds]     = useState(new Set());
 
   const canApprove = usePermission('order.approve');
   const canReject  = usePermission('order.reject');
@@ -78,7 +80,6 @@ export default function PendingApproval() {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        // Backend rejected because order was already actioned elsewhere — refresh list
         if (res.status === 400 && body?.message?.includes('Invalid transition')) {
           toast.warn('Order was already processed. Refreshing list…');
           setOrders(prev => prev.filter(o => o.id !== row.id));
@@ -87,17 +88,36 @@ export default function PendingApproval() {
         }
         return;
       }
-      toast.success('Order approved — sent to production');
-      // Optimistically remove the row so it disappears immediately even if
-      // the subsequent reload is slow or fails due to a transient network error
-      setOrders(prev => prev.filter(o => o.id !== row.id));
-      setExpanded(null);
-      // Reload in background to sync any other status changes
-      loadOrders().catch(() => {});
+      toast.success('Order approved — click "Send to Production" to continue');
+      // Keep row visible, update status locally so Send to Production button appears
+      setOrders(prev => prev.map(o => o.id === row.id ? { ...o, status: 'APPROVED' } : o));
+      setApprovedIds(s => new Set(s).add(row.id));
+      setExpanded(row.id);
     } catch {
       toast.error('Approval failed');
     } finally {
       setPendingIds(s => { const n = new Set(s); n.delete(row.id); return n; });
+    }
+  };
+
+  const sendToProduction = async (row) => {
+    if (prodIds.has(row.id)) return;
+    setProdIds(s => new Set(s).add(row.id));
+    try {
+      const res = await apiFetch(`/orders/${row.id}/send-to-production`, { method: 'PATCH' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        toast.error(body.message || 'Failed to send to production');
+        return;
+      }
+      toast.success('Order sent to production');
+      setOrders(prev => prev.filter(o => o.id !== row.id));
+      setApprovedIds(s => { const n = new Set(s); n.delete(row.id); return n; });
+      setExpanded(null);
+    } catch {
+      toast.error('Failed to send to production');
+    } finally {
+      setProdIds(s => { const n = new Set(s); n.delete(row.id); return n; });
     }
   };
 
@@ -198,7 +218,7 @@ export default function PendingApproval() {
             >
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 600, fontSize: 15, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  {row.order_no || row.order_number || `ORD-${String(row.id).padStart(5, '0')}`}
+                  {row.order_no || row.order_number || `ORD${String(row.id).padStart(4, '0')}`}
                   <StatusBadge status={row.status} />
                 </div>
 
@@ -250,10 +270,7 @@ export default function PendingApproval() {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     <button
-                      onClick={() => openPanel(
-                        `Order #${row.order_no || row.order_number || row.id}`,
-                        <OrderDetail orderId={row.id} />,
-                      )}
+                      onClick={() => window.open(`/orders/${row.id}/print`, '_blank')}
                       style={btn({ background: '#f8fafc', color: '#374151', border: '1px solid #e2e8f0' })}
                     >
                       👁 View
@@ -269,6 +286,19 @@ export default function PendingApproval() {
                         })}
                       >
                         {pendingIds.has(row.id) ? '…' : '✓ Approve'}
+                      </button>
+                    )}
+                    {row.status === 'APPROVED' && (
+                      <button
+                        onClick={() => sendToProduction(row)}
+                        disabled={prodIds.has(row.id)}
+                        style={btn({
+                          background: '#7c3aed', color: '#fff',
+                          opacity: prodIds.has(row.id) ? 0.6 : 1,
+                          cursor: prodIds.has(row.id) ? 'not-allowed' : 'pointer',
+                        })}
+                      >
+                        {prodIds.has(row.id) ? '…' : '🏭 Send to Production'}
                       </button>
                     )}
                     {canReject && row.status === 'PENDING_APPROVAL' && (

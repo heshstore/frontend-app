@@ -77,7 +77,7 @@ export default function ReadyOrders() {
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
             <span style={{ fontWeight: 700, fontSize: 14, color: '#374151' }}>
-              {order.order_no || `ORD-${order.id}`}
+              {order.order_no || `ORD${String(order.id).padStart(4, '0')}`}
             </span>
             <span style={{
               background: '#fef9c3', color: '#a16207',

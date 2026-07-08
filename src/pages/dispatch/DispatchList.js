@@ -168,7 +168,7 @@ function DispatchCard({ dispatch: d, onMarkDelivered, isMarking }) {
       {/* Top row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
         <span style={{ fontWeight: 700, fontSize: 13, color: '#374151' }}>
-          {d.order_no || `ORD-${d.order_id}`}
+          {d.order_no || `ORD${String(d.order_id).padStart(4, '0')}`}
         </span>
         <StatusBadge status={d.dispatch_status} />
         {d.transport_type && (

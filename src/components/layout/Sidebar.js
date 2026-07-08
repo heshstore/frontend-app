@@ -438,6 +438,7 @@ export default function Sidebar({ onClose }) {
 
           {(canSeeProduction || canSeeItems) && (
             <SectionGroup id="production" label="Production" icon="wrench" sections={sections} onToggle={toggleSection}>
+              {canSeeProduction && pi('Production Board',      '/production/board',        'grid')}
               {canSeeProduction && pi('Work Orders',           '/production/execution',    'wrench')}
               {canSeeProduction && pi('Departments',           '/departments',             'grid')}
               {canSeeProduction && pi('Mfg Analytics',         '/manufacturing/analytics', 'trend')}

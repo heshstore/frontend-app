@@ -94,7 +94,7 @@ export default function OutstandingOrders() {
             {/* Order / customer */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
               <span style={{ fontWeight: 700, fontSize: 13, color: '#374151' }}>
-                {order.order_no || `ORD-${order.id}`}
+                {order.order_no || `ORD${String(order.id).padStart(4, '0')}`}
               </span>
             </div>
             <div style={{ fontSize: 14, fontWeight: 600, color: '#111827', marginBottom: 10 }}>

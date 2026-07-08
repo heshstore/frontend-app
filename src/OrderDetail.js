@@ -192,6 +192,7 @@ export default function OrderDetail({ orderId: propId }) {
   const [error, setError]           = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [planning, setPlanning]     = useState({ requirements: [], workloads: [] });
+  const [sendingToProd, setSendingToProd] = useState(false);
 
   const retry = () => { setOrder(null); setRetryCount(c => c + 1); };
 
@@ -218,6 +219,25 @@ export default function OrderDetail({ orderId: propId }) {
 
     return () => { cancelled = true; };
   }, [id, retryCount]);
+
+  const handleSendToProduction = async () => {
+    if (!window.confirm('Move this order to In Production?')) return;
+    setSendingToProd(true);
+    try {
+      const res = await apiFetch(`/orders/${id}/send-to-production`, { method: 'PATCH' });
+      if (res.ok) {
+        const updated = await res.json();
+        setOrder(updated);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(err.message || 'Failed to move to production');
+      }
+    } catch (e) {
+      alert('Error: ' + e.message);
+    } finally {
+      setSendingToProd(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -314,7 +334,7 @@ export default function OrderDetail({ orderId: propId }) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
               <div style={{ fontSize: 22, fontWeight: 800, color: '#111827' }}>
-                Order #{order.order_no || order.order_number || order.id}
+                {order.order_no || order.order_number || `ORD${String(order.id).padStart(4, '0')}`}
               </div>
               <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
                 {fmtDate(order.order_date || order.created_at)}
@@ -487,10 +507,19 @@ export default function OrderDetail({ orderId: propId }) {
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {isPanelMode && (
                 <button
-                  onClick={() => window.open(`/orders/${id}`, '_blank')}
+                  onClick={() => window.open(`/orders/${id}/print`, '_blank')}
                   style={actionBtn({ background: '#f8fafc', color: '#374151', border: '1px solid #e2e8f0' })}
                 >
                   👁 View<CountBadge n={order.view_count} color="#374151" />
+                </button>
+              )}
+              {order.status === 'APPROVED' && (
+                <button
+                  onClick={handleSendToProduction}
+                  disabled={sendingToProd}
+                  style={actionBtn({ background: '#7c3aed', color: '#fff', opacity: sendingToProd ? 0.7 : 1 })}
+                >
+                  🏭 {sendingToProd ? 'Moving…' : 'Send to Production'}
                 </button>
               )}
               <button

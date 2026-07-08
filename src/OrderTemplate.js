@@ -65,13 +65,13 @@ export default function OrderTemplate({ data, wrapClass = 'qp-screen' }) {
   // Tax mode is set per item now, not per document — show "Mixed" when items
   // disagree instead of a single (possibly wrong) document-wide label.
   const taxLabel = items.length === 0
-    ? (data.is_tax_inclusive ? '(Tax Incl.)' : '(Tax Extra)')
-    : items.every((it) => !!it.is_tax_inclusive) ? '(Tax Incl.)'
-    : items.every((it) => !it.is_tax_inclusive) ? '(Tax Extra)'
-    : '(Mixed)';
+    ? (data.is_tax_inclusive ? 'Inclusive' : 'Extra')
+    : items.every((it) => !!it.is_tax_inclusive) ? 'Inclusive'
+    : items.every((it) => !it.is_tax_inclusive) ? 'Extra'
+    : 'Mixed';
   const colWidths = hasAnyDiscount
-    ? { no: 4, photo: 6, name: 28, instr: 17, qty: 6, disc: 7, rate: 12, gst: 6, amt: 14 }
-    : { no: 4, photo: 6, name: 32, instr: 19, qty: 6, rate: 13, gst: 7, amt: 13 };
+    ? { no: 4, photo: 6, name: 26, instr: 6, qty: 5, unit: 5, disc: 13, rate: 13, gst: 8, amt: 14 }
+    : { no: 4, photo: 6, name: 34, instr: 11, qty: 5, unit: 5, rate: 13.5, gst: 9, amt: 12.5 };
   // Order entity uses 'subtotal' not 'sub_total'
   const subTotal   = Number(data.subtotal || data.sub_total || 0);
   const discType   = data.discount_type  || 'PERCENT';
@@ -271,6 +271,7 @@ export default function OrderTemplate({ data, wrapClass = 'qp-screen' }) {
             <col style={{ width: `${colWidths.name}%` }}  />
             <col style={{ width: `${colWidths.instr}%` }} />
             <col style={{ width: `${colWidths.qty}%` }}   />
+            <col style={{ width: `${colWidths.unit}%` }}  />
             {hasAnyDiscount && <col style={{ width: `${colWidths.disc}%` }} />}
             <col style={{ width: `${colWidths.rate}%` }}  />
             <col style={{ width: `${colWidths.gst}%` }}   />
@@ -278,62 +279,80 @@ export default function OrderTemplate({ data, wrapClass = 'qp-screen' }) {
           </colgroup>
           <thead>
             <tr>
-              <th className="ta-c">#</th>
+              <th className="ta-c">S.No</th>
               <th className="ta-c">Photo</th>
-              <th className="ta-l">Item No / Name</th>
-              <th className="ta-l">Instructions</th>
+              <th className="ta-l">Item / Name / HSN</th>
+              <th className="ta-l">Instr.</th>
               <th className="ta-c">Qty</th>
+              <th className="ta-c">Unit</th>
               {hasAnyDiscount && <th className="ta-c">Disc</th>}
               <th className="ta-r">Rate (₹)</th>
               <th className="ta-c">GST Tax</th>
-              <th className="ta-r" style={{ whiteSpace: 'normal' }}>Amount (₹)<div className="qp-th-sub">{taxLabel}</div></th>
+              <th className="ta-r" style={{ whiteSpace: 'normal' }}>Amount (₹)<div className="qp-th-sub">{taxLabel === 'Mixed' ? '(Mixed)' : taxLabel === 'Inclusive' ? '(Tax Incl.)' : '(Tax Extra)'}</div></th>
             </tr>
           </thead>
           <tbody>
             {items.length === 0 ? (
               <tr>
-                <td colSpan={hasAnyDiscount ? 9 : 8} style={{ textAlign: 'center', color: '#94a3b8', padding: '14pt' }}>
+                <td colSpan={hasAnyDiscount ? 10 : 9} style={{ textAlign: 'center', color: '#94a3b8', padding: '14pt' }}>
                   No items
                 </td>
               </tr>
             ) : items.map((it, i) => {
-              const base    = Number(it.amount || 0);
-              const gstPct  = Number(it.gst_percent || 0);
-              const gstAmt  = it.gst_amount != null
-                ? Number(it.gst_amount)
-                : (base * gstPct) / 100;
-              const total   = base + gstAmt;
-              const discVal = it.discount_value ? Number(it.discount_value) : 0;
-              const disc    = discVal > 0
-                ? (it.discount_type === 'percent' ? `${discVal}%` : inr(discVal))
-                : '—';
+              const base           = Number(it.amount || 0);
+              const rate           = Number(it.rate || 0);
+              const qty            = Number(it.qty || 0);
+              const gstPct         = Number(it.gst_percent || 0);
+              const gstAmt         = (base * gstPct) / 100;
+              const discVal        = Number(it.discount_value || 0);
+              const discType       = String(it.discount_type || 'percent').toLowerCase();
+              const isFlatDisc     = discType !== 'percent';
+              const perUnitDiscAmt = isFlatDisc ? discVal : (rate * discVal) / 100;
+              const discountedRate = Math.max(0, rate - perUnitDiscAmt);
               return (
                 <tr key={it.id || i}>
                   <td className="ta-c" style={{ color: '#64748b' }}>{i + 1}</td>
-                  <td className="ta-c">
+                  <td>
                     {it.image_url ? (
                       <img
                         src={resolveImageUrl(it.image_url)}
                         alt=""
-                        style={{ width: 28, height: 28, objectFit: 'contain', borderRadius: 2 }}
-                        onError={(e) => { e.target.style.display = 'none'; }}
+                        className="qp-item-photo"
+                        onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = ''; }}
                       />
-                    ) : (
-                      <div className="qp-photo-placeholder">IMG</div>
-                    )}
+                    ) : null}
+                    <div className="qp-photo-box" style={it.image_url ? { display: 'none' } : undefined} />
+                    <div className="qp-photo-label">Photo</div>
                   </td>
                   <td>
-                    <div className="qp-item-name">{it.item_name || '—'}</div>
                     {it.sku && <div className="qp-item-sku">{it.sku}</div>}
+                    <div className="qp-item-name">{it.item_name || '—'}</div>
+                    {it.hsn_code && <div className="qp-item-hsn">HSN: {it.hsn_code}</div>}
                   </td>
-                  <td style={{ fontSize: '7.5pt', color: '#475569' }}>
-                    {it.instruction || it.instructions || it.notes || '—'}
+                  <td className="qp-instr">{it.instruction || it.instructions || it.notes || ''}</td>
+                  <td className="ta-c">{qty}</td>
+                  <td className="ta-c">{it.unit || ''}</td>
+                  {hasAnyDiscount && (
+                    <td className="ta-c">
+                      {discVal > 0 && (
+                        <>
+                          <div className="qp-disc-main">{isFlatDisc ? inr(discVal) : `${discVal}%`}</div>
+                          <div className="qp-disc-sub">on {inr(rate)}</div>
+                          <div className="qp-disc-amt">= {inr(isFlatDisc ? discountedRate : perUnitDiscAmt)}</div>
+                        </>
+                      )}
+                    </td>
+                  )}
+                  <td className="ta-r" style={{ whiteSpace: 'nowrap' }}>{inr(discVal > 0 ? discountedRate : rate)}</td>
+                  <td className="ta-c">
+                    {gstPct > 0 && (
+                      <>
+                        <div className="qp-gst-pct">{gstPct}%</div>
+                        <div className="qp-gst-amt">{inr(gstAmt)}</div>
+                      </>
+                    )}
                   </td>
-                  <td className="ta-c">{Number(it.qty || 0)}</td>
-                  {hasAnyDiscount && <td className="ta-c">{disc}</td>}
-                  <td className="ta-r">{inr(it.rate)}</td>
-                  <td className="ta-c">{gstPct > 0 ? `${gstPct}%` : '—'}</td>
-                  <td className="ta-r" style={{ fontWeight: 600 }}>{inr(total)}</td>
+                  <td className="ta-r" style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{inr(base)}</td>
                 </tr>
               );
             })}

@@ -45,6 +45,8 @@ export default function DocActions({
     trackDocAction(type, id, 'print');
     if (type === 'quotation') {
       window.open(`/quotations/${id}/print`, '_blank');
+    } else if (type === 'order') {
+      window.open(`/orders/${id}/print`, '_blank');
     } else {
       window.print();
     }

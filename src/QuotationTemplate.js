@@ -161,12 +161,13 @@ const CSS = `
 .qp-instr     { font-size: 7pt; color: #64748b; }
 .qp-gst-pct   { font-size: 7.5pt; font-weight: 700; }
 .qp-gst-amt   { font-size: 5.5pt; color: #64748b; margin-top: 2pt; }
-.qp-disc-main { font-size: 7pt; font-weight: 700; color: #0f172a; }
+.qp-disc-main { font-size: 7pt; font-weight: 700; color: #0f172a; white-space: nowrap; }
 .qp-disc-sub  { font-size: 6pt; color: #64748b; margin-top: 3pt; }
 .qp-disc-amt  {
   font-size: 7pt; font-weight: 700; color: #0f172a;
   margin-top: 3pt; padding-top: 3pt;
   border-top: 0.5pt solid #cbd5e1;
+  white-space: nowrap;
 }
 .qp-item-photo {
   width: 26pt; height: 26pt;
@@ -330,7 +331,7 @@ export default function QuotationTemplate({ data, wrapClass = 'qp-screen' }) {
     : items.every((it) => !it.is_tax_inclusive) ? 'Extra'
     : 'Mixed';
   const colWidths = hasAnyDiscount
-    ? { no: 4, photo: 6, name: 28, instr: 8, qty: 5, unit: 5, disc: 13, rate: 11.5, gst: 8, amt: 11.5 }
+    ? { no: 4, photo: 6, name: 26, instr: 6, qty: 5, unit: 5, disc: 13, rate: 13, gst: 8, amt: 14 }
     : { no: 4, photo: 6, name: 34, instr: 11, qty: 5, unit: 5, rate: 13.5, gst: 9, amt: 12.5 };
 
   const subTotal   = Number(data.sub_total || 0);
@@ -549,7 +550,7 @@ export default function QuotationTemplate({ data, wrapClass = 'qp-screen' }) {
                       )}
                     </td>
                   )}
-                  <td className="ta-r">{inr(discVal > 0 ? discountedRate : rate)}</td>
+                  <td className="ta-r" style={{ whiteSpace: 'nowrap' }}>{inr(discVal > 0 ? discountedRate : rate)}</td>
                   <td className="ta-c">
                     {gstPct > 0 && (
                       <>
@@ -558,7 +559,7 @@ export default function QuotationTemplate({ data, wrapClass = 'qp-screen' }) {
                       </>
                     )}
                   </td>
-                  <td className="ta-r" style={{ fontWeight: 700 }}>{inr(base)}</td>
+                  <td className="ta-r" style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{inr(base)}</td>
                 </tr>
               );
             })}

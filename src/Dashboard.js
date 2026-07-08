@@ -229,7 +229,7 @@ function DelayedRow({ job, onView }) {
         </div>
         <div style={{ fontSize: 11, color: C.muted, marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ fontFamily: 'monospace', fontSize: 10, color: C.faint }}>
-            {job.order_id ? `ORD-${job.order_id}` : `#${job.id}`}
+            {job.order_id ? `ORD${String(job.order_id).padStart(4, '0')}` : `#${job.id}`}
           </span>
           <span style={{
             fontSize: 10, fontWeight: 700, color: stageColor,

@@ -212,6 +212,30 @@ export const DOC_TEMPLATE_CSS = `
 .qp-table tbody tr:last-child td { border-bottom: 1pt solid #94a3b8; }
 .qp-item-name { font-weight: 600; color: #0f172a; }
 .qp-item-sku  { font-size: 7pt; color: #94a3b8; margin-top: 1pt; }
+.qp-item-hsn  { font-size: 6.5pt; color: #64748b; margin-top: 1pt; }
+.qp-instr     { font-size: 7pt; color: #64748b; vertical-align: top; overflow-wrap: break-word; }
+.qp-gst-pct   { font-size: 7.5pt; font-weight: 700; }
+.qp-gst-amt   { font-size: 5.5pt; color: #64748b; margin-top: 2pt; }
+.qp-disc-main { font-size: 7pt; font-weight: 700; color: #0f172a; white-space: nowrap; }
+.qp-disc-sub  { font-size: 6pt; color: #64748b; margin-top: 3pt; }
+.qp-disc-amt  {
+  font-size: 7pt; font-weight: 700; color: #0f172a;
+  margin-top: 3pt; padding-top: 3pt;
+  border-top: 0.5pt solid #cbd5e1;
+  white-space: nowrap;
+}
+.qp-item-photo {
+  width: 26pt; height: 26pt; object-fit: contain;
+  border-radius: 3pt; display: block; margin: 0 auto;
+  border: 0.5pt solid #e2e8f0;
+}
+.qp-photo-box {
+  width: 26pt; height: 26pt; background: #e2e8f0;
+  border-radius: 3pt; margin: 0 auto;
+  display: flex; align-items: center; justify-content: center;
+}
+.qp-photo-box::after { content: ''; width: 8pt; height: 8pt; border-radius: 50%; background: #94a3b8; }
+.qp-photo-label { font-size: 6pt; color: #94a3b8; text-align: center; margin-top: 1pt; }
 .qp-photo-placeholder {
   width: 28pt; height: 28pt; background: #f1f5f9;
   border: 0.5pt solid #e2e8f0; border-radius: 2pt;

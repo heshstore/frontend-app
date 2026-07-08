@@ -225,7 +225,7 @@ export default function OrderList() {
           >
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 600, fontSize: 15, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                {row.order_no || `Ord-${String(row.id).padStart(5, '0')}`}
+                {row.order_no || `ORD${String(row.id).padStart(4, '0')}`}
                 <StatusBadge status={row.status} />
                 {row.is_wholesaler !== undefined && <PricingBadge isWholesaler={row.is_wholesaler} />}
               </div>
@@ -258,7 +258,7 @@ export default function OrderList() {
                 {/* Left */}
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   <button
-                    onClick={() => openPanel(`Order #${row.order_no || row.id}`, <OrderDetail orderId={row.id} />)}
+                    onClick={() => { trackDocAction('order', row.id, 'view'); window.open(`/orders/${row.id}/print`, '_blank'); }}
                     style={btn({ background: '#f8fafc', color: '#374151', border: '1px solid #e2e8f0' })}
                   >
                     👁 View<CountBadge n={row.view_count} color="#374151" />

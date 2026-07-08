@@ -87,7 +87,7 @@ export default function PaymentHistory() {
             borderRadius: 10, padding: '14px 16px', marginBottom: 16,
           }}>
             <div style={{ fontWeight: 700, fontSize: 14, color: '#374151', marginBottom: 2 }}>
-              {o.order_no || `ORD-${o.id}`}
+              {o.order_no || `ORD${String(o.id).padStart(4, '0')}`}
             </div>
             <div style={{ fontSize: 13, color: '#111827', marginBottom: 10 }}>
               {o.customer_name}

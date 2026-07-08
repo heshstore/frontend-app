@@ -169,7 +169,7 @@ export default function BusinessSummary() {
             {staleOrders.length} order{staleOrders.length > 1 ? 's' : ''} stuck — no production activity for 4+ hours
           </div>
           <div style={{ fontSize: 12, color: '#c2410c' }}>
-            {staleOrders.map(o => o.order_no || `ORD-${o.id}`).join(', ')}
+            {staleOrders.map(o => o.order_no || `ORD${String(o.id).padStart(4, '0')}`).join(', ')}
             {staleOrders.some(o => o.unassigned_jobs > 0) && ' — check staff assignments'}
           </div>
         </div>

@@ -241,7 +241,7 @@ export default function QuotationList() {
       const data = await res.json();
       if (res.ok) {
         const orderId = data.order_id;
-        const orderNo = data.order_no || (orderId ? `ORD-${String(orderId).padStart(4, '0')}` : '');
+        const orderNo = data.order_no || (orderId ? `ORD${String(orderId).padStart(4, '0')}` : '');
         toast.success(`Order ${orderNo} created successfully`);
         loadQuotations();
         if (orderId) navigate(`/orders/${orderId}`);

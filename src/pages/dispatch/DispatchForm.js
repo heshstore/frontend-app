@@ -92,7 +92,7 @@ export default function DispatchForm() {
         borderRadius: 10, padding: '14px 16px', marginBottom: 20,
       }}>
         <div style={{ fontWeight: 700, fontSize: 14, color: '#1d4ed8', marginBottom: 2 }}>
-          {order.order_no || `ORD-${order.id}`}
+          {order.order_no || `ORD${String(order.id).padStart(4, '0')}`}
         </div>
         <div style={{ fontSize: 13, color: '#374151' }}>{order.customer_name}</div>
         {order.customer_phone && (
