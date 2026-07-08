@@ -51,32 +51,26 @@ function StatusPill({ status }) {
 
 // ─── Order card ───────────────────────────────────────────────────────────────
 function OrderCard({ order, departments, mode, onRefresh }) {
-  const [expanded,  setExpanded]  = useState(false);
-  const [items,     setItems]     = useState(null);
+  const [items,        setItems]        = useState(null);
   const [loadingItems, setLoadingItems] = useState(false);
-  const [assigning, setAssigning] = useState({});   // itemId → bool
-  const [deptPick,  setDeptPick]  = useState({});   // itemId → deptId
+  const [assigning,    setAssigning]    = useState({});
+  const [deptPick,     setDeptPick]     = useState({});
 
   const loadItems = useCallback(async () => {
-    if (items !== null) return;
     setLoadingItems(true);
     try {
       const res  = await apiFetch(`/orders/${order.id}`);
       const data = await res.json();
-      // Enrich items with category type from service_items (backend returns it via join or separate field)
       setItems(data.items || []);
     } catch {
       toast.error('Failed to load order items');
     } finally {
       setLoadingItems(false);
     }
-  }, [order.id, items]);
+  }, [order.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleExpand = () => {
-    const next = !expanded;
-    setExpanded(next);
-    if (next) loadItems();
-  };
+  // Load items automatically — no click required
+  useEffect(() => { loadItems(); }, [order.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const assignDept = async (item) => {
     const deptId = deptPick[item.id];
@@ -136,10 +130,7 @@ function OrderCard({ order, departments, mode, onRefresh }) {
       overflow: 'hidden',
     }}>
       {/* Header row */}
-      <div
-        onClick={handleExpand}
-        style={{ padding: '14px 18px', cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: 14 }}
-      >
+      <div style={{ padding: '14px 18px', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>{orderNo}</span>
@@ -163,12 +154,10 @@ function OrderCard({ order, departments, mode, onRefresh }) {
             </span>
           </div>
         </div>
-        <span style={{ fontSize: 16, color: '#94a3b8', marginTop: 2 }}>{expanded ? '▲' : '▼'}</span>
       </div>
 
-      {/* Expanded items */}
-      {expanded && (
-        <div style={{ borderTop: '1px solid #f1f5f9', padding: '14px 18px' }}>
+      {/* Items — always visible */}
+      <div style={{ borderTop: '1px solid #f1f5f9', padding: '14px 18px' }}>
           {loadingItems && (
             <div style={{ color: '#94a3b8', fontSize: 13 }}>Loading items…</div>
           )}
@@ -292,7 +281,6 @@ function OrderCard({ order, departments, mode, onRefresh }) {
             </div>
           )}
         </div>
-      )}
     </div>
   );
 }
