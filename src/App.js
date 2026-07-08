@@ -54,7 +54,10 @@ import DepartmentList from "./pages/boq/DepartmentList";
 import InventoryPage              from "./pages/inventory/InventoryPage";
 import PurchaseRequirementsPage    from "./pages/purchase-requirements/PurchaseRequirementsPage";
 import ProductionExecutionPage    from "./pages/production-execution/ProductionExecutionPage";
-import ManufacturingAnalyticsPage from "./pages/manufacturing/ManufacturingAnalyticsPage";
+import ProductionBoardPage             from "./pages/production/ProductionBoardPage";
+import CentralProductionBoardPage     from "./pages/production/CentralProductionBoardPage";
+import DepartmentWorkspacePage        from "./pages/production/DepartmentWorkspacePage";
+import ManufacturingAnalyticsPage     from "./pages/manufacturing/ManufacturingAnalyticsPage";
 import VendorsPage                  from "./pages/vendors/VendorsPage";
 import PurchaseOrdersPage         from "./pages/purchase-orders/PurchaseOrdersPage";
 import PurchaseOrderDetailPage    from "./pages/purchase-orders/PurchaseOrderDetailPage";
@@ -278,7 +281,10 @@ function App() {
               <Route path="/vendors" element={<PermissionRoute permission="inventory.view"><VendorsPage /></PermissionRoute>} />
               <Route path="/purchase-orders" element={<PermissionRoute permission="inventory.view"><PurchaseOrdersPage /></PermissionRoute>} />
               <Route path="/purchase-orders/:id" element={<PermissionRoute permission="inventory.view"><PurchaseOrderDetailPage /></PermissionRoute>} />
-              <Route path="/production/execution" element={<PermissionRoute permission="production.view"><ProductionExecutionPage /></PermissionRoute>} />
+              <Route path="/production/board"           element={<PermissionRoute permission="production.view"><ProductionBoardPage /></PermissionRoute>} />
+              <Route path="/production/central-board"   element={<PermissionRoute permission="production.view"><CentralProductionBoardPage /></PermissionRoute>} />
+              <Route path="/production/dept-workspace"  element={<PermissionRoute permission="production.view"><DepartmentWorkspacePage /></PermissionRoute>} />
+              <Route path="/production/execution"       element={<PermissionRoute permission="production.view"><ProductionExecutionPage /></PermissionRoute>} />
               <Route path="/manufacturing/analytics" element={<PermissionRoute permission="production.view"><ManufacturingAnalyticsPage /></PermissionRoute>} />
 
               <Route path="/staff" element={<PermissionRoute permission="staff.view"><StaffManagement /></PermissionRoute>} />
