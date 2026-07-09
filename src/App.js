@@ -57,6 +57,7 @@ import ProductionExecutionPage    from "./pages/production-execution/ProductionE
 import ProductionBoardPage             from "./pages/production/ProductionBoardPage";
 import CentralProductionBoardPage     from "./pages/production/CentralProductionBoardPage";
 import DepartmentWorkspacePage        from "./pages/production/DepartmentWorkspacePage";
+import DepartmentControlCenterPage    from "./pages/production/DepartmentControlCenterPage";
 import ManufacturingAnalyticsPage     from "./pages/manufacturing/ManufacturingAnalyticsPage";
 import VendorsPage                  from "./pages/vendors/VendorsPage";
 import PurchaseOrdersPage         from "./pages/purchase-orders/PurchaseOrdersPage";
@@ -284,6 +285,7 @@ function App() {
               <Route path="/production/board"           element={<PermissionRoute permission="production.view"><ProductionBoardPage /></PermissionRoute>} />
               <Route path="/production/central-board"   element={<PermissionRoute permission="production.view"><CentralProductionBoardPage /></PermissionRoute>} />
               <Route path="/production/dept-workspace"  element={<PermissionRoute permission="production.view"><DepartmentWorkspacePage /></PermissionRoute>} />
+              <Route path="/departments/:id/control-center" element={<PermissionRoute permission="production.view"><DepartmentControlCenterPage /></PermissionRoute>} />
               <Route path="/production/execution"       element={<PermissionRoute permission="production.view"><ProductionExecutionPage /></PermissionRoute>} />
               <Route path="/manufacturing/analytics" element={<PermissionRoute permission="production.view"><ManufacturingAnalyticsPage /></PermissionRoute>} />
 

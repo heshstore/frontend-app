@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { apiFetch } from "../../utils/api";
 import { toast } from "../../utils/toast";
 
@@ -12,6 +13,7 @@ const EMPTY_FORM = {
 };
 
 export default function DepartmentList() {
+  const navigate = useNavigate();
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [includeInactive, setIncludeInactive] = useState(false);
@@ -168,7 +170,7 @@ export default function DepartmentList() {
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ background: "#f3f4f6" }}>
-              {["Name", "Code", "Daily Capacity", "Manpower", "Status", "Actions"].map((h) => (
+              {["Name", "Code", "Daily Capacity", "Manpower", "Status", "Actions", ""].map((h) => (
                 <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "#374151", borderBottom: "1px solid #e5e7eb" }}>
                   {h}
                 </th>
@@ -206,6 +208,17 @@ export default function DepartmentList() {
                         }}
                       >
                         {isEditing ? "Cancel" : "Edit"}
+                      </button>
+                    </td>
+                    <td style={{ padding: "10px 12px" }}>
+                      <button
+                        onClick={() => navigate(`/departments/${dept.id}/control-center`)}
+                        style={{
+                          padding: "4px 10px", border: "none", borderRadius: 5,
+                          background: "#2563eb", color: "#fff", fontSize: 12, cursor: "pointer",
+                        }}
+                      >
+                        Open →
                       </button>
                     </td>
                   </tr>
