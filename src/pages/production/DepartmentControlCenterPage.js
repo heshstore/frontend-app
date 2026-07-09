@@ -3,27 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../utils/api';
 import { toast } from '../../utils/toast';
 
-// ── Design tokens (matches ERP theme) ────────────────────────────────────────
-const C = {
-  blue: '#2563eb', blueLt: '#eff6ff', border: '#e2e8f0',
-  red: '#dc2626', redLt: '#fef2f2', green: '#16a34a', greenLt: '#f0fdf4',
-  amber: '#d97706', amberLt: '#fffbeb', slate: '#64748b', bg: '#f8fafc',
-  white: '#fff', text: '#1e293b', muted: '#94a3b8',
-};
-const inp = {
-  padding: '8px 12px', border: `1px solid ${C.border}`, borderRadius: 8,
-  fontSize: 13, color: C.text, background: C.white, width: '100%', boxSizing: 'border-box',
-};
-const btn = (bg, color = '#fff') => ({
-  padding: '7px 16px', background: bg, color, border: 'none', borderRadius: 8,
-  fontSize: 13, fontWeight: 600, cursor: 'pointer',
-});
-const btnSm = (bg, color = '#fff') => ({ ...btn(bg, color), padding: '4px 10px', fontSize: 12 });
-const outBtn = { ...btn(C.white, C.slate), border: `1px solid ${C.border}` };
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const api = async (path, opts = {}) => {
-  const res = await apiFetch(path, opts);
+  const res = await apiFetch(path, { ...opts, headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) } });
   if (!res.ok) {
     const e = await res.json().catch(() => ({}));
     throw new Error(e.message || `Error ${res.status}`);
@@ -32,192 +14,283 @@ const api = async (path, opts = {}) => {
   return res.json();
 };
 
-const DEPT_TYPES = ['Production', 'Quality', 'Packing', 'Warehouse', 'Maintenance', 'Administration'];
-const INSPECTION_TYPES = ['100%', 'Sampling', 'First Piece', 'Final Inspection'];
-const FREQUENCIES = ['DAILY', 'WEEKLY', 'MONTHLY', 'QUARTERLY', 'YEARLY'];
-const MACHINE_STATUSES = ['RUNNING', 'IDLE', 'BREAKDOWN', 'MAINTENANCE'];
-const DOC_TYPES = ['SOP', 'MACHINE_MANUAL', 'MAINTENANCE_MANUAL', 'SAFETY_MANUAL', 'WORK_INSTRUCTION'];
-const STATUS_COLOR = { RUNNING: C.green, IDLE: C.slate, BREAKDOWN: C.red, MAINTENANCE: C.amber };
-const FREQ_COLOR = { DAILY: C.blue, WEEKLY: C.green, MONTHLY: C.amber, QUARTERLY: '#7c3aed', YEARLY: C.red };
+function fmtDate(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+}
 
-function fmtDate(d) { return d ? new Date(d).toLocaleDateString('en-IN') : '—'; }
-function fmtMins(m) { if (!m) return '—'; return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`; }
+// ── Styles ────────────────────────────────────────────────────────────────────
+const inp = {
+  width: '100%', padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: 8,
+  fontSize: 13, color: '#1e293b', background: '#fff', boxSizing: 'border-box',
+};
+const primaryBtn = { padding: '8px 18px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' };
+const ghostBtn = { padding: '7px 14px', background: '#f8fafc', color: '#475569', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, cursor: 'pointer' };
+const dangerBtn = { ...ghostBtn, color: '#dc2626', borderColor: '#fecaca' };
 
-// ── Collapsible Section ───────────────────────────────────────────────────────
-function Section({ title, badge, badgeColor, children, defaultOpen = false }) {
+const DEPT_TYPES = ['Production', 'Packing', 'Quality', 'Warehouse', 'Administration'];
+const MACHINE_STATUSES = ['READY', 'RUNNING', 'IDLE', 'BREAKDOWN', 'MAINTENANCE'];
+
+const STATUS_STYLE = {
+  READY:       { bg: '#f0fdf4', color: '#16a34a', border: '#bbf7d0' },
+  RUNNING:     { bg: '#eff6ff', color: '#2563eb', border: '#bfdbfe' },
+  IDLE:        { bg: '#f8fafc', color: '#64748b', border: '#e2e8f0' },
+  BREAKDOWN:   { bg: '#fef2f2', color: '#dc2626', border: '#fecaca' },
+  MAINTENANCE: { bg: '#fffbeb', color: '#d97706', border: '#fde68a' },
+};
+
+function StatusBadge({ status }) {
+  const s = STATUS_STYLE[status] ?? STATUS_STYLE.IDLE;
+  return (
+    <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 99, background: s.bg, color: s.color, border: `1px solid ${s.border}`, textTransform: 'uppercase' }}>
+      {status}
+    </span>
+  );
+}
+
+// ── Collapsible card ──────────────────────────────────────────────────────────
+function Card({ title, right, children, defaultOpen = true }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, marginBottom: 12, overflow: 'hidden' }}>
-      <button
-        onClick={() => setOpen(o => !o)}
-        style={{
-          width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          padding: '14px 18px', background: 'none', border: 'none', cursor: 'pointer',
-          fontSize: 14, fontWeight: 700, color: C.text,
-        }}
-      >
-        <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {title}
-          {badge != null && (
-            <span style={{
-              fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99,
-              background: badgeColor ?? C.blueLt, color: badgeColor ? C.white : C.blue,
-            }}>{badge}</span>
-          )}
-        </span>
-        <span style={{ color: C.muted }}>{open ? '▲' : '▼'}</span>
-      </button>
-      {open && <div style={{ padding: '0 18px 18px', borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>{children}</div>}
-    </div>
-  );
-}
-
-// ── Toggle switch ─────────────────────────────────────────────────────────────
-function Toggle({ checked, onChange, label }) {
-  return (
-    <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}>
+    <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, marginBottom: 16, overflow: 'hidden' }}>
       <div
-        onClick={() => onChange(!checked)}
-        style={{
-          width: 40, height: 22, borderRadius: 11, position: 'relative', transition: 'background .2s',
-          background: checked ? C.blue : C.border, flexShrink: 0,
-        }}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', cursor: 'pointer', userSelect: 'none' }}
+        onClick={() => setOpen(o => !o)}
       >
-        <div style={{
-          position: 'absolute', top: 3, left: checked ? 21 : 3, width: 16, height: 16,
-          borderRadius: '50%', background: C.white, transition: 'left .2s',
-        }} />
+        <span style={{ fontWeight: 700, fontSize: 14, color: '#1e293b' }}>{title}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {right && <div onClick={e => e.stopPropagation()}>{right}</div>}
+          <span style={{ color: '#94a3b8', fontSize: 12 }}>{open ? '▲' : '▼'}</span>
+        </div>
       </div>
-      <span style={{ fontSize: 13, color: C.text }}>{label}</span>
-    </label>
-  );
-}
-
-// ── Field row ─────────────────────────────────────────────────────────────────
-function Field({ label, children }) {
-  return (
-    <div style={{ marginBottom: 14 }}>
-      <div style={{ fontSize: 11, color: C.slate, fontWeight: 600, marginBottom: 5, textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</div>
-      {children}
+      {open && <div style={{ padding: '0 20px 20px', borderTop: '1px solid #f1f5f9' }}>{children}</div>}
     </div>
   );
 }
-function GridRow({ children, cols = 3 }) {
-  return <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 14, marginBottom: 4 }}>{children}</div>;
+
+function Label({ children }) {
+  return <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 5 }}>{children}</div>;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// SECTIONS
-// ═══════════════════════════════════════════════════════════════════════════════
+function Grid({ cols = 3, children }) {
+  return <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 14 }}>{children}</div>;
+}
 
-// ── S1+S2+S3+S12+S13: Extension form ─────────────────────────────────────────
-function ExtensionSection({ deptId, ext, onSaved }) {
-  const [form, setForm] = useState(ext);
+// ══════════════════════════════════════════════════════════════════
+// SECTION 1 — Department Information
+// ══════════════════════════════════════════════════════════════════
+function DeptInfoSection({ deptId, dept, ext, onExtSaved }) {
+  const [form, setForm] = useState({
+    description: ext?.description ?? '',
+    deptType: ext?.deptType ?? 'Production',
+    workingHoursPerDay: ext?.workingHoursPerDay ?? 8,
+    managerName: ext?.managerName ?? '',
+    supervisorName: ext?.supervisorName ?? '',
+  });
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => { setForm(ext); }, [ext]);
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  useEffect(() => {
+    setForm({
+      description: ext?.description ?? '',
+      deptType: ext?.deptType ?? 'Production',
+      workingHoursPerDay: ext?.workingHoursPerDay ?? 8,
+      managerName: ext?.managerName ?? '',
+      supervisorName: ext?.supervisorName ?? '',
+    });
+  }, [ext]);
 
   const save = async () => {
     setSaving(true);
     try {
       const saved = await api(`/departments/${deptId}/extension`, { method: 'PATCH', body: JSON.stringify(form) });
-      onSaved(saved);
-      toast.success('Saved');
+      onExtSaved(saved);
+      toast.success('Department info saved');
     } catch (e) { toast.error(e.message); }
     finally { setSaving(false); }
   };
 
-  if (!form) return null;
   return (
-    <>
-      <Section title="Basic Information" defaultOpen>
-        <GridRow>
-          <Field label="Description">
-            <textarea value={form.description ?? ''} onChange={e => set('description', e.target.value)}
-              style={{ ...inp, height: 72, resize: 'vertical' }} />
-          </Field>
-          <Field label="Department Type">
-            <select value={form.deptType ?? 'Production'} onChange={e => set('deptType', e.target.value)} style={inp}>
-              {DEPT_TYPES.map(t => <option key={t}>{t}</option>)}
-            </select>
-          </Field>
-        </GridRow>
-      </Section>
-
-      <Section title="Capacity Planning">
-        <GridRow cols={4}>
-          <Field label="Working Hours / Day">
-            <input type="number" value={form.workingHoursPerDay ?? 8} onChange={e => set('workingHoursPerDay', e.target.value)} style={inp} />
-          </Field>
-          <Field label="No. of Machines">
-            <input type="number" value={form.noMachines ?? 0} onChange={e => set('noMachines', e.target.value)} style={inp} />
-          </Field>
-          <Field label="No. of Operators">
-            <input type="number" value={form.noOperators ?? 0} onChange={e => set('noOperators', e.target.value)} style={inp} />
-          </Field>
-          <Field label="Efficiency %">
-            <input type="number" value={form.efficiencyPct ?? 85} onChange={e => set('efficiencyPct', e.target.value)} style={inp} />
-          </Field>
-          <Field label="OEE Target %">
-            <input type="number" value={form.oeeTargetPct ?? 80} onChange={e => set('oeeTargetPct', e.target.value)} style={inp} />
-          </Field>
-        </GridRow>
-      </Section>
-
-      <Section title="Department Ownership">
-        <GridRow>
-          <Field label="Department Manager">
-            <input value={form.managerName ?? ''} onChange={e => set('managerName', e.target.value)} style={inp} placeholder="Name" />
-          </Field>
-          <Field label="Supervisor">
-            <input value={form.supervisorName ?? ''} onChange={e => set('supervisorName', e.target.value)} style={inp} placeholder="Name" />
-          </Field>
-          <Field label="Team Leader">
-            <input value={form.teamLeaderName ?? ''} onChange={e => set('teamLeaderName', e.target.value)} style={inp} placeholder="Name" />
-          </Field>
-        </GridRow>
-      </Section>
-
-      <Section title="Quality Rules">
-        <GridRow cols={2}>
-          <Field label="Require QC">
-            <Toggle checked={!!form.requireQc} onChange={v => set('requireQc', v)} label="QC required before dispatch" />
-          </Field>
-          <Field label="Inspection Type">
-            <select value={form.inspectionType ?? ''} onChange={e => set('inspectionType', e.target.value)} style={inp}>
-              <option value="">— Select —</option>
-              {INSPECTION_TYPES.map(t => <option key={t}>{t}</option>)}
-            </select>
-          </Field>
-        </GridRow>
-      </Section>
-
-      <Section title="Department Rules">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-          <Toggle checked={!!form.allowParallelJobs} onChange={v => set('allowParallelJobs', v)} label="Allow Parallel Jobs" />
-          <Toggle checked={!!form.requireSupervisorApproval} onChange={v => set('requireSupervisorApproval', v)} label="Require Supervisor Approval (checklist)" />
-          <Toggle checked={!!form.requireQcRule} onChange={v => set('requireQcRule', v)} label="Require QC Checkpoint" />
-          <Toggle checked={!!form.allowSkipProcess} onChange={v => set('allowSkipProcess', v)} label="Allow Skip Process" />
-          <Toggle checked={!!form.allowOvertime} onChange={v => set('allowOvertime', v)} label="Allow Overtime" />
+    <Card title="Department Information">
+      {/* Read-only existing fields */}
+      <Grid cols={3}>
+        <div>
+          <Label>Department Name</Label>
+          <div style={{ ...inp, background: '#f8fafc', color: '#475569' }}>{dept?.name ?? '—'}</div>
         </div>
-      </Section>
-
-      <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
-        <button style={btn(C.blue)} onClick={save} disabled={saving}>
-          {saving ? 'Saving…' : 'Save All Settings'}
-        </button>
+        <div>
+          <Label>Department Code</Label>
+          <div style={{ ...inp, background: '#f8fafc', color: '#475569', fontFamily: 'monospace' }}>{dept?.code ?? '—'}</div>
+        </div>
+        <div>
+          <Label>Department Type</Label>
+          <select value={form.deptType} onChange={e => setForm(f => ({ ...f, deptType: e.target.value }))} style={inp}>
+            {DEPT_TYPES.map(t => <option key={t}>{t}</option>)}
+          </select>
+        </div>
+        <div>
+          <Label>Working Hours / Day</Label>
+          <input type="number" min="1" max="24" value={form.workingHoursPerDay}
+            onChange={e => setForm(f => ({ ...f, workingHoursPerDay: e.target.value }))} style={inp} />
+        </div>
+        <div>
+          <Label>Department Manager</Label>
+          <input value={form.managerName} onChange={e => setForm(f => ({ ...f, managerName: e.target.value }))} style={inp} placeholder="Name" />
+        </div>
+        <div>
+          <Label>Supervisor</Label>
+          <input value={form.supervisorName} onChange={e => setForm(f => ({ ...f, supervisorName: e.target.value }))} style={inp} placeholder="Name" />
+        </div>
+      </Grid>
+      <div style={{ marginTop: 14 }}>
+        <Label>Description</Label>
+        <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+          style={{ ...inp, height: 70, resize: 'vertical' }} placeholder="Department purpose and scope…" />
       </div>
-    </>
+      <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end' }}>
+        <button style={primaryBtn} onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save Changes'}</button>
+      </div>
+    </Card>
   );
 }
 
-// ── S4+S5: Checklist + Production Lock ───────────────────────────────────────
-function ChecklistSection({ deptId, checklist, session, readiness, onRefresh }) {
+// ══════════════════════════════════════════════════════════════════
+// SECTION 2 — Machine Master
+// ══════════════════════════════════════════════════════════════════
+const EMPTY_MACHINE = { name: '', machineRefId: '', model: '', serialNumber: '', installationDate: '', operator: '' };
+
+function MachinesSection({ deptId, machines, onRefresh }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState(EMPTY_MACHINE);
+  const [saving, setSaving] = useState(false);
+  const [editId, setEditId] = useState(null);
+  const [editStatus, setEditStatus] = useState({});
+
+  const addMachine = async () => {
+    if (!form.name.trim()) { toast.error('Machine name is required'); return; }
+    setSaving(true);
+    try {
+      await api(`/departments/${deptId}/machines`, { method: 'POST', body: JSON.stringify(form) });
+      setForm(EMPTY_MACHINE);
+      setShowAdd(false);
+      onRefresh();
+      toast.success('Machine added');
+    } catch (e) { toast.error(e.message); }
+    finally { setSaving(false); }
+  };
+
+  const updateStatus = async (machineId, status) => {
+    try {
+      await api(`/departments/${deptId}/machines/${machineId}`, { method: 'PATCH', body: JSON.stringify({ status }) });
+      onRefresh();
+    } catch (e) { toast.error(e.message); }
+  };
+
+  const toggleActive = async (m) => {
+    try {
+      await api(`/departments/${deptId}/machines/${m.id}`, { method: 'PATCH', body: JSON.stringify({ isActive: !m.isActive }) });
+      onRefresh();
+    } catch (e) { toast.error(e.message); }
+  };
+
+  const readyToday = (m) => m.status === 'READY' && m.readyDate === new Date().toISOString().slice(0, 10);
+
+  return (
+    <Card title={`Machines (${machines?.length ?? 0})`} right={
+      <button style={primaryBtn} onClick={() => setShowAdd(s => !s)}>{showAdd ? 'Cancel' : '+ Add Machine'}</button>
+    }>
+      {showAdd && (
+        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: 16, marginBottom: 16 }}>
+          <Grid cols={3}>
+            <div>
+              <Label>Machine Name *</Label>
+              <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} style={inp} placeholder="e.g. Laser Cutter 1" />
+            </div>
+            <div>
+              <Label>Machine Code</Label>
+              <input value={form.machineRefId} onChange={e => setForm(f => ({ ...f, machineRefId: e.target.value }))} style={inp} placeholder="e.g. LC-001" />
+            </div>
+            <div>
+              <Label>Model</Label>
+              <input value={form.model} onChange={e => setForm(f => ({ ...f, model: e.target.value }))} style={inp} placeholder="e.g. XL-500" />
+            </div>
+            <div>
+              <Label>Serial Number</Label>
+              <input value={form.serialNumber} onChange={e => setForm(f => ({ ...f, serialNumber: e.target.value }))} style={inp} />
+            </div>
+            <div>
+              <Label>Installation Date</Label>
+              <input type="date" value={form.installationDate} onChange={e => setForm(f => ({ ...f, installationDate: e.target.value }))} style={inp} />
+            </div>
+            <div>
+              <Label>Operator</Label>
+              <input value={form.operator} onChange={e => setForm(f => ({ ...f, operator: e.target.value }))} style={inp} placeholder="Operator name" />
+            </div>
+          </Grid>
+          <div style={{ marginTop: 12 }}>
+            <button style={primaryBtn} onClick={addMachine} disabled={saving}>{saving ? 'Adding…' : 'Add Machine'}</button>
+          </div>
+        </div>
+      )}
+
+      {(!machines || machines.length === 0) && !showAdd && (
+        <div style={{ textAlign: 'center', padding: '32px 0', color: '#94a3b8', fontSize: 13 }}>No machines added yet. Click "+ Add Machine" to get started.</div>
+      )}
+
+      {(machines ?? []).map(m => (
+        <div key={m.id} style={{
+          display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px',
+          border: `1px solid ${readyToday(m) ? '#bbf7d0' : '#e2e8f0'}`,
+          background: readyToday(m) ? '#f0fdf4' : '#fff',
+          borderRadius: 10, marginBottom: 8,
+          opacity: m.isActive ? 1 : 0.5,
+        }}>
+          {/* Status indicator dot */}
+          <div style={{ width: 10, height: 10, borderRadius: '50%', flexShrink: 0, background: STATUS_STYLE[m.status]?.color ?? '#94a3b8' }} />
+
+          {/* Machine info */}
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: 13, color: '#1e293b' }}>
+              {m.name}
+              {m.machineRefId && <span style={{ fontWeight: 400, color: '#64748b', marginLeft: 6, fontFamily: 'monospace', fontSize: 12 }}>{m.machineRefId}</span>}
+            </div>
+            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
+              {[m.model, m.serialNumber].filter(Boolean).join(' · ')}
+              {m.operator && <> · Operator: <strong>{m.operator}</strong></>}
+              {m.installationDate && <> · Installed: {fmtDate(m.installationDate)}</>}
+            </div>
+            {readyToday(m) && (
+              <div style={{ fontSize: 10, color: '#16a34a', fontWeight: 700, marginTop: 3 }}>✓ READY TODAY</div>
+            )}
+          </div>
+
+          {/* Status dropdown */}
+          <select
+            value={m.status}
+            onChange={e => updateStatus(m.id, e.target.value)}
+            style={{ ...inp, width: 150, padding: '5px 8px', fontSize: 12 }}
+          >
+            {MACHINE_STATUSES.map(s => <option key={s}>{s}</option>)}
+          </select>
+
+          {/* Active toggle */}
+          <button style={{ ...ghostBtn, fontSize: 11, padding: '4px 10px' }} onClick={() => toggleActive(m)}>
+            {m.isActive ? 'Disable' : 'Enable'}
+          </button>
+        </div>
+      ))}
+    </Card>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
+// SECTION 3 — Checklist Configuration
+// ══════════════════════════════════════════════════════════════════
+function ChecklistConfigSection({ deptId, checklist, onRefresh }) {
   const [newItem, setNewItem] = useState('');
   const [mandatory, setMandatory] = useState(true);
   const [adding, setAdding] = useState(false);
-  const [busy, setBusy] = useState(false);
+
+  const items = checklist?.items ?? [];
 
   const addItem = async () => {
     if (!newItem.trim()) return;
@@ -232,21 +305,107 @@ function ChecklistSection({ deptId, checklist, session, readiness, onRefresh }) 
     finally { setAdding(false); }
   };
 
+  const updateItem = async (iid, patch) => {
+    try {
+      await api(`/departments/${deptId}/checklist/items/${iid}`, { method: 'PATCH', body: JSON.stringify(patch) });
+      onRefresh();
+    } catch (e) { toast.error(e.message); }
+  };
+
   const deleteItem = async (iid) => {
+    if (!window.confirm('Remove this checklist item?')) return;
     try {
       await api(`/departments/${deptId}/checklist/items/${iid}`, { method: 'DELETE' });
       onRefresh();
     } catch (e) { toast.error(e.message); }
   };
 
-  const toggleItem = async (iid, current) => {
+  const moveItem = async (idx, dir) => {
+    const newOrder = [...items];
+    const target = idx + dir;
+    if (target < 0 || target >= newOrder.length) return;
+    [newOrder[idx], newOrder[target]] = [newOrder[target], newOrder[idx]];
     try {
-      await api(`/departments/${deptId}/checklist/items/${iid}`, {
-        method: 'PATCH', body: JSON.stringify({ isMandatory: !current }),
+      await api(`/departments/${deptId}/checklist/items/reorder`, {
+        method: 'PATCH', body: JSON.stringify({ orderedIds: newOrder.map(i => i.id) }),
       });
       onRefresh();
     } catch (e) { toast.error(e.message); }
   };
+
+  return (
+    <Card title={`Daily Startup Checklist (${items.filter(i => i.isActive).length} active items)`}>
+      {/* Add row */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+        <input
+          value={newItem} onChange={e => setNewItem(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && addItem()}
+          placeholder="Add checklist item…"
+          style={{ ...inp, flex: 1, minWidth: 200 }}
+        />
+        <label style={{ fontSize: 12, color: '#475569', display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+          <input type="checkbox" checked={mandatory} onChange={e => setMandatory(e.target.checked)} />
+          Mandatory
+        </label>
+        <button style={primaryBtn} onClick={addItem} disabled={adding || !newItem.trim()}>
+          {adding ? '…' : '+ Add'}
+        </button>
+      </div>
+
+      {items.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '24px 0', color: '#94a3b8', fontSize: 13 }}>
+          No checklist items yet. Add items above so operators can complete the morning inspection.
+        </div>
+      )}
+
+      {items.map((item, idx) => (
+        <div key={item.id} style={{
+          display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px',
+          background: item.isActive ? '#fff' : '#f8fafc', borderRadius: 8,
+          border: '1px solid #e2e8f0', marginBottom: 6, opacity: item.isActive ? 1 : 0.55,
+        }}>
+          <span style={{ color: '#94a3b8', fontSize: 11, width: 22, textAlign: 'right', flexShrink: 0 }}>{idx + 1}</span>
+          <span style={{ flex: 1, fontSize: 13, color: '#1e293b' }}>{item.itemText}</span>
+
+          <span style={{
+            fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 99, flexShrink: 0,
+            background: item.isMandatory ? '#fef3c7' : '#f1f5f9',
+            color: item.isMandatory ? '#92400e' : '#64748b',
+          }}>
+            {item.isMandatory ? 'MANDATORY' : 'OPTIONAL'}
+          </span>
+
+          {/* Controls */}
+          <button style={{ ...ghostBtn, padding: '3px 8px', fontSize: 11 }}
+            onClick={() => updateItem(item.id, { isMandatory: !item.isMandatory })}>
+            {item.isMandatory ? 'Make Optional' : 'Make Mandatory'}
+          </button>
+          <button style={{ ...ghostBtn, padding: '3px 8px', fontSize: 11 }}
+            onClick={() => updateItem(item.id, { isActive: !item.isActive })}>
+            {item.isActive ? 'Disable' : 'Enable'}
+          </button>
+          <button style={{ ...ghostBtn, padding: '3px 6px', fontSize: 11 }} onClick={() => moveItem(idx, -1)} disabled={idx === 0}>↑</button>
+          <button style={{ ...ghostBtn, padding: '3px 6px', fontSize: 11 }} onClick={() => moveItem(idx, 1)} disabled={idx === items.length - 1}>↓</button>
+          <button style={{ ...dangerBtn, padding: '3px 8px', fontSize: 11 }} onClick={() => deleteItem(item.id)}>✕</button>
+        </div>
+      ))}
+    </Card>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
+// SECTION 4 — Today's Inspection
+// ══════════════════════════════════════════════════════════════════
+function InspectionSection({ deptId, checklist, readiness, onRefresh }) {
+  const [busy, setBusy] = useState(false);
+  const session = readiness?.session;
+  const items = (checklist?.items ?? []).filter(i => i.isActive);
+  const completedIds = new Set((session?.completions ?? []).map(c => c.itemId));
+
+  const mandatoryItems = items.filter(i => i.isMandatory);
+  const completedMandatory = mandatoryItems.filter(i => completedIds.has(i.id)).length;
+  const allMandatoryDone = mandatoryItems.length > 0 && completedMandatory === mandatoryItems.length;
+  const progress = mandatoryItems.length > 0 ? Math.round((completedMandatory / mandatoryItems.length) * 100) : 100;
 
   const startSession = async () => {
     setBusy(true);
@@ -257,11 +416,10 @@ function ChecklistSection({ deptId, checklist, session, readiness, onRefresh }) 
     finally { setBusy(false); }
   };
 
-  const toggleComplete = async (itemId) => {
+  const toggleItem = async (itemId) => {
     if (!session) return;
     setBusy(true);
     try {
-      const completedIds = new Set((session.completions || []).map(c => c.itemId));
       if (completedIds.has(itemId)) {
         await api(`/departments/${deptId}/checklist/today/complete/${itemId}`, {
           method: 'DELETE', body: JSON.stringify({ sessionId: session.id }),
@@ -276,584 +434,134 @@ function ChecklistSection({ deptId, checklist, session, readiness, onRefresh }) 
     finally { setBusy(false); }
   };
 
-  const approve = async () => {
-    if (!session) return;
+  const finishInspection = async () => {
     setBusy(true);
     try {
-      await api(`/departments/${deptId}/checklist/today/approve`, {
-        method: 'POST', body: JSON.stringify({ sessionId: session.id }),
-      });
-      toast.success('Checklist approved — Department is READY');
+      await api(`/departments/${deptId}/checklist/today/finish`, { method: 'POST' });
+      toast.success('Inspection complete — machines are now READY');
       onRefresh();
     } catch (e) { toast.error(e.message); }
     finally { setBusy(false); }
   };
 
-  const completedIds = new Set((session?.completions || []).map(c => c.itemId));
-  const items = checklist?.items ?? [];
-  const totalMandatory = items.filter(i => i.isMandatory && i.isActive).length;
-  const completedMandatory = items.filter(i => i.isMandatory && i.isActive && completedIds.has(i.id)).length;
-  const progress = totalMandatory > 0 ? Math.round((completedMandatory / totalMandatory) * 100) : 100;
+  const isReady = readiness?.ready;
+  const noItems = items.length === 0;
 
   return (
-    <>
-      <Section
-        title="Daily Machine Startup Checklist"
-        badge={`${items.filter(i => i.isActive).length} items`}
-        defaultOpen
-      >
-        {/* Add item */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-          <input
-            value={newItem} onChange={e => setNewItem(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && addItem()}
-            placeholder="Add checklist item…"
-            style={{ ...inp, flex: 1, minWidth: 200 }}
-          />
-          <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-            <input type="checkbox" checked={mandatory} onChange={e => setMandatory(e.target.checked)} />
-            Mandatory
-          </label>
-          <button style={btn(C.blue)} onClick={addItem} disabled={adding || !newItem.trim()}>
-            {adding ? 'Adding…' : '+ Add'}
+    <Card title="Today's Inspection" defaultOpen>
+      {/* Status banner */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px',
+        borderRadius: 10, marginBottom: 16,
+        background: isReady ? '#f0fdf4' : '#fef2f2',
+        border: `1px solid ${isReady ? '#bbf7d0' : '#fecaca'}`,
+      }}>
+        <span style={{ fontSize: 32 }}>{isReady ? '✅' : '🔒'}</span>
+        <div>
+          <div style={{ fontWeight: 800, fontSize: 16, color: isReady ? '#16a34a' : '#dc2626' }}>
+            {isReady ? 'MACHINES ARE READY — Production can begin' : 'NOT READY — Production is blocked'}
+          </div>
+          <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{readiness?.reason}</div>
+        </div>
+      </div>
+
+      {noItems ? (
+        <div style={{ textAlign: 'center', padding: '24px 0', color: '#94a3b8', fontSize: 13 }}>
+          No checklist items configured. Add items in the "Daily Startup Checklist" section above.
+        </div>
+      ) : !session ? (
+        <div style={{ textAlign: 'center', padding: '24px 0' }}>
+          <div style={{ color: '#64748b', marginBottom: 14, fontSize: 13 }}>
+            Today's inspection has not been started yet.
+          </div>
+          <button style={{ ...primaryBtn, padding: '10px 28px', fontSize: 14 }} onClick={startSession} disabled={busy}>
+            {busy ? 'Starting…' : '▶ Start Morning Inspection'}
           </button>
         </div>
-
-        {items.length === 0 ? (
-          <div style={{ color: C.muted, textAlign: 'center', padding: '24px 0', fontSize: 13 }}>
-            No checklist items yet. Add items above.
-          </div>
-        ) : (
-          <div>
-            {items.map((item, idx) => (
-              <div key={item.id} style={{
-                display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
-                background: item.isActive ? C.white : '#f8fafc', borderRadius: 8,
-                border: `1px solid ${C.border}`, marginBottom: 6, opacity: item.isActive ? 1 : 0.5,
-              }}>
-                <span style={{ color: C.muted, fontSize: 12, width: 20 }}>{idx + 1}</span>
-                <span style={{ flex: 1, fontSize: 13, color: C.text }}>{item.itemText}</span>
-                <span style={{
-                  fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 99,
-                  background: item.isMandatory ? '#fef3c7' : C.bg, color: item.isMandatory ? '#92400e' : C.slate,
-                }}>
-                  {item.isMandatory ? 'MANDATORY' : 'OPTIONAL'}
-                </span>
-                <button style={btnSm(C.bg, C.slate)} onClick={() => toggleItem(item.id, item.isMandatory)}>
-                  {item.isMandatory ? 'Make Optional' : 'Make Mandatory'}
-                </button>
-                <button style={btnSm(C.bg, C.slate)} onClick={() => deleteItem(item.id)}>✕</button>
+      ) : (
+        <>
+          {/* Progress bar */}
+          {mandatoryItems.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#64748b', marginBottom: 5 }}>
+                <span>Mandatory items</span>
+                <span style={{ fontWeight: 700 }}>{completedMandatory} / {mandatoryItems.length} completed ({progress}%)</span>
               </div>
-            ))}
-          </div>
-        )}
-      </Section>
-
-      <Section
-        title="Production Lock — Today's Status"
-        badge={readiness?.ready ? 'READY' : 'NOT READY'}
-        badgeColor={readiness?.ready ? C.green : C.red}
-        defaultOpen
-      >
-        {/* Status banner */}
-        <div style={{
-          padding: '14px 18px', borderRadius: 10, marginBottom: 16,
-          background: readiness?.ready ? C.greenLt : C.redLt,
-          border: `1px solid ${readiness?.ready ? '#bbf7d0' : '#fecaca'}`,
-          display: 'flex', alignItems: 'center', gap: 12,
-        }}>
-          <span style={{ fontSize: 28 }}>{readiness?.ready ? '✅' : '🔒'}</span>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 15, color: readiness?.ready ? C.green : C.red }}>
-              {readiness?.ready ? 'MACHINE READY — Production can begin' : 'NOT READY — Production blocked'}
+              <div style={{ height: 8, background: '#e2e8f0', borderRadius: 99, overflow: 'hidden' }}>
+                <div style={{ width: `${progress}%`, height: '100%', background: progress === 100 ? '#16a34a' : '#2563eb', transition: 'width .3s' }} />
+              </div>
             </div>
-            <div style={{ fontSize: 12, color: C.slate, marginTop: 2 }}>{readiness?.reason}</div>
-          </div>
-        </div>
+          )}
 
-        {/* Progress */}
-        {totalMandatory > 0 && (
+          {/* Checklist items */}
           <div style={{ marginBottom: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: C.slate, marginBottom: 4 }}>
-              <span>Mandatory items completed</span>
-              <span>{completedMandatory} / {totalMandatory} ({progress}%)</span>
-            </div>
-            <div style={{ height: 8, background: C.border, borderRadius: 99, overflow: 'hidden' }}>
-              <div style={{ width: `${progress}%`, height: '100%', background: progress === 100 ? C.green : C.blue, transition: 'width .3s' }} />
-            </div>
-          </div>
-        )}
-
-        {/* Start session */}
-        {!session && items.length > 0 && (
-          <button style={btn(C.blue)} onClick={startSession} disabled={busy}>
-            {busy ? 'Starting…' : '▶ Start Today\'s Checklist'}
-          </button>
-        )}
-
-        {/* Checklist execution */}
-        {session && (
-          <div>
-            <div style={{ fontSize: 12, color: C.slate, marginBottom: 10 }}>
-              Started: {fmtDate(session.startedAt)}
-              {session.approvedAt && ` · Approved: ${fmtDate(session.approvedAt)}`}
-            </div>
-            {items.filter(i => i.isActive).map(item => {
+            {items.map(item => {
               const done = completedIds.has(item.id);
               return (
-                <div key={item.id} style={{
-                  display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px',
-                  borderRadius: 8, border: `1px solid ${done ? '#bbf7d0' : C.border}`,
-                  background: done ? C.greenLt : C.white, marginBottom: 6, cursor: 'pointer',
-                }} onClick={() => toggleComplete(item.id)}>
+                <div
+                  key={item.id}
+                  onClick={() => !busy && toggleItem(item.id)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
+                    borderRadius: 9, border: `1px solid ${done ? '#bbf7d0' : '#e2e8f0'}`,
+                    background: done ? '#f0fdf4' : '#fff', marginBottom: 7,
+                    cursor: busy ? 'default' : 'pointer',
+                  }}
+                >
+                  {/* Checkbox */}
                   <div style={{
-                    width: 20, height: 20, borderRadius: 4, border: `2px solid ${done ? C.green : C.border}`,
-                    background: done ? C.green : C.white, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                    width: 22, height: 22, borderRadius: 6, flexShrink: 0,
+                    border: `2px solid ${done ? '#16a34a' : '#e2e8f0'}`,
+                    background: done ? '#16a34a' : '#fff',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>
-                    {done && <span style={{ color: C.white, fontSize: 12, fontWeight: 700 }}>✓</span>}
+                    {done && <span style={{ color: '#fff', fontSize: 13, fontWeight: 800 }}>✓</span>}
                   </div>
-                  <span style={{ flex: 1, fontSize: 13, color: done ? C.green : C.text, textDecoration: done ? 'line-through' : 'none' }}>
+
+                  <span style={{ flex: 1, fontSize: 13, color: done ? '#16a34a' : '#1e293b', textDecoration: done ? 'line-through' : 'none', fontWeight: done ? 500 : 400 }}>
                     {item.itemText}
                   </span>
-                  {item.isMandatory && <span style={{ fontSize: 10, color: C.amber, fontWeight: 700 }}>MANDATORY</span>}
+
+                  {item.isMandatory && (
+                    <span style={{ fontSize: 10, fontWeight: 700, color: '#d97706', background: '#fef3c7', padding: '2px 6px', borderRadius: 99 }}>
+                      MANDATORY
+                    </span>
+                  )}
                 </div>
               );
             })}
-
-            {session.isComplete && !session.approvedAt && (
-              <button style={{ ...btn(C.green), marginTop: 10 }} onClick={approve} disabled={busy}>
-                ✓ Supervisor Approve — Mark READY
-              </button>
-            )}
           </div>
-        )}
-      </Section>
-    </>
-  );
-}
 
-// ── S6: Maintenance ───────────────────────────────────────────────────────────
-function MaintenanceSection({ deptId, maintenance, onRefresh }) {
-  const [form, setForm] = useState({ frequency: 'DAILY', taskName: '', estimatedMinutes: 30, responsiblePerson: '' });
-  const [adding, setAdding] = useState(false);
-  const [showAdd, setShowAdd] = useState(false);
-
-  const add = async () => {
-    if (!form.taskName.trim()) return;
-    setAdding(true);
-    try {
-      await api(`/departments/${deptId}/maintenance`, { method: 'POST', body: JSON.stringify(form) });
-      setForm({ frequency: 'DAILY', taskName: '', estimatedMinutes: 30, responsiblePerson: '' });
-      setShowAdd(false);
-      onRefresh();
-    } catch (e) { toast.error(e.message); }
-    finally { setAdding(false); }
-  };
-
-  const complete = async (sid) => {
-    try {
-      await api(`/departments/${deptId}/maintenance/${sid}/complete`, { method: 'POST' });
-      toast.success('Marked complete');
-      onRefresh();
-    } catch (e) { toast.error(e.message); }
-  };
-
-  const remove = async (sid) => {
-    try {
-      await api(`/departments/${deptId}/maintenance/${sid}`, { method: 'DELETE' });
-      onRefresh();
-    } catch (e) { toast.error(e.message); }
-  };
-
-  const byFreq = FREQUENCIES.reduce((m, f) => {
-    m[f] = (maintenance ?? []).filter(s => s.frequency === f);
-    return m;
-  }, {});
-
-  return (
-    <Section title="Preventive Maintenance Schedule" badge={maintenance?.length ?? 0}>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-        <button style={btn(C.blue)} onClick={() => setShowAdd(s => !s)}>
-          {showAdd ? 'Cancel' : '+ Add Task'}
-        </button>
-      </div>
-
-      {showAdd && (
-        <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: 14, marginBottom: 14 }}>
-          <GridRow cols={4}>
-            <Field label="Frequency">
-              <select value={form.frequency} onChange={e => setForm(f => ({ ...f, frequency: e.target.value }))} style={inp}>
-                {FREQUENCIES.map(f => <option key={f}>{f}</option>)}
-              </select>
-            </Field>
-            <Field label="Task Name">
-              <input value={form.taskName} onChange={e => setForm(f => ({ ...f, taskName: e.target.value }))} style={inp} placeholder="e.g. Check oil level" />
-            </Field>
-            <Field label="Estimated (min)">
-              <input type="number" value={form.estimatedMinutes} onChange={e => setForm(f => ({ ...f, estimatedMinutes: +e.target.value }))} style={inp} />
-            </Field>
-            <Field label="Responsible Person">
-              <input value={form.responsiblePerson} onChange={e => setForm(f => ({ ...f, responsiblePerson: e.target.value }))} style={inp} placeholder="Name" />
-            </Field>
-          </GridRow>
-          <button style={btn(C.blue)} onClick={add} disabled={adding}>{adding ? 'Adding…' : 'Add Task'}</button>
-        </div>
-      )}
-
-      {FREQUENCIES.map(freq => {
-        const tasks = byFreq[freq];
-        if (!tasks.length) return null;
-        return (
-          <div key={freq} style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: FREQ_COLOR[freq], marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 }}>
-              {freq}
-            </div>
-            {tasks.map(t => (
-              <div key={t.id} style={{
-                display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px',
-                border: `1px solid ${C.border}`, borderRadius: 8, background: C.white, marginBottom: 6,
-              }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>{t.taskName}</div>
-                  <div style={{ fontSize: 11, color: C.slate, marginTop: 2 }}>
-                    {fmtMins(t.estimatedMinutes)}
-                    {t.responsiblePerson && ` · ${t.responsiblePerson}`}
-                    {t.lastCompletedAt && ` · Last done: ${fmtDate(t.lastCompletedAt)}`}
-                  </div>
-                </div>
-                <button style={btnSm(C.greenLt, C.green)} onClick={() => complete(t.id)}>✓ Done</button>
-                <button style={btnSm(C.bg, C.slate)} onClick={() => remove(t.id)}>✕</button>
-              </div>
-            ))}
-          </div>
-        );
-      })}
-
-      {(!maintenance || maintenance.length === 0) && !showAdd && (
-        <div style={{ color: C.muted, textAlign: 'center', padding: '24px 0', fontSize: 13 }}>No maintenance schedules configured.</div>
-      )}
-    </Section>
-  );
-}
-
-// ── S7: Machines ──────────────────────────────────────────────────────────────
-function MachinesSection({ deptId, machines, onRefresh }) {
-  const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ name: '', machineType: '', model: '', serialNumber: '', machineRefId: '', installationDate: '', capacity: '', capacityUnit: '' });
-  const [adding, setAdding] = useState(false);
-
-  const add = async () => {
-    if (!form.name.trim()) return;
-    setAdding(true);
-    try {
-      await api(`/departments/${deptId}/machines`, { method: 'POST', body: JSON.stringify(form) });
-      setForm({ name: '', machineType: '', model: '', serialNumber: '', machineRefId: '', installationDate: '', capacity: '', capacityUnit: '' });
-      setShowAdd(false);
-      onRefresh();
-    } catch (e) { toast.error(e.message); }
-    finally { setAdding(false); }
-  };
-
-  const setStatus = async (mid, status) => {
-    try {
-      await api(`/departments/${deptId}/machines/${mid}`, { method: 'PATCH', body: JSON.stringify({ status }) });
-      onRefresh();
-    } catch (e) { toast.error(e.message); }
-  };
-
-  const remove = async (mid) => {
-    try {
-      await api(`/departments/${deptId}/machines/${mid}`, { method: 'DELETE' });
-      onRefresh();
-    } catch (e) { toast.error(e.message); }
-  };
-
-  return (
-    <Section title="Machines" badge={machines?.length ?? 0}>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-        <button style={btn(C.blue)} onClick={() => setShowAdd(s => !s)}>{showAdd ? 'Cancel' : '+ Add Machine'}</button>
-      </div>
-
-      {showAdd && (
-        <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: 14, marginBottom: 14 }}>
-          <GridRow cols={3}>
-            <Field label="Machine Name *">
-              <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} style={inp} placeholder="e.g. Laser Cutter 1" />
-            </Field>
-            <Field label="Machine ID">
-              <input value={form.machineRefId} onChange={e => setForm(f => ({ ...f, machineRefId: e.target.value }))} style={inp} placeholder="e.g. M-001" />
-            </Field>
-            <Field label="Type">
-              <input value={form.machineType} onChange={e => setForm(f => ({ ...f, machineType: e.target.value }))} style={inp} placeholder="e.g. CNC" />
-            </Field>
-            <Field label="Model">
-              <input value={form.model} onChange={e => setForm(f => ({ ...f, model: e.target.value }))} style={inp} />
-            </Field>
-            <Field label="Serial Number">
-              <input value={form.serialNumber} onChange={e => setForm(f => ({ ...f, serialNumber: e.target.value }))} style={inp} />
-            </Field>
-            <Field label="Installation Date">
-              <input type="date" value={form.installationDate} onChange={e => setForm(f => ({ ...f, installationDate: e.target.value }))} style={inp} />
-            </Field>
-            <Field label="Capacity">
-              <input type="number" value={form.capacity} onChange={e => setForm(f => ({ ...f, capacity: e.target.value }))} style={inp} />
-            </Field>
-            <Field label="Capacity Unit">
-              <input value={form.capacityUnit} onChange={e => setForm(f => ({ ...f, capacityUnit: e.target.value }))} style={inp} placeholder="e.g. SQFT/hr" />
-            </Field>
-          </GridRow>
-          <button style={btn(C.blue)} onClick={add} disabled={adding}>{adding ? 'Adding…' : 'Add Machine'}</button>
-        </div>
-      )}
-
-      {(machines ?? []).map(m => (
-        <div key={m.id} style={{
-          display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
-          border: `1px solid ${C.border}`, borderRadius: 10, background: C.white, marginBottom: 8,
-        }}>
-          <div style={{
-            width: 10, height: 10, borderRadius: '50%', flexShrink: 0,
-            background: STATUS_COLOR[m.status] ?? C.muted,
-          }} />
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 600, fontSize: 13 }}>{m.name} {m.machineRefId && <span style={{ color: C.slate, fontWeight: 400 }}>({m.machineRefId})</span>}</div>
-            <div style={{ fontSize: 11, color: C.slate, marginTop: 2 }}>
-              {[m.machineType, m.model, m.serialNumber].filter(Boolean).join(' · ')}
-              {m.capacity && ` · ${m.capacity}${m.capacityUnit ?? ''}`}
-            </div>
-          </div>
-          <select
-            value={m.status}
-            onChange={e => setStatus(m.id, e.target.value)}
-            style={{ ...inp, width: 130, padding: '5px 8px' }}
-          >
-            {MACHINE_STATUSES.map(s => <option key={s}>{s}</option>)}
-          </select>
-          <button style={btnSm(C.bg, C.slate)} onClick={() => remove(m.id)}>✕</button>
-        </div>
-      ))}
-
-      {(!machines || machines.length === 0) && !showAdd && (
-        <div style={{ color: C.muted, textAlign: 'center', padding: '24px 0', fontSize: 13 }}>No machines added yet.</div>
-      )}
-    </Section>
-  );
-}
-
-// ── S8: Skills ────────────────────────────────────────────────────────────────
-function SkillsSection({ deptId, skills, onRefresh }) {
-  const [newSkill, setNewSkill] = useState('');
-  const add = async () => {
-    if (!newSkill.trim()) return;
-    try {
-      await api(`/departments/${deptId}/skills`, { method: 'POST', body: JSON.stringify({ skillName: newSkill.trim() }) });
-      setNewSkill('');
-      onRefresh();
-    } catch (e) { toast.error(e.message); }
-  };
-  const remove = async (sid) => {
-    try { await api(`/departments/${deptId}/skills/${sid}`, { method: 'DELETE' }); onRefresh(); }
-    catch (e) { toast.error(e.message); }
-  };
-  return (
-    <Section title="Department Skills" badge={skills?.length ?? 0}>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 14, alignItems: 'center' }}>
-        <input value={newSkill} onChange={e => setNewSkill(e.target.value)} onKeyDown={e => e.key === 'Enter' && add()}
-          placeholder="Add skill…" style={{ ...inp, flex: 1 }} />
-        <button style={btn(C.blue)} onClick={add}>+ Add</button>
-      </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-        {(skills ?? []).map(s => (
-          <span key={s.id} style={{
-            display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px',
-            background: C.blueLt, borderRadius: 99, fontSize: 12, color: C.blue, fontWeight: 600,
-          }}>
-            {s.skillName}
-            <button onClick={() => remove(s.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.blue, fontSize: 14, lineHeight: 1 }}>×</button>
-          </span>
-        ))}
-        {(!skills || skills.length === 0) && <span style={{ color: C.muted, fontSize: 13 }}>No skills added yet.</span>}
-      </div>
-    </Section>
-  );
-}
-
-// ── S9: KPIs ──────────────────────────────────────────────────────────────────
-function KpiSection({ deptId, kpis, onRefresh }) {
-  const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ kpiName: '', targetValue: '', unit: '' });
-  const add = async () => {
-    if (!form.kpiName.trim()) return;
-    try {
-      await api(`/departments/${deptId}/kpis`, { method: 'POST', body: JSON.stringify(form) });
-      setForm({ kpiName: '', targetValue: '', unit: '' });
-      setShowAdd(false);
-      onRefresh();
-    } catch (e) { toast.error(e.message); }
-  };
-  const remove = async (kid) => {
-    try { await api(`/departments/${deptId}/kpis/${kid}`, { method: 'DELETE' }); onRefresh(); }
-    catch (e) { toast.error(e.message); }
-  };
-  return (
-    <Section title="Department KPIs" badge={kpis?.length ?? 0}>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-        <button style={btn(C.blue)} onClick={() => setShowAdd(s => !s)}>{showAdd ? 'Cancel' : '+ Add KPI'}</button>
-      </div>
-      {showAdd && (
-        <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
-          <input value={form.kpiName} onChange={e => setForm(f => ({ ...f, kpiName: e.target.value }))} placeholder="KPI Name" style={{ ...inp, flex: 2, minWidth: 150 }} />
-          <input type="number" value={form.targetValue} onChange={e => setForm(f => ({ ...f, targetValue: e.target.value }))} placeholder="Target" style={{ ...inp, flex: 1, minWidth: 80 }} />
-          <input value={form.unit} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))} placeholder="Unit (%, pcs…)" style={{ ...inp, flex: 1, minWidth: 80 }} />
-          <button style={btn(C.blue)} onClick={add}>Add</button>
-        </div>
-      )}
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-        <tbody>
-          {(kpis ?? []).map(k => (
-            <tr key={k.id} style={{ borderBottom: `1px solid ${C.border}` }}>
-              <td style={{ padding: '8px 4px', fontWeight: 600 }}>{k.kpiName}</td>
-              <td style={{ padding: '8px 4px', color: C.slate }}>{k.targetValue != null ? `${k.targetValue} ${k.unit ?? ''}` : '—'}</td>
-              <td style={{ padding: '8px 4px', textAlign: 'right' }}>
-                <button style={btnSm(C.bg, C.slate)} onClick={() => remove(k.id)}>✕</button>
-              </td>
-            </tr>
-          ))}
-          {(!kpis || kpis.length === 0) && (
-            <tr><td colSpan={3} style={{ padding: '20px 0', textAlign: 'center', color: C.muted }}>No KPIs configured.</td></tr>
+          {/* Complete inspection button */}
+          {!isReady && (
+            <button
+              style={{
+                ...primaryBtn,
+                padding: '11px 28px', fontSize: 14,
+                background: allMandatoryDone ? '#16a34a' : '#94a3b8',
+                cursor: allMandatoryDone && !busy ? 'pointer' : 'not-allowed',
+              }}
+              onClick={finishInspection}
+              disabled={!allMandatoryDone || busy}
+            >
+              {busy ? 'Processing…' : allMandatoryDone ? '✓ Complete Inspection — Mark READY' : `Complete all ${mandatoryItems.length - completedMandatory} remaining mandatory items first`}
+            </button>
           )}
-        </tbody>
-      </table>
-    </Section>
-  );
-}
 
-// ── S10: KRAs ─────────────────────────────────────────────────────────────────
-function KraSection({ deptId, kras, onRefresh }) {
-  const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ kraName: '', description: '' });
-  const add = async () => {
-    if (!form.kraName.trim()) return;
-    try {
-      await api(`/departments/${deptId}/kras`, { method: 'POST', body: JSON.stringify(form) });
-      setForm({ kraName: '', description: '' });
-      setShowAdd(false);
-      onRefresh();
-    } catch (e) { toast.error(e.message); }
-  };
-  const remove = async (kid) => {
-    try { await api(`/departments/${deptId}/kras/${kid}`, { method: 'DELETE' }); onRefresh(); }
-    catch (e) { toast.error(e.message); }
-  };
-  return (
-    <Section title="Department KRAs" badge={kras?.length ?? 0}>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-        <button style={btn(C.blue)} onClick={() => setShowAdd(s => !s)}>{showAdd ? 'Cancel' : '+ Add KRA'}</button>
-      </div>
-      {showAdd && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
-          <input value={form.kraName} onChange={e => setForm(f => ({ ...f, kraName: e.target.value }))} placeholder="KRA Title" style={inp} />
-          <input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Description (optional)" style={inp} />
-          <div><button style={btn(C.blue)} onClick={add}>Add</button></div>
-        </div>
-      )}
-      <div>
-        {(kras ?? []).map(k => (
-          <div key={k.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '9px 12px', border: `1px solid ${C.border}`, borderRadius: 8, marginBottom: 6 }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, fontSize: 13 }}>{k.kraName}</div>
-              {k.description && <div style={{ fontSize: 12, color: C.slate, marginTop: 2 }}>{k.description}</div>}
+          {isReady && (
+            <div style={{ fontSize: 13, color: '#16a34a', fontWeight: 600 }}>
+              ✅ Inspection completed at {session.startedAt ? new Date(session.startedAt).toLocaleTimeString('en-IN') : '—'}
             </div>
-            <button style={btnSm(C.bg, C.slate)} onClick={() => remove(k.id)}>✕</button>
-          </div>
-        ))}
-        {(!kras || kras.length === 0) && <div style={{ color: C.muted, textAlign: 'center', padding: '20px 0', fontSize: 13 }}>No KRAs configured.</div>}
-      </div>
-    </Section>
-  );
-}
-
-// ── S11: Documents ────────────────────────────────────────────────────────────
-function DocumentsSection({ deptId, documents, onRefresh }) {
-  const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ docType: 'SOP', docName: '', fileUrl: '' });
-  const add = async () => {
-    if (!form.docName.trim()) return;
-    try {
-      await api(`/departments/${deptId}/documents`, { method: 'POST', body: JSON.stringify(form) });
-      setForm({ docType: 'SOP', docName: '', fileUrl: '' });
-      setShowAdd(false);
-      onRefresh();
-    } catch (e) { toast.error(e.message); }
-  };
-  const remove = async (did) => {
-    try { await api(`/departments/${deptId}/documents/${did}`, { method: 'DELETE' }); onRefresh(); }
-    catch (e) { toast.error(e.message); }
-  };
-  const DOC_LABEL = { SOP: 'SOP', MACHINE_MANUAL: 'Machine Manual', MAINTENANCE_MANUAL: 'Maintenance Manual', SAFETY_MANUAL: 'Safety Manual', WORK_INSTRUCTION: 'Work Instruction' };
-  return (
-    <Section title="Department Documents" badge={documents?.length ?? 0}>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-        <button style={btn(C.blue)} onClick={() => setShowAdd(s => !s)}>{showAdd ? 'Cancel' : '+ Add Document'}</button>
-      </div>
-      {showAdd && (
-        <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
-          <select value={form.docType} onChange={e => setForm(f => ({ ...f, docType: e.target.value }))} style={{ ...inp, flex: 1, minWidth: 140 }}>
-            {DOC_TYPES.map(t => <option key={t} value={t}>{DOC_LABEL[t]}</option>)}
-          </select>
-          <input value={form.docName} onChange={e => setForm(f => ({ ...f, docName: e.target.value }))} placeholder="Document name" style={{ ...inp, flex: 2, minWidth: 150 }} />
-          <input value={form.fileUrl} onChange={e => setForm(f => ({ ...f, fileUrl: e.target.value }))} placeholder="URL / link (optional)" style={{ ...inp, flex: 2, minWidth: 150 }} />
-          <button style={btn(C.blue)} onClick={add}>Add</button>
-        </div>
+          )}
+        </>
       )}
-      <div>
-        {(documents ?? []).map(d => (
-          <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', border: `1px solid ${C.border}`, borderRadius: 8, marginBottom: 6 }}>
-            <span style={{ fontSize: 20 }}>📄</span>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, fontSize: 13 }}>{d.docName}</div>
-              <div style={{ fontSize: 11, color: C.slate }}>{DOC_LABEL[d.docType] ?? d.docType} · {fmtDate(d.uploadedAt)}</div>
-            </div>
-            {d.fileUrl && <a href={d.fileUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: C.blue }}>Open ↗</a>}
-            <button style={btnSm(C.bg, C.slate)} onClick={() => remove(d.id)}>✕</button>
-          </div>
-        ))}
-        {(!documents || documents.length === 0) && <div style={{ color: C.muted, textAlign: 'center', padding: '20px 0', fontSize: 13 }}>No documents added yet.</div>}
-      </div>
-    </Section>
+    </Card>
   );
 }
 
-// ── S14: Dashboard ────────────────────────────────────────────────────────────
-function DashboardSection({ dashboard }) {
-  if (!dashboard) return null;
-  const kpis = [
-    { label: "Today's Jobs", value: dashboard.todayJobs, color: C.blue },
-    { label: 'Completed', value: dashboard.completedJobs, color: C.green },
-    { label: 'Pending', value: dashboard.pendingJobs, color: C.amber },
-    { label: 'In Progress', value: dashboard.inProgressJobs, color: '#7c3aed' },
-    { label: 'Running Machines', value: dashboard.runningMachines, color: C.green },
-    { label: 'Idle Machines', value: dashboard.idleMachines, color: C.slate },
-    { label: 'Under Maintenance', value: dashboard.maintenanceMachines, color: C.amber },
-    { label: 'Breakdown', value: dashboard.breakdownMachines, color: C.red },
-  ];
-  return (
-    <Section title="Dashboard Summary" defaultOpen>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-        {kpis.map(k => (
-          <div key={k.label} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 16px' }}>
-            <div style={{ fontSize: 26, fontWeight: 800, color: k.color }}>{k.value ?? 0}</div>
-            <div style={{ fontSize: 11, color: C.slate, marginTop: 3 }}>{k.label}</div>
-          </div>
-        ))}
-      </div>
-    </Section>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════
 // MAIN PAGE
-// ═══════════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════
 export default function DepartmentControlCenterPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -861,102 +569,69 @@ export default function DepartmentControlCenterPage() {
 
   const [dept, setDept] = useState(null);
   const [detail, setDetail] = useState(null);
-  const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const loadDept = useCallback(async () => {
+  const loadAll = useCallback(async () => {
     try {
-      const res = await apiFetch(`/departments?includeInactive=true`);
-      const list = await res.json();
-      const d = list.find(x => x.id === deptId);
-      if (d) setDept(d);
-    } catch { }
-  }, [deptId]);
-
-  const loadDetail = useCallback(async () => {
-    try {
-      const [det, dash] = await Promise.all([
-        api(`/departments/${deptId}/detail`),
-        api(`/departments/${deptId}/dashboard`),
-      ]);
+      const deptsList = await apiFetch('/departments?includeInactive=true').then(r => r.json());
+      setDept(deptsList.find(d => d.id === deptId) ?? null);
+      const det = await api(`/departments/${deptId}/detail`);
       setDetail(det);
-      setDashboard(dash);
     } catch (e) {
-      toast.error('Failed to load department detail');
+      toast.error('Failed to load department');
+    } finally {
+      setLoading(false);
     }
   }, [deptId]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    await Promise.all([loadDept(), loadDetail()]);
-    setLoading(false);
-  }, [loadDept, loadDetail]);
+  useEffect(() => { loadAll(); }, [loadAll]);
 
-  useEffect(() => { load(); }, [load]);
-
-  const refresh = useCallback(() => { loadDetail(); }, [loadDetail]);
+  const refresh = useCallback(() => {
+    api(`/departments/${deptId}/detail`).then(setDetail).catch(() => {});
+  }, [deptId]);
 
   if (loading) {
-    return (
-      <div style={{ padding: 40, textAlign: 'center', color: C.slate, fontFamily: 'system-ui, sans-serif' }}>
-        Loading department…
-      </div>
-    );
+    return <div style={{ padding: 48, textAlign: 'center', color: '#94a3b8', fontFamily: 'system-ui, sans-serif' }}>Loading…</div>;
   }
 
   const ready = detail?.readiness?.ready;
 
   return (
-    <div style={{ padding: '24px 28px', background: C.bg, minHeight: '100vh', fontFamily: 'system-ui, sans-serif' }}>
+    <div style={{ padding: '24px 32px', background: '#f8fafc', minHeight: '100vh', fontFamily: 'system-ui, sans-serif', maxWidth: 1100, margin: '0 auto' }}>
 
-      {/* Header */}
+      {/* Page header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <button onClick={() => navigate(-1)} style={{ ...outBtn, marginBottom: 10, fontSize: 12 }}>← Back</button>
-          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: C.text }}>
-            {dept?.name ?? 'Department'}
-            <span style={{ fontFamily: 'monospace', fontSize: 14, color: C.slate, fontWeight: 400, marginLeft: 10 }}>
-              {dept?.code}
-            </span>
+          <button onClick={() => navigate(-1)} style={{ ...ghostBtn, marginBottom: 10 }}>← Back to Departments</button>
+          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#1e293b' }}>
+            {dept?.name ?? 'Department'}&nbsp;
+            <span style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 400, color: '#94a3b8' }}>{dept?.code}</span>
           </h1>
-          <div style={{ fontSize: 13, color: C.slate, marginTop: 4 }}>
-            {detail?.ext?.deptType ?? 'Department'} Control Center
+          <div style={{ fontSize: 13, color: '#64748b', marginTop: 3 }}>
+            {detail?.ext?.deptType ?? 'Department'} — Control Center
           </div>
         </div>
 
-        {/* Today's status pill */}
+        {/* Today's status */}
         <div style={{
-          padding: '12px 20px', borderRadius: 12, textAlign: 'center',
-          background: ready ? C.greenLt : C.redLt,
+          padding: '12px 22px', borderRadius: 12, textAlign: 'center', minWidth: 150,
+          background: ready ? '#f0fdf4' : '#fef2f2',
           border: `2px solid ${ready ? '#bbf7d0' : '#fecaca'}`,
         }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: ready ? C.green : C.red, textTransform: 'uppercase', letterSpacing: 1 }}>
-            Today's Status
-          </div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: ready ? C.green : C.red, marginTop: 2 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: ready ? '#16a34a' : '#dc2626' }}>Today's Status</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: ready ? '#16a34a' : '#dc2626', marginTop: 3 }}>
             {ready ? '✅ READY' : '🔒 NOT READY'}
           </div>
         </div>
       </div>
 
-      {/* Sections */}
       {detail && (
         <>
-          <DashboardSection dashboard={dashboard} />
-          <ExtensionSection deptId={deptId} ext={detail.ext} onSaved={(saved) => setDetail(d => ({ ...d, ext: saved }))} />
-          <ChecklistSection
-            deptId={deptId}
-            checklist={detail.checklist}
-            session={detail.readiness?.session}
-            readiness={detail.readiness}
-            onRefresh={refresh}
-          />
-          <MaintenanceSection deptId={deptId} maintenance={detail.maintenance} onRefresh={refresh} />
+          {/* Section 4 first — operators see inspection status at the top */}
+          <InspectionSection deptId={deptId} checklist={detail.checklist} readiness={detail.readiness} onRefresh={refresh} />
+          <DeptInfoSection deptId={deptId} dept={dept} ext={detail.ext} onExtSaved={saved => setDetail(d => ({ ...d, ext: saved }))} />
           <MachinesSection deptId={deptId} machines={detail.machines} onRefresh={refresh} />
-          <SkillsSection deptId={deptId} skills={detail.skills} onRefresh={refresh} />
-          <KpiSection deptId={deptId} kpis={detail.kpis} onRefresh={refresh} />
-          <KraSection deptId={deptId} kras={detail.kras} onRefresh={refresh} />
-          <DocumentsSection deptId={deptId} documents={detail.documents} onRefresh={refresh} />
+          <ChecklistConfigSection deptId={deptId} checklist={detail.checklist} onRefresh={refresh} />
         </>
       )}
     </div>
